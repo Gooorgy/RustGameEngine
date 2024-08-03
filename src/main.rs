@@ -2,6 +2,7 @@ pub mod structs;
 pub mod utils;
 
 use ash::{vk, Entry, Instance};
+use new::graphics_pipeline;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::ptr;
@@ -51,6 +52,8 @@ impl VulkanApp {
             unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
         let present_queue =
             unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
+
+        graphics_pipeline::graphics_pipeline::create(&device);
 
         Ok(Self {
             _entry: entry,
