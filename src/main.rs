@@ -1,12 +1,17 @@
 pub mod structs;
 pub mod utils;
 
+mod graphics_pipeline;
+mod render_pass;
+mod swapchain;
+
+use crate::swapchain::structs::SwapchainInfo;
+use ash::vk::PipelineLayout;
 use ash::{vk, Entry, Instance};
-use new::graphics_pipeline;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::ptr;
-use structs::{QueueFamiliyIndices, SurfaceInfo, SwapChainSupportDetails, SwapchainInfo};
+use structs::{QueueFamiliyIndices, SurfaceInfo, SwapChainSupportDetails};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -29,6 +34,9 @@ struct VulkanApp {
     _surface_info: SurfaceInfo,
     _swapchain_info: SwapchainInfo,
     _image_views: Vec<vk::ImageView>,
+    _pipeline_layout: PipelineLayout,
+    _render_pass: vk::RenderPass,
+    _graphics_pipeline: vk::Pipeline,
 }
 
 #[derive(Default)]
@@ -53,7 +61,9 @@ impl VulkanApp {
         let present_queue =
             unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
 
-        graphics_pipeline::graphics_pipeline::create(&device);
+        let render_pass = render_pass::render_pass::create(&swapchain_info, &device);
+        let (pipeline_layout, graphics_pipeline) =
+            graphics_pipeline::graphics_pipeline::create(&device, &render_pass);
 
         Ok(Self {
             _entry: entry,
@@ -65,6 +75,9 @@ impl VulkanApp {
             _surface_info: surface_info,
             _swapchain_info: swapchain_info,
             _image_views: image_views,
+            _pipeline_layout: pipeline_layout,
+            _render_pass: render_pass,
+            _graphics_pipeline: graphics_pipeline,
         })
     }
 

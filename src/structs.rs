@@ -14,15 +14,6 @@ pub struct SurfaceInfo {
     pub surface: ash::vk::SurfaceKHR,
 }
 
-pub struct SwapchainInfo {
-    pub swapchain_device: ash::khr::swapchain::Device,
-    pub swapchain: ash::vk::SwapchainKHR,
-    pub swapchain_images: Vec<ash::vk::Image>,
-
-    pub swapchain_image_format: ash::vk::SurfaceFormatKHR,
-    pub swapchain_extent: ash::vk::Extent2D,
-}
-
 pub struct SwapChainSupportDetails {
     pub capabilies: ash::vk::SurfaceCapabilitiesKHR,
     pub formats: Vec<ash::vk::SurfaceFormatKHR>,
