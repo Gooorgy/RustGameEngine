@@ -8,6 +8,7 @@ mod swapchain;
 use crate::swapchain::structs::SwapchainInfo;
 use ash::vk::PipelineLayout;
 use ash::{vk, Entry, Instance};
+use new::frame_buffer;
 use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::ptr;
@@ -37,6 +38,7 @@ struct VulkanApp {
     _pipeline_layout: PipelineLayout,
     _render_pass: vk::RenderPass,
     _graphics_pipeline: vk::Pipeline,
+    _swapchain_frame_buffer: Vec<vk::Framebuffer>,
 }
 
 #[derive(Default)]
@@ -65,6 +67,13 @@ impl VulkanApp {
         let (pipeline_layout, graphics_pipeline) =
             graphics_pipeline::graphics_pipeline::create(&device, &render_pass);
 
+        let frame_buffers = frame_buffer::frame_buffer::create_buffers(
+            &device,
+            &image_views,
+            &render_pass,
+            &swapchain_info.swapchain_extent,
+        );
+
         Ok(Self {
             _entry: entry,
             _instance: instance,
@@ -78,6 +87,7 @@ impl VulkanApp {
             _pipeline_layout: pipeline_layout,
             _render_pass: render_pass,
             _graphics_pipeline: graphics_pipeline,
+            _swapchain_frame_buffer: frame_buffers,
         })
     }
 
