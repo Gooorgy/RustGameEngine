@@ -1,4 +1,3 @@
-pub mod structs;
 pub mod utils;
 
 mod graphics_pipeline;
@@ -6,13 +5,16 @@ mod render_pass;
 mod swapchain;
 
 use crate::swapchain::structs::SwapchainInfo;
+use new::structs::QueueFamiliyIndices;
+
 use ash::vk::PipelineLayout;
 use ash::{vk, Entry, Instance};
-use new::frame_buffer;
+use new::structs::{SurfaceInfo, SwapChainSupportDetails};
+use new::{command_pool, frame_buffer};
 use std::error::Error;
 use std::ffi::{CStr, CString};
+use std::os::raw::c_void;
 use std::ptr;
-use structs::{QueueFamiliyIndices, SurfaceInfo, SwapChainSupportDetails};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -24,6 +26,33 @@ const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
 const DEVICE_EXTENSIONS: [&CStr; 1] = [vk::KHR_SWAPCHAIN_NAME];
+
+const VALIDATION: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
+
+unsafe extern "system" fn vulkan_debug_utils_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _p_user_data: *mut c_void,
+) -> vk::Bool32 {
+    let severity = match message_severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => "[Verbose]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => "[Warning]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => "[Error]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => "[Info]",
+        _ => "[Unknown]",
+    };
+    let types = match message_type {
+        vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "[General]",
+        vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE => "[Performance]",
+        vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION => "[Validation]",
+        _ => "[Unknown]",
+    };
+    let message = CStr::from_ptr((*p_callback_data).p_message);
+    println!("[Debug]{}{}{:?}", severity, types, message);
+
+    vk::FALSE
+}
 
 struct VulkanApp {
     _entry: Entry,
@@ -39,11 +68,16 @@ struct VulkanApp {
     _render_pass: vk::RenderPass,
     _graphics_pipeline: vk::Pipeline,
     _swapchain_frame_buffer: Vec<vk::Framebuffer>,
+    _image_available_semaphore: ash::vk::Semaphore,
+    _render_finished_semaphore: ash::vk::Semaphore,
+    _in_flight_fence: ash::vk::Fence,
+    command_buffers: Vec<ash::vk::CommandBuffer>,
 }
 
 #[derive(Default)]
 struct AppWindow {
     window: Option<winit::window::Window>,
+    vulkan_app: Option<VulkanApp>,
 }
 
 impl VulkanApp {
@@ -74,6 +108,17 @@ impl VulkanApp {
             &swapchain_info.swapchain_extent,
         );
 
+        let command_pool = command_pool::command_pool::create_command_pool(
+            &device,
+            &Self::find_queue_family(&instance, physical_device, &surface_info),
+        );
+
+        let command_buffers =
+            command_pool::command_pool::create_command_buffer(&device, &command_pool);
+
+        let (image_available_semaphore, render_finished_semaphore, in_flight_fence) =
+            Self::create_sync_objects(&device);
+
         Ok(Self {
             _entry: entry,
             _instance: instance,
@@ -88,7 +133,46 @@ impl VulkanApp {
             _render_pass: render_pass,
             _graphics_pipeline: graphics_pipeline,
             _swapchain_frame_buffer: frame_buffers,
+            _image_available_semaphore: image_available_semaphore,
+            _render_finished_semaphore: render_finished_semaphore,
+            _in_flight_fence: in_flight_fence,
+            command_buffers,
         })
+    }
+
+    fn setup_debug_utils(
+        entry: &ash::Entry,
+        instance: &ash::Instance,
+    ) -> (ash::ext::debug_utils::Instance, vk::DebugUtilsMessengerEXT) {
+        let debug_utils_loader = ash::ext::debug_utils::Instance::new(entry, instance);
+
+        let messenger_ci = Self::populate_debug_messenger_create_info();
+
+        let utils_messenger = unsafe {
+            debug_utils_loader
+                .create_debug_utils_messenger(&messenger_ci, None)
+                .expect("Debug Utils Callback")
+        };
+
+        (debug_utils_loader, utils_messenger)
+    }
+
+    fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateInfoEXT<'static> {
+        vk::DebugUtilsMessengerCreateInfoEXT {
+            s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            p_next: ptr::null(),
+            flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
+            message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
+                // vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
+                // vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
+                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
+            message_type: vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION,
+            pfn_user_callback: Some(vulkan_debug_utils_callback),
+            p_user_data: ptr::null_mut(),
+            ..Default::default()
+        }
     }
 
     fn create_instance(entry: &Entry, window: &Window) -> Instance {
@@ -106,10 +190,27 @@ impl VulkanApp {
             ash_window::enumerate_required_extensions(window.display_handle().unwrap().as_raw())
                 .unwrap();
         let extension_names = extension_names.to_vec();
+        let requred_validation_layer_raw_names: Vec<CString> = VALIDATION
+            .iter()
+            .map(|layer_name| CString::new(*layer_name).unwrap())
+            .collect();
+        let enable_layer_names: Vec<*const i8> = requred_validation_layer_raw_names
+            .iter()
+            .map(|layer_name| layer_name.as_ptr())
+            .collect();
 
-        let instance_create_info = vk::InstanceCreateInfo::default()
-            .application_info(&app_info)
-            .enabled_extension_names(&extension_names);
+        let debug_utils_create_info = Self::populate_debug_messenger_create_info();
+
+        let instance_create_info = vk::InstanceCreateInfo {
+            s_type: ash::vk::StructureType::INSTANCE_CREATE_INFO,
+            p_next: &debug_utils_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT
+                as *const c_void,
+            pp_enabled_layer_names: enable_layer_names.as_ptr(),
+            enabled_layer_count: enable_layer_names.len() as u32,
+            pp_enabled_extension_names: extension_names.as_ptr(),
+            enabled_extension_count: extension_names.len() as u32,
+            ..Default::default()
+        };
 
         unsafe { entry.create_instance(&instance_create_info, None).unwrap() }
     }
@@ -183,7 +284,7 @@ impl VulkanApp {
         instance: &Instance,
         physical_device: vk::PhysicalDevice,
         surface_info: &SurfaceInfo,
-    ) -> structs::QueueFamiliyIndices {
+    ) -> QueueFamiliyIndices {
         let mut indices = QueueFamiliyIndices {
             graphics_family: None,
             present_family: None,
@@ -484,6 +585,111 @@ impl VulkanApp {
 
         image_views
     }
+
+    fn create_sync_objects(device: &ash::Device) -> (vk::Semaphore, vk::Semaphore, vk::Fence) {
+        let semaphore_create_info = ash::vk::SemaphoreCreateInfo {
+            s_type: ash::vk::StructureType::SEMAPHORE_CREATE_INFO,
+            ..Default::default()
+        };
+
+        let fence_create_info = ash::vk::FenceCreateInfo {
+            s_type: ash::vk::StructureType::FENCE_CREATE_INFO,
+            flags: ash::vk::FenceCreateFlags::SIGNALED,
+            ..Default::default()
+        };
+
+        unsafe {
+            (
+                device
+                    .create_semaphore(&semaphore_create_info, None)
+                    .expect(""),
+                device
+                    .create_semaphore(&semaphore_create_info, None)
+                    .expect(""),
+                device.create_fence(&fence_create_info, None).expect(""),
+            )
+        }
+    }
+
+    fn draw_frame(&self) {
+        println!("draw frame");
+        unsafe {
+            self._device
+                .wait_for_fences(&[self._in_flight_fence], true, u64::MAX)
+                .expect("Unable to wait for fence");
+
+            self._device
+                .reset_fences(&[self._in_flight_fence])
+                .expect("Unable to reset fence");
+        }
+
+        let (image_index, _is_sub_optimal_image) = unsafe {
+            self._swapchain_info
+                .swapchain_device
+                .acquire_next_image(
+                    self._swapchain_info.swapchain,
+                    u64::MAX,
+                    self._image_available_semaphore,
+                    self._in_flight_fence,
+                )
+                .expect("unable to acquire next image")
+        };
+
+        unsafe {
+            self._device
+                .reset_command_buffer(
+                    self.command_buffers[image_index as usize],
+                    vk::CommandBufferResetFlags::empty(),
+                )
+                .expect("Unable to reset command buffer");
+        }
+
+        command_pool::command_pool::record_command_buffer(&self._device, &self.command_buffers);
+        render_pass::render_pass::begin_render_pass(
+            &self._device,
+            &self._render_pass,
+            &self._swapchain_frame_buffer,
+            &self.command_buffers,
+            self._graphics_pipeline,
+            &self._swapchain_info.swapchain_extent,
+        );
+
+        let semaphore = [self._render_finished_semaphore];
+        let submit_info = ash::vk::SubmitInfo {
+            s_type: ash::vk::StructureType::SUBMIT_INFO,
+            wait_semaphore_count: 1,
+            p_wait_semaphores: [self._image_available_semaphore].as_ptr(),
+            p_wait_dst_stage_mask: [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT].as_ptr(),
+            command_buffer_count: 1,
+            p_command_buffers: self.command_buffers.as_ptr(),
+            signal_semaphore_count: 1,
+            p_signal_semaphores: semaphore.as_ptr(),
+            ..Default::default()
+        };
+
+        unsafe {
+            self._device
+                .queue_submit(self._graphics_queue, &[submit_info], self._in_flight_fence)
+                .expect("Unable to submit draw command buffer");
+        }
+
+        let present_info = ash::vk::PresentInfoKHR {
+            s_type: ash::vk::StructureType::PRESENT_INFO_KHR,
+            wait_semaphore_count: 1,
+            p_wait_semaphores: semaphore.as_ptr(),
+            p_swapchains: &self._swapchain_info.swapchain,
+            swapchain_count: 1,
+            p_image_indices: &image_index,
+            ..Default::default()
+        };
+
+        unsafe {
+            self._swapchain_info
+                .swapchain_device
+                .queue_present(self._present_queue, &present_info)
+                .expect("Unable to present");
+        }
+    }
 }
 
 impl ApplicationHandler for AppWindow {
@@ -493,7 +699,7 @@ impl ApplicationHandler for AppWindow {
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
 
-        let _x: Result<VulkanApp, Box<dyn Error>> = VulkanApp::new(&self.window.as_ref().unwrap());
+        self.vulkan_app = Some(VulkanApp::new(&self.window.as_ref().unwrap()).expect(""));
     }
 
     fn window_event(
@@ -504,6 +710,10 @@ impl ApplicationHandler for AppWindow {
     ) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::RedrawRequested => match &self.vulkan_app {
+                Some(app) => app.draw_frame(),
+                _ => panic!(""),
+            },
             _ => {}
         }
     }
