@@ -4,3 +4,4 @@ pub mod graphics_pipeline;
 pub mod render_pass;
 pub mod structs;
 pub mod swapchain;
+pub mod validation;
