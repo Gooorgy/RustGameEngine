@@ -1,6 +1,6 @@
-use std::{ffi::CStr, os::raw::c_void};
+use std::{ffi::CStr, os::raw::c_void, ptr};
 
-pub unsafe extern "system" fn vulkan_debug_utils_callback(
+unsafe extern "system" fn vulkan_debug_utils_callback(
     message_severity: ash::vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: ash::vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const ash::vk::DebugUtilsMessengerCallbackDataEXT,
@@ -25,15 +25,31 @@ pub unsafe extern "system" fn vulkan_debug_utils_callback(
     ash::vk::FALSE
 }
 
+pub fn populate_debug_messenger_create_info() -> ash::vk::DebugUtilsMessengerCreateInfoEXT<'static>
+{
+    ash::vk::DebugUtilsMessengerCreateInfoEXT {
+        s_type: ash::vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        p_next: ptr::null(),
+        flags: ash::vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
+        message_severity: ash::vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
+            // vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
+            // vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
+            ash::vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
+        message_type: ash::vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+            | ash::vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
+            | ash::vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION,
+        pfn_user_callback: Some(vulkan_debug_utils_callback),
+        p_user_data: ptr::null_mut(),
+        ..Default::default()
+    }
+}
+
 pub const VALIDATION: ValidationInfo = ValidationInfo {
-    #[cfg(debug_assertions)]
-    is_enable: true,
-    #[cfg(not(debug_assertions))]
-    is_enable: false,
+    is_enabled: false,
     required_validation_layers: ["VK_LAYER_KHRONOS_validation"],
 };
 
 pub struct ValidationInfo {
-    pub is_enable: bool,
+    pub is_enabled: bool,
     pub required_validation_layers: [&'static str; 1],
 }

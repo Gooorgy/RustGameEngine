@@ -1,0 +1,406 @@
+use std::{
+    error::Error,
+    ffi::{c_void, CString},
+    ptr,
+};
+
+use ash::vk;
+use winit::{raw_window_handle::HasDisplayHandle, window::Window};
+
+use super::{
+    command_buffer::CommandBufferInfo,
+    device::{self, DeviceInfo},
+    frame_buffer,
+    graphics_pipeline::{self, PipelineInfo},
+    surface::{self, SurfaceInfo},
+    swapchain::{self, SwapchainInfo},
+    validation,
+};
+
+pub struct VulkanBackend {
+    _entry: ash::Entry,
+    _instance: ash::Instance,
+    device_info: DeviceInfo,
+    _surface_info: SurfaceInfo,
+    swapchain_info: SwapchainInfo,
+    _image_views: Vec<vk::ImageView>,
+    pipeline_info: PipelineInfo,
+    render_pass: vk::RenderPass,
+    swapchain_frame_buffers: Vec<vk::Framebuffer>,
+    image_available_semaphore: ash::vk::Semaphore,
+    render_finished_semaphore: ash::vk::Semaphore,
+    in_flight_fence: ash::vk::Fence,
+    command_buffer_info: CommandBufferInfo,
+}
+
+impl VulkanBackend {
+    pub fn new(window: &Window) -> Result<Self, Box<dyn Error>> {
+        let entry = unsafe { ash::Entry::load()? };
+        let instance = Self::create_instance(&entry, window);
+        let surface_info = surface::SurfaceInfo::new(&entry, &instance, window);
+        let device_info = device::DeviceInfo::new(&instance, &surface_info);
+        let swapchain_info = swapchain::SwapchainInfo::new(&instance, &device_info, &surface_info);
+
+        let image_views = Self::create_image_views(&swapchain_info, &device_info.logical_device);
+
+        let render_pass = Self::create_render_pass(&swapchain_info, &device_info.logical_device);
+        let pipeline_info =
+            graphics_pipeline::PipelineInfo::new(&render_pass, &device_info.logical_device);
+
+        let frame_buffers = frame_buffer::create_buffers(
+            &device_info.logical_device,
+            &image_views,
+            &render_pass,
+            &swapchain_info.swapchain_extent,
+        );
+
+        let command_buffer_info = CommandBufferInfo::new(&device_info);
+
+        let (image_available_semaphore, render_finished_semaphore, in_flight_fence) =
+            Self::create_sync_objects(&device_info.logical_device);
+
+        Ok(Self {
+            _entry: entry,
+            _instance: instance,
+            device_info,
+            _surface_info: surface_info,
+            swapchain_info,
+            _image_views: image_views,
+            pipeline_info,
+            render_pass: render_pass,
+            swapchain_frame_buffers: frame_buffers,
+            image_available_semaphore: image_available_semaphore,
+            render_finished_semaphore: render_finished_semaphore,
+            in_flight_fence: in_flight_fence,
+            command_buffer_info,
+        })
+    }
+
+    fn create_render_pass(
+        swapchain_info: &SwapchainInfo,
+        device: &ash::Device,
+    ) -> ash::vk::RenderPass {
+        let color_attachment = ash::vk::AttachmentDescription {
+            format: swapchain_info.swapchain_image_format.format,
+            samples: ash::vk::SampleCountFlags::TYPE_1,
+            load_op: ash::vk::AttachmentLoadOp::CLEAR,
+            store_op: ash::vk::AttachmentStoreOp::STORE,
+            stencil_load_op: ash::vk::AttachmentLoadOp::DONT_CARE,
+            stencil_store_op: ash::vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: ash::vk::ImageLayout::UNDEFINED,
+            final_layout: ash::vk::ImageLayout::PRESENT_SRC_KHR,
+            ..Default::default()
+        };
+
+        let color_attachment_ref = ash::vk::AttachmentReference {
+            attachment: 0,
+            layout: ash::vk::ImageLayout::ATTACHMENT_OPTIMAL,
+        };
+
+        let subpass = ash::vk::SubpassDescription {
+            pipeline_bind_point: ash::vk::PipelineBindPoint::GRAPHICS,
+            color_attachment_count: 1,
+            p_color_attachments: &color_attachment_ref,
+            ..Default::default()
+        };
+
+        let subpass_dependency = ash::vk::SubpassDependency {
+            src_subpass: ash::vk::SUBPASS_EXTERNAL,
+            dst_subpass: 0,
+            src_stage_mask: ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            src_access_mask: ash::vk::AccessFlags::empty(),
+            dst_stage_mask: ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            dst_access_mask: ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            ..Default::default()
+        };
+
+        let render_pass_create_info = ash::vk::RenderPassCreateInfo {
+            s_type: ash::vk::StructureType::RENDER_PASS_CREATE_INFO,
+            attachment_count: 1,
+            p_attachments: &color_attachment,
+            subpass_count: 1,
+            p_subpasses: &subpass,
+            dependency_count: 1,
+            p_dependencies: &subpass_dependency,
+            ..Default::default()
+        };
+
+        unsafe {
+            device
+                .create_render_pass(&render_pass_create_info, None)
+                .expect("Unable to create render pass")
+        }
+    }
+
+    fn create_instance(entry: &ash::Entry, window: &Window) -> ash::Instance {
+        let app_name = CString::new("Vulkan Application").unwrap();
+        let engine_name = CString::new("No Engine").unwrap();
+
+        let app_info = vk::ApplicationInfo::default()
+            .application_name(app_name.as_c_str())
+            .application_version(vk::make_api_version(0, 1, 0, 0))
+            .engine_name(engine_name.as_c_str())
+            .engine_version(vk::make_api_version(0, 1, 0, 0))
+            .api_version(vk::make_api_version(0, 1, 0, 0));
+
+        let extension_names =
+            ash_window::enumerate_required_extensions(window.display_handle().unwrap().as_raw())
+                .unwrap();
+        let extension_names = extension_names.to_vec();
+
+        let enable_layer_names = if validation::VALIDATION.is_enabled {
+            let x: Vec<CString> = validation::VALIDATION
+                .required_validation_layers
+                .iter()
+                .map(|layer_name| CString::new(*layer_name).unwrap())
+                .collect();
+
+            x.iter().map(|layer_name| layer_name.as_ptr()).collect()
+        } else {
+            vec![]
+        };
+
+        let p_debug_utils_messenger_info = if validation::VALIDATION.is_enabled {
+            &validation::populate_debug_messenger_create_info()
+                as *const vk::DebugUtilsMessengerCreateInfoEXT as *const c_void
+        } else {
+            ptr::null()
+        };
+        let instance_create_info = vk::InstanceCreateInfo {
+            s_type: ash::vk::StructureType::INSTANCE_CREATE_INFO,
+            p_next: p_debug_utils_messenger_info,
+            pp_enabled_layer_names: enable_layer_names.as_ptr(),
+            enabled_layer_count: enable_layer_names.len() as u32,
+            pp_enabled_extension_names: extension_names.as_ptr(),
+            enabled_extension_count: extension_names.len() as u32,
+            p_application_info: &app_info,
+            ..Default::default()
+        };
+
+        unsafe { entry.create_instance(&instance_create_info, None).unwrap() }
+    }
+
+    fn create_image_views(
+        swapchain_info: &SwapchainInfo,
+        device: &ash::Device,
+    ) -> Vec<vk::ImageView> {
+        let mut image_views = vec![];
+
+        for swapchain_image in swapchain_info.swapchain_images.clone() {
+            let image_view_create_info = vk::ImageViewCreateInfo {
+                s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
+                image: swapchain_image,
+                view_type: vk::ImageViewType::TYPE_2D,
+                format: swapchain_info.swapchain_image_format.format,
+                components: vk::ComponentMapping {
+                    r: vk::ComponentSwizzle::R,
+                    g: vk::ComponentSwizzle::G,
+                    b: vk::ComponentSwizzle::B,
+                    a: vk::ComponentSwizzle::A,
+                },
+                subresource_range: vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                },
+                ..Default::default()
+            };
+
+            let image_view_result =
+                unsafe { device.create_image_view(&image_view_create_info, None) };
+
+            let image_view = match image_view_result {
+                Ok(image_view) => image_view,
+                _ => panic!("Error creating image view"),
+            };
+
+            image_views.push(image_view);
+        }
+
+        image_views
+    }
+
+    fn create_sync_objects(device: &ash::Device) -> (vk::Semaphore, vk::Semaphore, vk::Fence) {
+        let semaphore_create_info = ash::vk::SemaphoreCreateInfo {
+            s_type: ash::vk::StructureType::SEMAPHORE_CREATE_INFO,
+            ..Default::default()
+        };
+
+        let fence_create_info = ash::vk::FenceCreateInfo {
+            s_type: ash::vk::StructureType::FENCE_CREATE_INFO,
+            flags: ash::vk::FenceCreateFlags::SIGNALED,
+            ..Default::default()
+        };
+
+        unsafe {
+            (
+                device
+                    .create_semaphore(&semaphore_create_info, None)
+                    .expect(""),
+                device
+                    .create_semaphore(&semaphore_create_info, None)
+                    .expect(""),
+                device.create_fence(&fence_create_info, None).expect(""),
+            )
+        }
+    }
+
+    pub fn begin_render_pass(&self) {
+        let clear_values = [ash::vk::ClearValue {
+            color: ash::vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        }];
+
+        for (i, &command_buffer) in self.command_buffer_info.command_buffers.iter().enumerate() {
+            let render_pass_begin_info = ash::vk::RenderPassBeginInfo {
+                s_type: ash::vk::StructureType::RENDER_PASS_BEGIN_INFO,
+                render_pass: self.render_pass,
+                framebuffer: self.swapchain_frame_buffers[i],
+                render_area: ash::vk::Rect2D {
+                    offset: ash::vk::Offset2D { x: 0, y: 0 },
+                    extent: self.swapchain_info.swapchain_extent,
+                },
+                clear_value_count: clear_values.len() as u32,
+                p_clear_values: clear_values.as_ptr(),
+                ..Default::default()
+            };
+
+            unsafe {
+                self.device_info.logical_device.cmd_begin_render_pass(
+                    command_buffer,
+                    &render_pass_begin_info,
+                    ash::vk::SubpassContents::INLINE,
+                );
+
+                self.device_info.logical_device.cmd_bind_pipeline(
+                    command_buffer,
+                    ash::vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline_info.graphics_pipelines[i],
+                );
+
+                let viewport = ash::vk::Viewport {
+                    x: 0.0f32,
+                    y: 0.0f32,
+                    width: self.swapchain_info.swapchain_extent.width as f32,
+                    height: self.swapchain_info.swapchain_extent.height as f32,
+                    min_depth: 0 as f32,
+                    max_depth: 1 as f32,
+                    ..Default::default()
+                };
+
+                self.device_info
+                    .logical_device
+                    .cmd_set_viewport(command_buffer, 0, &[viewport]);
+
+                let scissor = ash::vk::Rect2D {
+                    offset: ash::vk::Offset2D { x: 0, y: 0 },
+                    extent: self.swapchain_info.swapchain_extent,
+                    ..Default::default()
+                };
+
+                self.device_info
+                    .logical_device
+                    .cmd_set_scissor(command_buffer, 0, &[scissor]);
+
+                self.device_info
+                    .logical_device
+                    .cmd_draw(command_buffer, 3, 1, 0, 0);
+
+                self.device_info
+                    .logical_device
+                    .cmd_end_render_pass(command_buffer);
+
+                self.device_info
+                    .logical_device
+                    .end_command_buffer(command_buffer)
+                    .expect("Failed to end command buffer");
+            }
+        }
+    }
+
+    pub fn draw_frame(&self) {
+        println!("draw frame");
+        unsafe {
+            self.device_info
+                .logical_device
+                .wait_for_fences(&[self.in_flight_fence], true, u64::MAX)
+                .expect("Unable to wait for fence");
+
+            self.device_info
+                .logical_device
+                .reset_fences(&[self.in_flight_fence])
+                .expect("Unable to reset fence");
+        }
+
+        let (image_index, _is_sub_optimal_image) = unsafe {
+            self.swapchain_info
+                .swapchain_device
+                .acquire_next_image(
+                    self.swapchain_info.swapchain,
+                    u64::MAX,
+                    self.image_available_semaphore,
+                    self.in_flight_fence,
+                )
+                .expect("unable to acquire next image")
+        };
+
+        unsafe {
+            self.device_info
+                .logical_device
+                .reset_command_buffer(
+                    self.command_buffer_info.command_buffers[image_index as usize],
+                    vk::CommandBufferResetFlags::empty(),
+                )
+                .expect("Unable to reset command buffer");
+        }
+
+        self.command_buffer_info
+            .record_command_buffer(&self.device_info.logical_device);
+
+        self.begin_render_pass();
+
+        let semaphore = [self.render_finished_semaphore];
+        let submit_info = ash::vk::SubmitInfo {
+            s_type: ash::vk::StructureType::SUBMIT_INFO,
+            wait_semaphore_count: 1,
+            p_wait_semaphores: [self.image_available_semaphore].as_ptr(),
+            p_wait_dst_stage_mask: [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT].as_ptr(),
+            command_buffer_count: 1,
+            p_command_buffers: self.command_buffer_info.command_buffers.as_ptr(),
+            signal_semaphore_count: 1,
+            p_signal_semaphores: semaphore.as_ptr(),
+            ..Default::default()
+        };
+
+        unsafe {
+            self.device_info
+                .logical_device
+                .queue_submit(
+                    self.device_info.queue_info.graphics_queue,
+                    &[submit_info],
+                    self.in_flight_fence,
+                )
+                .expect("Unable to submit draw command buffer");
+        }
+
+        let present_info = ash::vk::PresentInfoKHR {
+            s_type: ash::vk::StructureType::PRESENT_INFO_KHR,
+            wait_semaphore_count: 1,
+            p_wait_semaphores: semaphore.as_ptr(),
+            p_swapchains: &self.swapchain_info.swapchain,
+            swapchain_count: 1,
+            p_image_indices: &image_index,
+            ..Default::default()
+        };
+
+        unsafe {
+            self.swapchain_info
+                .swapchain_device
+                .queue_present(self.device_info.queue_info.present_queue, &present_info)
+                .expect("Unable to present");
+        }
+    }
+}

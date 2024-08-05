@@ -1,5 +1,5 @@
 pub fn create_buffers(
-    device: &ash::Device,
+    logical_device: &ash::Device,
     image_views: &Vec<ash::vk::ImageView>,
     render_pass: &ash::vk::RenderPass,
     swapchain_extend: &ash::vk::Extent2D,
@@ -19,7 +19,7 @@ pub fn create_buffers(
         };
 
         let buffer = unsafe {
-            device
+            logical_device
                 .create_framebuffer(&frame_buffer_create_info, None)
                 .expect("Unable to create frame buffer")
         };
