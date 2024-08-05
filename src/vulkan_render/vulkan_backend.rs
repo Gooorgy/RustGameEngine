@@ -9,6 +9,7 @@ use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 use super::{
     command_buffer::CommandBufferInfo,
+    constants,
     device::{self, DeviceInfo},
     frame_buffer,
     graphics_pipeline::{self, PipelineInfo},
@@ -27,10 +28,11 @@ pub struct VulkanBackend {
     pipeline_info: PipelineInfo,
     render_pass: vk::RenderPass,
     swapchain_frame_buffers: Vec<vk::Framebuffer>,
-    image_available_semaphore: ash::vk::Semaphore,
-    render_finished_semaphore: ash::vk::Semaphore,
-    in_flight_fence: ash::vk::Fence,
+    image_available_semaphores: Vec<ash::vk::Semaphore>,
+    render_finished_semaphores: Vec<ash::vk::Semaphore>,
+    in_flight_fences: Vec<ash::vk::Fence>,
     command_buffer_info: CommandBufferInfo,
+    current_frame: u32,
 }
 
 impl VulkanBackend {
@@ -56,7 +58,7 @@ impl VulkanBackend {
 
         let command_buffer_info = CommandBufferInfo::new(&device_info);
 
-        let (image_available_semaphore, render_finished_semaphore, in_flight_fence) =
+        let (image_available_semaphores, render_finished_semaphores, in_flight_fences) =
             Self::create_sync_objects(&device_info.logical_device);
 
         Ok(Self {
@@ -69,10 +71,11 @@ impl VulkanBackend {
             pipeline_info,
             render_pass: render_pass,
             swapchain_frame_buffers: frame_buffers,
-            image_available_semaphore: image_available_semaphore,
-            render_finished_semaphore: render_finished_semaphore,
-            in_flight_fence: in_flight_fence,
+            image_available_semaphores,
+            render_finished_semaphores,
+            in_flight_fences,
             command_buffer_info,
+            current_frame: 0,
         })
     }
 
@@ -146,19 +149,23 @@ impl VulkanBackend {
         let extension_names =
             ash_window::enumerate_required_extensions(window.display_handle().unwrap().as_raw())
                 .unwrap();
-        let extension_names = extension_names.to_vec();
+        let mut extension_names = extension_names.to_vec();
+        if validation::VALIDATION.is_enabled {
+            extension_names.push(vk::EXT_DEBUG_UTILS_NAME.as_ptr());
+        }
 
-        let enable_layer_names = if validation::VALIDATION.is_enabled {
-            let x: Vec<CString> = validation::VALIDATION
-                .required_validation_layers
-                .iter()
-                .map(|layer_name| CString::new(*layer_name).unwrap())
-                .collect();
+        extension_names.push(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr());
 
-            x.iter().map(|layer_name| layer_name.as_ptr()).collect()
-        } else {
-            vec![]
-        };
+        let requred_validation_layer_raw_names: Vec<CString> = validation::VALIDATION
+            .required_validation_layers
+            .iter()
+            .map(|layer_name| CString::new(*layer_name).unwrap())
+            .collect();
+
+        let enable_layer_names: Vec<*const i8> = requred_validation_layer_raw_names
+            .iter()
+            .map(|layer_name| layer_name.as_ptr())
+            .collect();
 
         let p_debug_utils_messenger_info = if validation::VALIDATION.is_enabled {
             &validation::populate_debug_messenger_create_info()
@@ -222,7 +229,9 @@ impl VulkanBackend {
         image_views
     }
 
-    fn create_sync_objects(device: &ash::Device) -> (vk::Semaphore, vk::Semaphore, vk::Fence) {
+    fn create_sync_objects(
+        device: &ash::Device,
+    ) -> (Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>) {
         let semaphore_create_info = ash::vk::SemaphoreCreateInfo {
             s_type: ash::vk::StructureType::SEMAPHORE_CREATE_INFO,
             ..Default::default()
@@ -234,104 +243,132 @@ impl VulkanBackend {
             ..Default::default()
         };
 
-        unsafe {
-            (
-                device
+        let mut image_available_semaphores = vec![];
+        let mut render_finished_semaphores = vec![];
+        let mut in_flight_fences = vec![];
+
+        for _frame in 0..constants::MAX_FRAMES_IN_FLIGHT {
+            unsafe {
+                let image_available_semaphore = device
                     .create_semaphore(&semaphore_create_info, None)
-                    .expect(""),
-                device
+                    .expect("");
+
+                image_available_semaphores.push(image_available_semaphore);
+
+                let render_finished_semaphore = device
                     .create_semaphore(&semaphore_create_info, None)
-                    .expect(""),
-                device.create_fence(&fence_create_info, None).expect(""),
-            )
+                    .expect("");
+                render_finished_semaphores.push(render_finished_semaphore);
+
+                let in_flight_fence = device.create_fence(&fence_create_info, None).expect("");
+                in_flight_fences.push(in_flight_fence);
+            }
         }
+
+        (
+            image_available_semaphores,
+            render_finished_semaphores,
+            in_flight_fences,
+        )
     }
 
-    pub fn begin_render_pass(&self) {
+    pub fn begin_render_pass(&self, image_index: u32, current_frame: u32) {
         let clear_values = [ash::vk::ClearValue {
             color: ash::vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 1.0],
             },
         }];
 
-        for (i, &command_buffer) in self.command_buffer_info.command_buffers.iter().enumerate() {
-            let render_pass_begin_info = ash::vk::RenderPassBeginInfo {
-                s_type: ash::vk::StructureType::RENDER_PASS_BEGIN_INFO,
-                render_pass: self.render_pass,
-                framebuffer: self.swapchain_frame_buffers[i],
-                render_area: ash::vk::Rect2D {
-                    offset: ash::vk::Offset2D { x: 0, y: 0 },
-                    extent: self.swapchain_info.swapchain_extent,
-                },
-                clear_value_count: clear_values.len() as u32,
-                p_clear_values: clear_values.as_ptr(),
+        let render_pass_begin_info = ash::vk::RenderPassBeginInfo {
+            s_type: ash::vk::StructureType::RENDER_PASS_BEGIN_INFO,
+            render_pass: self.render_pass,
+            framebuffer: self.swapchain_frame_buffers[image_index as usize],
+            render_area: ash::vk::Rect2D {
+                offset: ash::vk::Offset2D { x: 0, y: 0 },
+                extent: self.swapchain_info.swapchain_extent,
+            },
+            clear_value_count: clear_values.len() as u32,
+            p_clear_values: clear_values.as_ptr(),
+            ..Default::default()
+        };
+
+        unsafe {
+            self.device_info.logical_device.cmd_begin_render_pass(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                &render_pass_begin_info,
+                ash::vk::SubpassContents::INLINE,
+            );
+
+            self.device_info.logical_device.cmd_bind_pipeline(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                ash::vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_info.graphics_pipelines[0],
+            );
+
+            let viewport = ash::vk::Viewport {
+                x: 0.0f32,
+                y: 0.0f32,
+                width: self.swapchain_info.swapchain_extent.width as f32,
+                height: self.swapchain_info.swapchain_extent.height as f32,
+                min_depth: 0 as f32,
+                max_depth: 1 as f32,
                 ..Default::default()
             };
 
-            unsafe {
-                self.device_info.logical_device.cmd_begin_render_pass(
-                    command_buffer,
-                    &render_pass_begin_info,
-                    ash::vk::SubpassContents::INLINE,
-                );
+            self.device_info.logical_device.cmd_set_viewport(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                0,
+                &[viewport],
+            );
 
-                self.device_info.logical_device.cmd_bind_pipeline(
-                    command_buffer,
-                    ash::vk::PipelineBindPoint::GRAPHICS,
-                    self.pipeline_info.graphics_pipelines[i],
-                );
+            let scissor = ash::vk::Rect2D {
+                offset: ash::vk::Offset2D { x: 0, y: 0 },
+                extent: self.swapchain_info.swapchain_extent,
+                ..Default::default()
+            };
 
-                let viewport = ash::vk::Viewport {
-                    x: 0.0f32,
-                    y: 0.0f32,
-                    width: self.swapchain_info.swapchain_extent.width as f32,
-                    height: self.swapchain_info.swapchain_extent.height as f32,
-                    min_depth: 0 as f32,
-                    max_depth: 1 as f32,
-                    ..Default::default()
-                };
+            self.device_info.logical_device.cmd_set_scissor(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                0,
+                &[scissor],
+            );
 
-                self.device_info
-                    .logical_device
-                    .cmd_set_viewport(command_buffer, 0, &[viewport]);
+            self.device_info.logical_device.cmd_draw(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                3,
+                1,
+                0,
+                0,
+            );
 
-                let scissor = ash::vk::Rect2D {
-                    offset: ash::vk::Offset2D { x: 0, y: 0 },
-                    extent: self.swapchain_info.swapchain_extent,
-                    ..Default::default()
-                };
+            self.device_info.logical_device.cmd_end_render_pass(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+            );
 
-                self.device_info
-                    .logical_device
-                    .cmd_set_scissor(command_buffer, 0, &[scissor]);
-
-                self.device_info
-                    .logical_device
-                    .cmd_draw(command_buffer, 3, 1, 0, 0);
-
-                self.device_info
-                    .logical_device
-                    .cmd_end_render_pass(command_buffer);
-
-                self.device_info
-                    .logical_device
-                    .end_command_buffer(command_buffer)
-                    .expect("Failed to end command buffer");
-            }
+            self.device_info
+                .logical_device
+                .end_command_buffer(
+                    self.command_buffer_info.command_buffers[current_frame as usize],
+                )
+                .expect("Failed to end command buffer");
         }
     }
 
-    pub fn draw_frame(&self) {
+    pub fn draw_frame(&mut self) {
         println!("draw frame");
         unsafe {
             self.device_info
                 .logical_device
-                .wait_for_fences(&[self.in_flight_fence], true, u64::MAX)
+                .wait_for_fences(
+                    &[self.in_flight_fences[self.current_frame as usize]],
+                    true,
+                    u64::MAX,
+                )
                 .expect("Unable to wait for fence");
 
             self.device_info
                 .logical_device
-                .reset_fences(&[self.in_flight_fence])
+                .reset_fences(&[self.in_flight_fences[self.current_frame as usize]])
                 .expect("Unable to reset fence");
         }
 
@@ -341,8 +378,8 @@ impl VulkanBackend {
                 .acquire_next_image(
                     self.swapchain_info.swapchain,
                     u64::MAX,
-                    self.image_available_semaphore,
-                    self.in_flight_fence,
+                    self.image_available_semaphores[self.current_frame as usize],
+                    vk::Fence::null(),
                 )
                 .expect("unable to acquire next image")
         };
@@ -351,22 +388,23 @@ impl VulkanBackend {
             self.device_info
                 .logical_device
                 .reset_command_buffer(
-                    self.command_buffer_info.command_buffers[image_index as usize],
+                    self.command_buffer_info.command_buffers[self.current_frame as usize],
                     vk::CommandBufferResetFlags::empty(),
                 )
                 .expect("Unable to reset command buffer");
         }
 
         self.command_buffer_info
-            .record_command_buffer(&self.device_info.logical_device);
+            .record_command_buffer(&self.device_info.logical_device, self.current_frame);
 
-        self.begin_render_pass();
+        self.begin_render_pass(image_index, self.current_frame);
 
-        let semaphore = [self.render_finished_semaphore];
+        let semaphore = [self.render_finished_semaphores[self.current_frame as usize]];
         let submit_info = ash::vk::SubmitInfo {
             s_type: ash::vk::StructureType::SUBMIT_INFO,
             wait_semaphore_count: 1,
-            p_wait_semaphores: [self.image_available_semaphore].as_ptr(),
+            p_wait_semaphores: [self.image_available_semaphores[self.current_frame as usize]]
+                .as_ptr(),
             p_wait_dst_stage_mask: [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT].as_ptr(),
             command_buffer_count: 1,
             p_command_buffers: self.command_buffer_info.command_buffers.as_ptr(),
@@ -381,7 +419,7 @@ impl VulkanBackend {
                 .queue_submit(
                     self.device_info.queue_info.graphics_queue,
                     &[submit_info],
-                    self.in_flight_fence,
+                    self.in_flight_fences[self.current_frame as usize],
                 )
                 .expect("Unable to submit draw command buffer");
         }
@@ -402,5 +440,7 @@ impl VulkanBackend {
                 .queue_present(self.device_info.queue_info.present_queue, &present_info)
                 .expect("Unable to present");
         }
+
+        self.current_frame = (self.current_frame + 1) % constants::MAX_FRAMES_IN_FLIGHT;
     }
 }

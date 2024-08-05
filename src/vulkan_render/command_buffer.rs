@@ -2,7 +2,7 @@ use std::ptr;
 
 use ash::vk;
 
-use super::device::DeviceInfo;
+use super::{constants, device::DeviceInfo};
 
 pub struct CommandBufferInfo {
     pub command_buffers: Vec<vk::CommandBuffer>,
@@ -14,7 +14,7 @@ impl CommandBufferInfo {
             s_type: ash::vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             command_pool: device_info.command_pool,
             level: ash::vk::CommandBufferLevel::PRIMARY,
-            command_buffer_count: 1,
+            command_buffer_count: constants::MAX_FRAMES_IN_FLIGHT,
             ..Default::default()
         };
 
@@ -28,21 +28,22 @@ impl CommandBufferInfo {
         Self { command_buffers }
     }
 
-    pub fn record_command_buffer(&self, device: &ash::Device) {
-        for (_i, &command_buffer) in self.command_buffers.iter().enumerate() {
-            let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo {
-                s_type: ash::vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-                flags: ash::vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
-                p_inheritance_info: ptr::null(),
-                p_next: ptr::null(),
-                ..Default::default()
-            };
+    pub fn record_command_buffer(&self, device: &ash::Device, current_frame: u32) {
+        let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo {
+            s_type: ash::vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
+            flags: ash::vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+            p_inheritance_info: ptr::null(),
+            p_next: ptr::null(),
+            ..Default::default()
+        };
 
-            unsafe {
-                device
-                    .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-                    .expect("Unable to begin recording command buffer")
-            }
+        unsafe {
+            device
+                .begin_command_buffer(
+                    self.command_buffers[current_frame as usize],
+                    &command_buffer_begin_info,
+                )
+                .expect("Unable to begin recording command buffer")
         }
     }
 }

@@ -32,8 +32,8 @@ impl ApplicationHandler for AppWindow {
     ) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::RedrawRequested => match &self.vulkan_app {
-                Some(app) => app.draw_frame(),
+            WindowEvent::RedrawRequested => match self.vulkan_app {
+                Some(ref mut app) => app.draw_frame(),
                 _ => panic!(""),
             },
             _ => {}

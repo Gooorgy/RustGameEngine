@@ -45,7 +45,7 @@ pub fn populate_debug_messenger_create_info() -> ash::vk::DebugUtilsMessengerCre
 }
 
 pub const VALIDATION: ValidationInfo = ValidationInfo {
-    is_enabled: false,
+    is_enabled: true,
     required_validation_layers: ["VK_LAYER_KHRONOS_validation"],
 };
 

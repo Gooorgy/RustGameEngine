@@ -1,10 +1,10 @@
-use std::{collections::HashSet, ffi::CStr, ptr};
+use std::{collections::HashSet, ffi::CStr, os::raw::c_void, ptr};
 
 use ash::vk;
 
 use super::surface::SurfaceInfo;
 
-const DEVICE_EXTENSIONS: [&CStr; 1] = [vk::KHR_SWAPCHAIN_NAME];
+const DEVICE_EXTENSIONS: [&CStr; 2] = [vk::KHR_SWAPCHAIN_NAME, vk::KHR_SYNCHRONIZATION2_NAME];
 
 pub struct DeviceInfo {
     pub _physical_device: vk::PhysicalDevice,
@@ -46,9 +46,15 @@ impl DeviceInfo {
             ..Default::default()
         };
 
+        let sync2Features = vk::PhysicalDeviceSynchronization2Features {
+            s_type: vk::StructureType::PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+            synchronization2: vk::TRUE,
+            ..Default::default()
+        };
+
         let create_info = vk::DeviceCreateInfo {
             s_type: vk::StructureType::DEVICE_CREATE_INFO,
-            p_next: ptr::null(),
+            p_next: ptr::addr_of!(sync2Features) as *const c_void,
             flags: vk::DeviceCreateFlags::empty(),
             p_queue_create_infos: queue_create_infos.as_ptr(),
             queue_create_info_count: queue_create_infos.len() as u32,
