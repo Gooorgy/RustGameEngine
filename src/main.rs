@@ -21,9 +21,10 @@ impl ApplicationHandler for AppWindow {
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
 
-        self.vulkan_app = Some(VulkanBackend::new(&self.window.as_ref().unwrap()).expect(""));
+        self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap()).expect(""));
     }
 
+    // Handle window event
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -33,7 +34,11 @@ impl ApplicationHandler for AppWindow {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => match self.vulkan_app {
-                Some(ref mut app) => app.draw_frame(),
+                Some(ref mut app) => {
+                    app.draw_frame();
+                    let window = &self.window.as_ref().unwrap();
+                    Window::request_redraw(window);
+                }
                 _ => panic!(""),
             },
             _ => {}

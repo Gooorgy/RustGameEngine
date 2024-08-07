@@ -46,7 +46,7 @@ impl DeviceInfo {
             ..Default::default()
         };
 
-        let sync2Features = vk::PhysicalDeviceSynchronization2Features {
+        let sync2_features = vk::PhysicalDeviceSynchronization2Features {
             s_type: vk::StructureType::PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
             synchronization2: vk::TRUE,
             ..Default::default()
@@ -54,7 +54,7 @@ impl DeviceInfo {
 
         let create_info = vk::DeviceCreateInfo {
             s_type: vk::StructureType::DEVICE_CREATE_INFO,
-            p_next: ptr::addr_of!(sync2Features) as *const c_void,
+            p_next: ptr::addr_of!(sync2_features) as *const c_void,
             flags: vk::DeviceCreateFlags::empty(),
             p_queue_create_infos: queue_create_infos.as_ptr(),
             queue_create_info_count: queue_create_infos.len() as u32,
@@ -78,7 +78,7 @@ impl DeviceInfo {
 
         let command_pool = Self::create_command_pool(&logical_device, &queue_indices);
 
-        return Self {
+        Self {
             logical_device,
             _physical_device: physical_device,
             queue_info: QueueInfo {
@@ -89,7 +89,12 @@ impl DeviceInfo {
             },
             swapchain_support_details,
             command_pool,
-        };
+        }
+    }
+
+    pub fn update_swapchain_capabilities(&mut self, surface_info: &SurfaceInfo) {
+        self.swapchain_support_details =
+            Self::query_swap_chain_support(self._physical_device, surface_info);
     }
 
     fn pick_physical_device(
@@ -116,11 +121,10 @@ impl DeviceInfo {
                 physical_device,
                 surface_info,
                 &swapchain_support_details,
-            ) {
-                if result.is_none() {
-                    result = Some(physical_device);
-                    break;
-                }
+            ) && result.is_none()
+            {
+                result = Some(physical_device);
+                break;
             }
         }
 
@@ -145,7 +149,7 @@ impl DeviceInfo {
                 && !swapchain_support_details.present_modes.is_empty();
         }
 
-        return indices.is_some() && extensions_supported && swapchain_adequate;
+        indices.is_some() && extensions_supported && swapchain_adequate
     }
 
     fn find_queue_family(

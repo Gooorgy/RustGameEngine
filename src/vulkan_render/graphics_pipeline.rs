@@ -2,6 +2,8 @@ use std::{ffi::CString, fs, io, path::Path, ptr};
 
 use ash::vk;
 
+use super::structs::Vertex;
+
 const FRAGMENT_SHADER: &str = "frag";
 const VERTEX_SHADER: &str = "vert";
 const SHADER_PATH: &str = ".\\src\\shaders";
@@ -42,7 +44,7 @@ impl PipelineInfo {
 
         let shader_stages = [vert_shader_stage_create_info, frag_shader_stage_create_info];
 
-        let dynamic_states = vec![
+        let dynamic_states = [
             ash::vk::DynamicState::VIEWPORT,
             ash::vk::DynamicState::SCISSOR,
         ];
@@ -54,12 +56,15 @@ impl PipelineInfo {
             ..Default::default()
         };
 
+        let vertex_binding_description = Vertex::get_binding_descriptions();
+        let vertex_attribute_description = Vertex::get_attribute_descriptions();
+
         let vertex_input_info_create_info = ash::vk::PipelineVertexInputStateCreateInfo {
             s_type: ash::vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-            vertex_binding_description_count: 0,
-            p_vertex_binding_descriptions: ptr::null(),
-            vertex_attribute_description_count: 0,
-            p_vertex_attribute_descriptions: ptr::null(),
+            vertex_binding_description_count: vertex_binding_description.len() as u32,
+            p_vertex_binding_descriptions: vertex_binding_description.as_ptr(),
+            vertex_attribute_description_count: vertex_attribute_description.len() as u32,
+            p_vertex_attribute_descriptions: vertex_attribute_description.as_ptr(),
             ..Default::default()
         };
 
@@ -109,7 +114,6 @@ impl PipelineInfo {
             src_alpha_blend_factor: ash::vk::BlendFactor::ONE,
             dst_alpha_blend_factor: ash::vk::BlendFactor::ZERO,
             alpha_blend_op: ash::vk::BlendOp::ADD,
-            ..Default::default()
         };
 
         let color_blending_create_info = ash::vk::PipelineColorBlendStateCreateInfo {
@@ -181,7 +185,7 @@ impl PipelineInfo {
         fs::read(path)
     }
 
-    fn create_shader_module(code: &Vec<u8>, device: &ash::Device) -> ash::vk::ShaderModule {
+    fn create_shader_module(code: &[u8], device: &ash::Device) -> ash::vk::ShaderModule {
         let create_info = ash::vk::ShaderModuleCreateInfo {
             s_type: ash::vk::StructureType::SHADER_MODULE_CREATE_INFO,
             code_size: code.len(),

@@ -18,7 +18,7 @@ impl SurfaceInfo {
                 .unwrap()
         };
 
-        let surface_instance = ash::khr::surface::Instance::new(&entry, &instance);
+        let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         Self {
             surface_instance,

@@ -103,9 +103,7 @@ impl SwapchainInfo {
         }
     }
 
-    fn choose_swapchain_format(
-        available_formats: &Vec<vk::SurfaceFormatKHR>,
-    ) -> vk::SurfaceFormatKHR {
+    fn choose_swapchain_format(available_formats: &[vk::SurfaceFormatKHR]) -> vk::SurfaceFormatKHR {
         for &format in available_formats.iter() {
             if format.format == vk::Format::B8G8R8A8_SRGB
                 && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
@@ -114,11 +112,11 @@ impl SwapchainInfo {
             }
         }
 
-        return available_formats.first().unwrap().clone();
+        return *available_formats.first().unwrap();
     }
 
     fn choose_swap_present_mode(
-        available_present_modes: &Vec<vk::PresentModeKHR>,
+        available_present_modes: &[vk::PresentModeKHR],
     ) -> vk::PresentModeKHR {
         for &present_mode in available_present_modes.iter() {
             if present_mode == vk::PresentModeKHR::MAILBOX {
@@ -126,7 +124,7 @@ impl SwapchainInfo {
             }
         }
 
-        return vk::PresentModeKHR::FIFO;
+        vk::PresentModeKHR::FIFO
     }
 
     fn chosse_swap_extent(capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {

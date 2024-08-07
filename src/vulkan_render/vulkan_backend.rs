@@ -7,6 +7,8 @@ use std::{
 use ash::vk;
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
+use crate::VERTICES;
+
 use super::{
     command_buffer::CommandBufferInfo,
     constants,
@@ -16,15 +18,16 @@ use super::{
     surface::{self, SurfaceInfo},
     swapchain::{self, SwapchainInfo},
     validation,
+    vertex_buffer::{self, VertexBufferInfo},
 };
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
-    _instance: ash::Instance,
+    instance: ash::Instance,
     device_info: DeviceInfo,
-    _surface_info: SurfaceInfo,
+    surface_info: SurfaceInfo,
     swapchain_info: SwapchainInfo,
-    _image_views: Vec<vk::ImageView>,
+    image_views: Vec<vk::ImageView>,
     pipeline_info: PipelineInfo,
     render_pass: vk::RenderPass,
     swapchain_frame_buffers: Vec<vk::Framebuffer>,
@@ -33,6 +36,7 @@ pub struct VulkanBackend {
     in_flight_fences: Vec<ash::vk::Fence>,
     command_buffer_info: CommandBufferInfo,
     current_frame: u32,
+    vertex_buffer_info: VertexBufferInfo,
 }
 
 impl VulkanBackend {
@@ -56,6 +60,8 @@ impl VulkanBackend {
             &swapchain_info.swapchain_extent,
         );
 
+        let vertex_buffer_info = vertex_buffer::VertexBufferInfo::new(&instance, &device_info);
+
         let command_buffer_info = CommandBufferInfo::new(&device_info);
 
         let (image_available_semaphores, render_finished_semaphores, in_flight_fences) =
@@ -63,19 +69,20 @@ impl VulkanBackend {
 
         Ok(Self {
             _entry: entry,
-            _instance: instance,
+            instance,
             device_info,
-            _surface_info: surface_info,
+            surface_info,
             swapchain_info,
-            _image_views: image_views,
+            image_views,
             pipeline_info,
-            render_pass: render_pass,
+            render_pass,
             swapchain_frame_buffers: frame_buffers,
             image_available_semaphores,
             render_finished_semaphores,
             in_flight_fences,
             command_buffer_info,
             current_frame: 0,
+            vertex_buffer_info,
         })
     }
 
@@ -229,6 +236,49 @@ impl VulkanBackend {
         image_views
     }
 
+    fn recreate_swapchain(&mut self) {
+        unsafe { self.device_info.logical_device.device_wait_idle().unwrap() }
+
+        self.cleanup_swapchain();
+
+        self.device_info
+            .update_swapchain_capabilities(&self.surface_info);
+        self.swapchain_info =
+            swapchain::SwapchainInfo::new(&self.instance, &self.device_info, &self.surface_info);
+        self.image_views =
+            Self::create_image_views(&self.swapchain_info, &self.device_info.logical_device);
+        self.swapchain_frame_buffers = frame_buffer::create_buffers(
+            &self.device_info.logical_device,
+            &self.image_views,
+            &self.render_pass,
+            &self.swapchain_info.swapchain_extent,
+        );
+    }
+
+    fn cleanup_swapchain(&mut self) {
+        for framebuffer in self.swapchain_frame_buffers.iter() {
+            unsafe {
+                self.device_info
+                    .logical_device
+                    .destroy_framebuffer(*framebuffer, None)
+            }
+        }
+
+        for image_view in self.image_views.iter() {
+            unsafe {
+                self.device_info
+                    .logical_device
+                    .destroy_image_view(*image_view, None)
+            }
+        }
+
+        unsafe {
+            self.swapchain_info
+                .swapchain_device
+                .destroy_swapchain(self.swapchain_info.swapchain, None)
+        }
+    }
+
     fn create_sync_objects(
         device: &ash::Device,
     ) -> (Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>) {
@@ -311,8 +361,7 @@ impl VulkanBackend {
                 width: self.swapchain_info.swapchain_extent.width as f32,
                 height: self.swapchain_info.swapchain_extent.height as f32,
                 min_depth: 0 as f32,
-                max_depth: 1 as f32,
-                ..Default::default()
+                max_depth: 1f32,
             };
 
             self.device_info.logical_device.cmd_set_viewport(
@@ -324,7 +373,6 @@ impl VulkanBackend {
             let scissor = ash::vk::Rect2D {
                 offset: ash::vk::Offset2D { x: 0, y: 0 },
                 extent: self.swapchain_info.swapchain_extent,
-                ..Default::default()
             };
 
             self.device_info.logical_device.cmd_set_scissor(
@@ -333,9 +381,17 @@ impl VulkanBackend {
                 &[scissor],
             );
 
+            let vertex_buffers = [self.vertex_buffer_info.buffer];
+            self.device_info.logical_device.cmd_bind_vertex_buffers(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                0,
+                &vertex_buffers,
+                &[0_u64],
+            );
+
             self.device_info.logical_device.cmd_draw(
                 self.command_buffer_info.command_buffers[current_frame as usize],
-                3,
+                VERTICES.len() as u32,
                 1,
                 0,
                 0,
@@ -364,24 +420,35 @@ impl VulkanBackend {
                     true,
                     u64::MAX,
                 )
-                .expect("Unable to wait for fence");
+                .expect("Unable to wait for fence")
+        }
 
+        let image_result = unsafe {
+            self.swapchain_info.swapchain_device.acquire_next_image(
+                self.swapchain_info.swapchain,
+                u64::MAX,
+                self.image_available_semaphores[self.current_frame as usize],
+                vk::Fence::null(),
+            )
+        };
+
+        let (image_index, _is_sub_optimal) = match image_result {
+            Ok(result) => result,
+            Err(error_result) => match error_result {
+                vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                    self.recreate_swapchain();
+                    println!("Error SWAPCHAIN");
+                    return;
+                }
+                _ => panic!(),
+            },
+        };
+
+        unsafe {
             self.device_info
                 .logical_device
                 .reset_fences(&[self.in_flight_fences[self.current_frame as usize]])
-                .expect("Unable to reset fence");
-        }
-
-        let (image_index, _is_sub_optimal_image) = unsafe {
-            self.swapchain_info
-                .swapchain_device
-                .acquire_next_image(
-                    self.swapchain_info.swapchain,
-                    u64::MAX,
-                    self.image_available_semaphores[self.current_frame as usize],
-                    vk::Fence::null(),
-                )
-                .expect("unable to acquire next image")
+                .expect("Unable to reset fence")
         };
 
         unsafe {
@@ -407,7 +474,8 @@ impl VulkanBackend {
                 .as_ptr(),
             p_wait_dst_stage_mask: [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT].as_ptr(),
             command_buffer_count: 1,
-            p_command_buffers: self.command_buffer_info.command_buffers.as_ptr(),
+            p_command_buffers: &self.command_buffer_info.command_buffers
+                [self.current_frame as usize],
             signal_semaphore_count: 1,
             p_signal_semaphores: semaphore.as_ptr(),
             ..Default::default()
@@ -434,12 +502,23 @@ impl VulkanBackend {
             ..Default::default()
         };
 
-        unsafe {
+        let present_result = unsafe {
             self.swapchain_info
                 .swapchain_device
                 .queue_present(self.device_info.queue_info.present_queue, &present_info)
-                .expect("Unable to present");
-        }
+        };
+
+        match present_result {
+            Ok(result) => result,
+            Err(error_result) => match error_result {
+                vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                    self.recreate_swapchain();
+                    println!("Error SWAPCHAIN");
+                    return;
+                }
+                _ => panic!(),
+            },
+        };
 
         self.current_frame = (self.current_frame + 1) % constants::MAX_FRAMES_IN_FLIGHT;
     }
