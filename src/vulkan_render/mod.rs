@@ -1,3 +1,4 @@
+mod buffer;
 mod command_buffer;
 mod constants;
 mod device;
@@ -7,5 +8,4 @@ pub mod structs;
 mod surface;
 mod swapchain;
 mod validation;
-mod vertex_buffer;
 pub mod vulkan_backend;

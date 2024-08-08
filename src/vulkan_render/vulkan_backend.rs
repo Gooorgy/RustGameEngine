@@ -10,15 +10,16 @@ use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 use crate::VERTICES;
 
 use super::{
+    buffer::{self, BufferInfo},
     command_buffer::CommandBufferInfo,
     constants,
     device::{self, DeviceInfo},
     frame_buffer,
     graphics_pipeline::{self, PipelineInfo},
+    structs::Vertex,
     surface::{self, SurfaceInfo},
     swapchain::{self, SwapchainInfo},
     validation,
-    vertex_buffer::{self, VertexBufferInfo},
 };
 
 pub struct VulkanBackend {
@@ -36,7 +37,7 @@ pub struct VulkanBackend {
     in_flight_fences: Vec<ash::vk::Fence>,
     command_buffer_info: CommandBufferInfo,
     current_frame: u32,
-    vertex_buffer_info: VertexBufferInfo,
+    vertex_buffer_info: BufferInfo,
 }
 
 impl VulkanBackend {
@@ -60,7 +61,7 @@ impl VulkanBackend {
             &swapchain_info.swapchain_extent,
         );
 
-        let vertex_buffer_info = vertex_buffer::VertexBufferInfo::new(&instance, &device_info);
+        let vertex_buffer_info = Self::create_vertex_buffer(&instance, &device_info);
 
         let command_buffer_info = CommandBufferInfo::new(&device_info);
 
@@ -84,6 +85,50 @@ impl VulkanBackend {
             current_frame: 0,
             vertex_buffer_info,
         })
+    }
+
+    fn create_vertex_buffer(instance: &ash::Instance, device_info: &DeviceInfo) -> BufferInfo {
+        let buffer_size = std::mem::size_of_val(&VERTICES) as u64;
+
+        let staging_buffer = buffer::BufferInfo::new(
+            instance,
+            device_info,
+            buffer_size,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+        );
+
+        unsafe {
+            let data = device_info
+                .logical_device
+                .map_memory(
+                    staging_buffer.buffer_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to map memory") as *mut Vertex;
+
+            data.copy_from_nonoverlapping(VERTICES.as_ptr(), VERTICES.len());
+
+            device_info
+                .logical_device
+                .unmap_memory(staging_buffer.buffer_memory);
+        };
+
+        let vertex_buffer = buffer::BufferInfo::new(
+            instance,
+            device_info,
+            buffer_size,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+        );
+
+        vertex_buffer.copy_buffer(&staging_buffer, buffer_size, device_info);
+
+        staging_buffer.destroy_buffer(&device_info.logical_device);
+
+        vertex_buffer
     }
 
     fn create_render_pass(

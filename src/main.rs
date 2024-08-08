@@ -16,11 +16,13 @@ struct AppWindow {
 
 impl ApplicationHandler for AppWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let monitor = event_loop.primary_monitor();
+        let x = Some(winit::window::Fullscreen::Borderless(monitor));
         let window_attributes = Window::default_attributes()
             .with_title(WINDOW_TITLE)
-            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
+            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+            .with_fullscreen(x);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
-
         self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap()).expect(""));
     }
 
