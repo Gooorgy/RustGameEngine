@@ -4,10 +4,10 @@ use std::{
     ptr,
 };
 
-use ash::vk;
+use ash::vk::{self, BindIndexBufferIndirectCommandNV};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
-use crate::VERTICES;
+use crate::{INDICES, VERTICES};
 
 use super::{
     buffer::{self, BufferInfo},
@@ -38,6 +38,7 @@ pub struct VulkanBackend {
     command_buffer_info: CommandBufferInfo,
     current_frame: u32,
     vertex_buffer_info: BufferInfo,
+    _index_buffer_info: BufferInfo,
 }
 
 impl VulkanBackend {
@@ -62,6 +63,7 @@ impl VulkanBackend {
         );
 
         let vertex_buffer_info = Self::create_vertex_buffer(&instance, &device_info);
+        let index_buffer_info = Self::create_index_buffer(&instance, &device_info);
 
         let command_buffer_info = CommandBufferInfo::new(&device_info);
 
@@ -84,7 +86,51 @@ impl VulkanBackend {
             command_buffer_info,
             current_frame: 0,
             vertex_buffer_info,
+            _index_buffer_info: index_buffer_info,
         })
+    }
+
+    fn create_index_buffer(instance: &ash::Instance, device_info: &DeviceInfo) -> BufferInfo {
+        let buffer_size = std::mem::size_of_val(&INDICES) as u64;
+        let staging_buffer = buffer::BufferInfo::new(
+            instance,
+            device_info,
+            buffer_size,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+        );
+
+        unsafe {
+            let data = device_info
+                .logical_device
+                .map_memory(
+                    staging_buffer.buffer_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to map memory") as *mut u16;
+
+            data.copy_from_nonoverlapping(INDICES.as_ptr(), INDICES.len());
+
+            device_info
+                .logical_device
+                .unmap_memory(staging_buffer.buffer_memory);
+        };
+
+        let index_buffer = buffer::BufferInfo::new(
+            instance,
+            device_info,
+            buffer_size,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+        );
+
+        index_buffer.copy_buffer(&staging_buffer, buffer_size, device_info);
+
+        staging_buffer.destroy_buffer(&device_info.logical_device);
+
+        index_buffer
     }
 
     fn create_vertex_buffer(instance: &ash::Instance, device_info: &DeviceInfo) -> BufferInfo {
@@ -434,10 +480,18 @@ impl VulkanBackend {
                 &[0_u64],
             );
 
-            self.device_info.logical_device.cmd_draw(
+            self.device_info.logical_device.cmd_bind_index_buffer(
                 self.command_buffer_info.command_buffers[current_frame as usize],
-                VERTICES.len() as u32,
+                self._index_buffer_info.buffer,
+                0,
+                vk::IndexType::UINT16,
+            );
+
+            self.device_info.logical_device.cmd_draw_indexed(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                INDICES.len() as u32,
                 1,
+                0,
                 0,
                 0,
             );
