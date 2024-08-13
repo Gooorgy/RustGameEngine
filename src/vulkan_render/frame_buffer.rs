@@ -7,16 +7,13 @@ pub fn create_buffers(
     let mut frame_buffers = vec![];
 
     for image_view in image_views {
-        let frame_buffer_create_info = ash::vk::FramebufferCreateInfo {
-            s_type: ash::vk::StructureType::FRAMEBUFFER_CREATE_INFO,
-            render_pass: *render_pass,
-            attachment_count: 1,
-            p_attachments: image_view,
-            width: swapchain_extend.width,
-            height: swapchain_extend.height,
-            layers: 1,
-            ..Default::default()
-        };
+        let image_view = [*image_view];
+        let frame_buffer_create_info = ash::vk::FramebufferCreateInfo::default()
+            .render_pass(*render_pass)
+            .attachment_count(1)
+            .attachments(&image_view)
+            .width(swapchain_extend.width)
+            .height(swapchain_extend.height);
 
         let buffer = unsafe {
             logical_device

@@ -15,7 +15,7 @@ impl SurfaceInfo {
         let display_handle = window.display_handle().unwrap().as_raw();
         let surface = unsafe {
             ash_window::create_surface(entry, instance, display_handle, window_handle, None)
-                .unwrap()
+                .expect("Error Creating Surface")
         };
 
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);

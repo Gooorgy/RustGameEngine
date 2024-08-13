@@ -1,5 +1,3 @@
-use std::ptr;
-
 use ash::vk;
 
 use super::{constants, device::DeviceInfo};
@@ -10,13 +8,10 @@ pub struct CommandBufferInfo {
 
 impl CommandBufferInfo {
     pub fn new(device_info: &DeviceInfo) -> CommandBufferInfo {
-        let command_buffer_allocate_info = ash::vk::CommandBufferAllocateInfo {
-            s_type: ash::vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
-            command_pool: device_info.command_pool,
-            level: ash::vk::CommandBufferLevel::PRIMARY,
-            command_buffer_count: constants::MAX_FRAMES_IN_FLIGHT,
-            ..Default::default()
-        };
+        let command_buffer_allocate_info = ash::vk::CommandBufferAllocateInfo::default()
+            .command_pool(device_info.command_pool)
+            .command_buffer_count(constants::MAX_FRAMES_IN_FLIGHT)
+            .level(vk::CommandBufferLevel::PRIMARY);
 
         let command_buffers = unsafe {
             device_info
@@ -29,13 +24,8 @@ impl CommandBufferInfo {
     }
 
     pub fn record_command_buffer(&self, device: &ash::Device, current_frame: u32) {
-        let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo {
-            s_type: ash::vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-            flags: ash::vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
-            p_inheritance_info: ptr::null(),
-            p_next: ptr::null(),
-            ..Default::default()
-        };
+        let command_buffer_begin_info = ash::vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE);
 
         unsafe {
             device

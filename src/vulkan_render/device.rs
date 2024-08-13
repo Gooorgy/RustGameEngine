@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ffi::CStr, os::raw::c_void, ptr};
+use std::{collections::HashSet, ffi::CStr};
 
 use ash::vk;
 
@@ -31,39 +31,24 @@ impl DeviceInfo {
         let mut queue_create_infos = vec![];
 
         for &unique_queue_family in unique_queue_families.iter() {
-            let queue_create_info = vk::DeviceQueueCreateInfo {
-                s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
-                queue_family_index: unique_queue_family,
-                queue_count: 1,
-                p_queue_priorities: queue_priorities.as_ptr(),
-                ..Default::default()
-            };
+            let queue_create_info = vk::DeviceQueueCreateInfo::default()
+                .queue_family_index(unique_queue_family)
+                .queue_priorities(&queue_priorities);
 
             queue_create_infos.push(queue_create_info);
         }
 
-        let physical_device_features = vk::PhysicalDeviceFeatures {
-            ..Default::default()
-        };
+        let physical_device_features = vk::PhysicalDeviceFeatures::default();
 
-        let sync2_features = vk::PhysicalDeviceSynchronization2Features {
-            s_type: vk::StructureType::PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-            synchronization2: vk::TRUE,
-            ..Default::default()
-        };
+        let mut sync2_features =
+            vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
 
-        let create_info = vk::DeviceCreateInfo {
-            s_type: vk::StructureType::DEVICE_CREATE_INFO,
-            p_next: ptr::addr_of!(sync2_features) as *const c_void,
-            flags: vk::DeviceCreateFlags::empty(),
-            p_queue_create_infos: queue_create_infos.as_ptr(),
-            queue_create_info_count: queue_create_infos.len() as u32,
-            p_enabled_features: &physical_device_features,
-            pp_enabled_extension_names: DEVICE_EXTENSIONS.map(|name| name.as_ptr()).as_ptr(),
-            enabled_extension_count: DEVICE_EXTENSIONS.len() as u32,
-
-            ..Default::default()
-        };
+        let binding = DEVICE_EXTENSIONS.map(|name| name.as_ptr());
+        let create_info = vk::DeviceCreateInfo::default()
+            .push_next(&mut sync2_features)
+            .queue_create_infos(queue_create_infos.as_slice())
+            .enabled_features(&physical_device_features)
+            .enabled_extension_names(binding.as_slice());
 
         let logical_device: ash::Device = unsafe {
             instance
@@ -220,21 +205,21 @@ impl DeviceInfo {
             surface_info
                 .surface_instance
                 .get_physical_device_surface_capabilities(physical_device, surface_info.surface)
-                .unwrap()
+                .expect("Error queue")
         };
 
         let formats = unsafe {
             surface_info
                 .surface_instance
                 .get_physical_device_surface_formats(physical_device, surface_info.surface)
-                .unwrap()
+                .expect("Error queue")
         };
 
         let present_modes = unsafe {
             surface_info
                 .surface_instance
                 .get_physical_device_surface_present_modes(physical_device, surface_info.surface)
-                .unwrap()
+                .expect("Error queue")
         };
 
         SwapChainSupportDetails {
@@ -248,12 +233,9 @@ impl DeviceInfo {
         logical_device: &ash::Device,
         queue_family_indeces: &QueueFamiliyIndices,
     ) -> ash::vk::CommandPool {
-        let command_pool_create_info = ash::vk::CommandPoolCreateInfo {
-            s_type: ash::vk::StructureType::COMMAND_POOL_CREATE_INFO,
-            flags: ash::vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
-            queue_family_index: queue_family_indeces.graphics_queue_index,
-            ..Default::default()
-        };
+        let command_pool_create_info = ash::vk::CommandPoolCreateInfo::default()
+            .queue_family_index(queue_family_indeces.graphics_queue_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
 
         unsafe {
             logical_device

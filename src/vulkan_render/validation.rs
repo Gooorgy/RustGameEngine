@@ -31,15 +31,17 @@ pub fn populate_debug_messenger_create_info() -> ash::vk::DebugUtilsMessengerCre
         s_type: ash::vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
         p_next: ptr::null(),
         flags: ash::vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
-        message_severity: ash::vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
-            // vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
-            // vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
-            ash::vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
+        message_severity: ash::vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+            | ash::vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
+            | ash::vk::DebugUtilsMessageSeverityFlagsEXT::INFO
+            | ash::vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
         message_type: ash::vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
             | ash::vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
-            | ash::vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION,
+            | ash::vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+            | ash::vk::DebugUtilsMessageTypeFlagsEXT::DEVICE_ADDRESS_BINDING,
         pfn_user_callback: Some(vulkan_debug_utils_callback),
         p_user_data: ptr::null_mut(),
+
         ..Default::default()
     }
 }

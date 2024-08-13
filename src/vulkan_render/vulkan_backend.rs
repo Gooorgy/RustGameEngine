@@ -4,7 +4,7 @@ use std::{
     ptr,
 };
 
-use ash::vk::{self, BindIndexBufferIndirectCommandNV};
+use ash::vk::{self};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 use crate::{INDICES, VERTICES};
@@ -511,14 +511,19 @@ impl VulkanBackend {
 
     pub fn draw_frame(&mut self) {
         println!("draw frame");
+
+        let current_in_flight_fence = self.in_flight_fences[self.current_frame as usize];
+        let current_image_available_semaphore =
+            self.image_available_semaphores[self.current_frame as usize];
+        let current_render_finished_semaphore =
+            self.render_finished_semaphores[self.current_frame as usize];
+        let current_command_buffer =
+            self.command_buffer_info.command_buffers[self.current_frame as usize];
+
         unsafe {
             self.device_info
                 .logical_device
-                .wait_for_fences(
-                    &[self.in_flight_fences[self.current_frame as usize]],
-                    true,
-                    u64::MAX,
-                )
+                .wait_for_fences(&[current_in_flight_fence], true, u64::MAX)
                 .expect("Unable to wait for fence")
         }
 
@@ -526,7 +531,7 @@ impl VulkanBackend {
             self.swapchain_info.swapchain_device.acquire_next_image(
                 self.swapchain_info.swapchain,
                 u64::MAX,
-                self.image_available_semaphores[self.current_frame as usize],
+                current_image_available_semaphore,
                 vk::Fence::null(),
             )
         };
@@ -546,17 +551,14 @@ impl VulkanBackend {
         unsafe {
             self.device_info
                 .logical_device
-                .reset_fences(&[self.in_flight_fences[self.current_frame as usize]])
+                .reset_fences(&[current_in_flight_fence])
                 .expect("Unable to reset fence")
         };
 
         unsafe {
             self.device_info
                 .logical_device
-                .reset_command_buffer(
-                    self.command_buffer_info.command_buffers[self.current_frame as usize],
-                    vk::CommandBufferResetFlags::empty(),
-                )
+                .reset_command_buffer(current_command_buffer, vk::CommandBufferResetFlags::empty())
                 .expect("Unable to reset command buffer");
         }
 
@@ -565,20 +567,15 @@ impl VulkanBackend {
 
         self.begin_render_pass(image_index, self.current_frame);
 
-        let semaphore = [self.render_finished_semaphores[self.current_frame as usize]];
-        let submit_info = ash::vk::SubmitInfo {
-            s_type: ash::vk::StructureType::SUBMIT_INFO,
-            wait_semaphore_count: 1,
-            p_wait_semaphores: [self.image_available_semaphores[self.current_frame as usize]]
-                .as_ptr(),
-            p_wait_dst_stage_mask: [ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT].as_ptr(),
-            command_buffer_count: 1,
-            p_command_buffers: &self.command_buffer_info.command_buffers
-                [self.current_frame as usize],
-            signal_semaphore_count: 1,
-            p_signal_semaphores: semaphore.as_ptr(),
-            ..Default::default()
-        };
+        let semaphore = [current_render_finished_semaphore];
+
+        let binding = [current_image_available_semaphore];
+        let binding2 = [self.command_buffer_info.command_buffers[self.current_frame as usize]];
+        let submit_info = vk::SubmitInfo::default()
+            .wait_semaphores(&binding)
+            .wait_dst_stage_mask(&[ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
+            .command_buffers(&binding2)
+            .signal_semaphores(&semaphore);
 
         unsafe {
             self.device_info

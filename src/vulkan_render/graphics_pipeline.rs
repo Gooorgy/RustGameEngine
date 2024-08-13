@@ -26,21 +26,15 @@ impl PipelineInfo {
 
         let shader_name = CString::new("main").unwrap();
 
-        let vert_shader_stage_create_info = ash::vk::PipelineShaderStageCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-            stage: ash::vk::ShaderStageFlags::VERTEX,
-            module: vert_shader_module,
-            p_name: shader_name.as_ptr(),
-            ..Default::default()
-        };
+        let vert_shader_stage_create_info = ash::vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(vert_shader_module)
+            .name(&shader_name);
 
-        let frag_shader_stage_create_info = ash::vk::PipelineShaderStageCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-            stage: ash::vk::ShaderStageFlags::FRAGMENT,
-            module: frag_shader_module,
-            p_name: shader_name.as_ptr(),
-            ..Default::default()
-        };
+        let frag_shader_stage_create_info = ash::vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .module(frag_shader_module)
+            .name(&shader_name);
 
         let shader_stages = [vert_shader_stage_create_info, frag_shader_stage_create_info];
 
@@ -49,50 +43,32 @@ impl PipelineInfo {
             ash::vk::DynamicState::SCISSOR,
         ];
 
-        let dynamic_state_create_info = ash::vk::PipelineDynamicStateCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-            dynamic_state_count: dynamic_states.len() as u32,
-            p_dynamic_states: dynamic_states.as_ptr(),
-            ..Default::default()
-        };
+        let dynamic_state_create_info =
+            ash::vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
         let vertex_binding_description = Vertex::get_binding_descriptions();
         let vertex_attribute_description = Vertex::get_attribute_descriptions();
 
-        let vertex_input_info_create_info = ash::vk::PipelineVertexInputStateCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-            vertex_binding_description_count: vertex_binding_description.len() as u32,
-            p_vertex_binding_descriptions: vertex_binding_description.as_ptr(),
-            vertex_attribute_description_count: vertex_attribute_description.len() as u32,
-            p_vertex_attribute_descriptions: vertex_attribute_description.as_ptr(),
-            ..Default::default()
-        };
+        let vertex_input_info_create_info = ash::vk::PipelineVertexInputStateCreateInfo::default()
+            .vertex_attribute_descriptions(&vertex_attribute_description)
+            .vertex_binding_descriptions(&vertex_binding_description);
 
-        let input_assembly_create_info = ash::vk::PipelineInputAssemblyStateCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-            topology: ash::vk::PrimitiveTopology::TRIANGLE_LIST,
-            primitive_restart_enable: ash::vk::FALSE,
-            ..Default::default()
-        };
+        let input_assembly_create_info = ash::vk::PipelineInputAssemblyStateCreateInfo::default()
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .primitive_restart_enable(true);
 
-        let viewport_state_create_info = ash::vk::PipelineViewportStateCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-            viewport_count: 1,
-            scissor_count: 1,
-            ..Default::default()
-        };
+        let viewport_state_create_info = ash::vk::PipelineViewportStateCreateInfo::default()
+            .viewport_count(1)
+            .scissor_count(1);
 
-        let rasterizer_create_info = ash::vk::PipelineRasterizationStateCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-            depth_clamp_enable: ash::vk::FALSE,
-            rasterizer_discard_enable: ash::vk::FALSE,
-            polygon_mode: ash::vk::PolygonMode::FILL,
-            line_width: 1.0_f32,
-            cull_mode: ash::vk::CullModeFlags::BACK,
-            front_face: ash::vk::FrontFace::CLOCKWISE,
-            depth_bias_enable: ash::vk::FALSE,
-            ..Default::default()
-        };
+        let rasterizer_create_info = ash::vk::PipelineRasterizationStateCreateInfo::default()
+            .depth_clamp_enable(false)
+            .depth_bias_enable(false)
+            .rasterizer_discard_enable(false)
+            .polygon_mode(vk::PolygonMode::FILL)
+            .line_width(1.0_f32)
+            .cull_mode(vk::CullModeFlags::BACK)
+            .front_face(vk::FrontFace::CLOCKWISE);
 
         let multisampling_create_info = ash::vk::PipelineMultisampleStateCreateInfo {
             s_type: ash::vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -105,31 +81,23 @@ impl PipelineInfo {
             ..Default::default()
         };
 
-        let color_blend_attachment = ash::vk::PipelineColorBlendAttachmentState {
-            color_write_mask: ash::vk::ColorComponentFlags::RGBA,
-            blend_enable: ash::vk::FALSE,
-            src_color_blend_factor: ash::vk::BlendFactor::ONE,
-            dst_color_blend_factor: ash::vk::BlendFactor::ZERO,
-            color_blend_op: ash::vk::BlendOp::ADD,
-            src_alpha_blend_factor: ash::vk::BlendFactor::ONE,
-            dst_alpha_blend_factor: ash::vk::BlendFactor::ZERO,
-            alpha_blend_op: ash::vk::BlendOp::ADD,
-        };
+        let color_blend_attachment = ash::vk::PipelineColorBlendAttachmentState::default()
+            .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .blend_enable(false)
+            .src_color_blend_factor(vk::BlendFactor::ONE)
+            .dst_color_blend_factor(vk::BlendFactor::ZERO)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ONE)
+            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .alpha_blend_op(vk::BlendOp::ADD);
 
-        let color_blending_create_info = ash::vk::PipelineColorBlendStateCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-            logic_op_enable: ash::vk::FALSE,
-            logic_op: ash::vk::LogicOp::COPY,
-            attachment_count: 1,
-            p_attachments: &color_blend_attachment,
-            ..Default::default()
-        };
+        let color_blend_attachments = [color_blend_attachment];
+        let color_blending_create_info = ash::vk::PipelineColorBlendStateCreateInfo::default()
+            .logic_op_enable(true)
+            .logic_op(vk::LogicOp::COPY)
+            .attachments(&color_blend_attachments);
 
-        let pipeline_layout_create_info = ash::vk::PipelineLayoutCreateInfo {
-            s_type: ash::vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
-
-            ..Default::default()
-        };
+        let pipeline_layout_create_info = ash::vk::PipelineLayoutCreateInfo::default();
 
         let pipeline_layout = unsafe {
             logical_device
@@ -137,25 +105,20 @@ impl PipelineInfo {
                 .expect("Unable to create pipeline layout")
         };
 
-        let pipeline_create_info = ash::vk::GraphicsPipelineCreateInfo {
-            s_type: ash::vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
-            stage_count: 2,
-            p_stages: shader_stages.as_ptr(),
-            p_vertex_input_state: &vertex_input_info_create_info,
-            p_input_assembly_state: &input_assembly_create_info,
-            p_viewport_state: &viewport_state_create_info,
-            p_rasterization_state: &rasterizer_create_info,
-            p_multisample_state: &multisampling_create_info,
-            p_depth_stencil_state: ptr::null(),
-            p_color_blend_state: &color_blending_create_info,
-            p_dynamic_state: &dynamic_state_create_info,
-            layout: pipeline_layout,
-            render_pass: *render_pass,
-            subpass: 0,
-            base_pipeline_handle: ash::vk::Pipeline::null(),
-            base_pipeline_index: -1,
-            ..Default::default()
-        };
+        let pipeline_create_info = ash::vk::GraphicsPipelineCreateInfo::default()
+            .stages(&shader_stages)
+            .vertex_input_state(&vertex_input_info_create_info)
+            .input_assembly_state(&input_assembly_create_info)
+            .viewport_state(&viewport_state_create_info)
+            .rasterization_state(&rasterizer_create_info)
+            .multisample_state(&multisampling_create_info)
+            .color_blend_state(&color_blending_create_info)
+            .dynamic_state(&dynamic_state_create_info)
+            .layout(pipeline_layout)
+            .render_pass(*render_pass)
+            .subpass(0)
+            .base_pipeline_handle(vk::Pipeline::null())
+            .base_pipeline_index(-1);
 
         let graphics_pipelines = unsafe {
             logical_device
@@ -186,14 +149,9 @@ impl PipelineInfo {
     }
 
     fn create_shader_module(code: &[u8], device: &ash::Device) -> ash::vk::ShaderModule {
-        let create_info = ash::vk::ShaderModuleCreateInfo {
-            s_type: ash::vk::StructureType::SHADER_MODULE_CREATE_INFO,
-            code_size: code.len(),
-            p_code: code.as_ptr() as *const u32,
-            ..Default::default()
-        };
-
         unsafe {
+            let (_prefix, shorts, _suffix) = code.align_to::<u32>();
+            let create_info = ash::vk::ShaderModuleCreateInfo::default().code(shorts);
             device
                 .create_shader_module(&create_info, None)
                 .expect("Unable to create shader module")

@@ -16,13 +16,10 @@ impl BufferInfo {
         memory_properties_flags: vk::MemoryPropertyFlags,
         usage: vk::BufferUsageFlags,
     ) -> Self {
-        let buffer_create_info = vk::BufferCreateInfo {
-            s_type: vk::StructureType::BUFFER_CREATE_INFO,
-            size,
-            usage,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
+        let buffer_create_info = vk::BufferCreateInfo::default()
+            .size(size)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         let buffer = unsafe {
             device_info
@@ -45,12 +42,9 @@ impl BufferInfo {
             memory_properties,
         );
 
-        let memory_allocate_create_info = vk::MemoryAllocateInfo {
-            s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
-            allocation_size: memory_requirements.size,
-            memory_type_index,
-            ..Default::default()
-        };
+        let memory_allocate_create_info = vk::MemoryAllocateInfo::default()
+            .allocation_size(memory_requirements.size)
+            .memory_type_index(memory_type_index);
 
         let buffer_memory = unsafe {
             device_info
@@ -78,13 +72,10 @@ impl BufferInfo {
         size: u64,
         device_info: &device::DeviceInfo,
     ) {
-        let buffer_allocate_info = vk::CommandBufferAllocateInfo {
-            s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
-            level: vk::CommandBufferLevel::PRIMARY,
-            command_pool: device_info.command_pool,
-            command_buffer_count: 1,
-            ..Default::default()
-        };
+        let buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
+            .command_pool(device_info.command_pool)
+            .command_buffer_count(1)
+            .level(vk::CommandBufferLevel::PRIMARY);
 
         let command_buffer = unsafe {
             device_info
@@ -93,11 +84,8 @@ impl BufferInfo {
                 .expect("Failed to allocate command buffer!")
         };
 
-        let begin_info = vk::CommandBufferBeginInfo {
-            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-            flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-            ..Default::default()
-        };
+        let begin_info = vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         unsafe {
             device_info
@@ -128,12 +116,7 @@ impl BufferInfo {
                 .expect("Failed to end command buffer recording!");
         }
 
-        let submit_info = vk::SubmitInfo {
-            s_type: vk::StructureType::SUBMIT_INFO,
-            command_buffer_count: 1,
-            p_command_buffers: command_buffer.as_ptr(),
-            ..Default::default()
-        };
+        let submit_info = vk::SubmitInfo::default().command_buffers(&command_buffer);
 
         unsafe {
             device_info
