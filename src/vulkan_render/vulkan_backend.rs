@@ -1,10 +1,15 @@
+use core::slice;
 use std::{
     error::Error,
     ffi::{c_void, CString},
-    ptr,
+    mem, ptr,
 };
 
-use ash::vk::{self};
+use std::time::Instant;
+use ash::{vk::{self}};
+
+use ash::vk::DescriptorSet;
+use cgmath::{Matrix4, Point3, Vector3};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 use crate::{INDICES, VERTICES};
@@ -12,11 +17,11 @@ use crate::{INDICES, VERTICES};
 use super::{
     buffer::{self, BufferInfo},
     command_buffer::CommandBufferInfo,
-    constants,
+    constants, descriptors,
     device::{self, DeviceInfo},
     frame_buffer,
-    graphics_pipeline::{self, PipelineInfo},
-    structs::Vertex,
+    graphics_pipeline::{PipelineInfo},
+    structs::{UniformBufferObject, Vertex},
     surface::{self, SurfaceInfo},
     swapchain::{self, SwapchainInfo},
     validation,
@@ -38,12 +43,19 @@ pub struct VulkanBackend {
     command_buffer_info: CommandBufferInfo,
     current_frame: u32,
     vertex_buffer_info: BufferInfo,
-    _index_buffer_info: BufferInfo,
+    index_buffer_info: BufferInfo,
+    descriptor_set_layout: vk::DescriptorSetLayout,
+    uniform_buffers: Vec<BufferInfo>,
+    uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
+    descriptor_sets: Vec<DescriptorSet>,
+    start_time: Instant,
+    ubo: UniformBufferObject,
 }
 
 impl VulkanBackend {
     pub fn new(window: &Window) -> Result<Self, Box<dyn Error>> {
         let entry = unsafe { ash::Entry::load()? };
+        Self::create_instance(&entry, window);
         let instance = Self::create_instance(&entry, window);
         let surface_info = surface::SurfaceInfo::new(&entry, &instance, window);
         let device_info = device::DeviceInfo::new(&instance, &surface_info);
@@ -52,8 +64,9 @@ impl VulkanBackend {
         let image_views = Self::create_image_views(&swapchain_info, &device_info.logical_device);
 
         let render_pass = Self::create_render_pass(&swapchain_info, &device_info.logical_device);
+        let descriptor_set_layout = Self::create_descriptor_set_layout(&device_info);
         let pipeline_info =
-            graphics_pipeline::PipelineInfo::new(&render_pass, &device_info.logical_device);
+            PipelineInfo::new(&render_pass, &device_info.logical_device, &descriptor_set_layout);
 
         let frame_buffers = frame_buffer::create_buffers(
             &device_info.logical_device,
@@ -64,11 +77,41 @@ impl VulkanBackend {
 
         let vertex_buffer_info = Self::create_vertex_buffer(&instance, &device_info);
         let index_buffer_info = Self::create_index_buffer(&instance, &device_info);
+        let (uniform_buffers, uniform_buffers_mapped) =
+            Self::create_uniform_buffers(&device_info, &instance);
+
+        let descriptor_pool = descriptors::CustomDescriptorPool::new(
+            &device_info.logical_device,
+            swapchain_info.swapchain_images.len() as u32,
+        );
+
+        let descriptor_sets = descriptor_pool.allocate_descriptor(
+            descriptor_set_layout,
+            &uniform_buffers,
+            swapchain_info.swapchain_images.len() as u32,
+        );
 
         let command_buffer_info = CommandBufferInfo::new(&device_info);
 
         let (image_available_semaphores, render_finished_semaphores, in_flight_fences) =
             Self::create_sync_objects(&device_info.logical_device);
+
+        let start_time = Instant::now();
+
+        let aspect_ratio =
+        swapchain_info.swapchain_extent.width as f32
+            / swapchain_info.swapchain_extent.height as f32;
+        let  mut ubo = UniformBufferObject {
+            model: Matrix4::from_angle_z(cgmath::Deg(90.0)),
+            view: Matrix4::look_at_rh(
+                Point3::new(2.0, 2.0, 2.0),
+                Point3::new(0.0, 0.0, 0.0),
+                Vector3::new(0.0, 0.0, 1.0),
+            ),
+            proj: cgmath::perspective(cgmath::Deg(45.0), aspect_ratio, 0.1, 10.0),
+        };
+
+        ubo.proj[1][1] *= -1.0;
 
         Ok(Self {
             _entry: entry,
@@ -86,8 +129,70 @@ impl VulkanBackend {
             command_buffer_info,
             current_frame: 0,
             vertex_buffer_info,
-            _index_buffer_info: index_buffer_info,
+            index_buffer_info,
+            descriptor_set_layout,
+            uniform_buffers,
+            uniform_buffers_mapped,
+            descriptor_sets,
+            start_time,
+            ubo,
         })
+    }
+
+    fn create_uniform_buffers(
+        device_info: &DeviceInfo,
+        instance: &ash::Instance,
+    ) -> (Vec<BufferInfo>, Vec<*mut UniformBufferObject>) {
+        let buffer_size = mem::size_of::<UniformBufferObject>() as u64;
+
+        let mut uniform_buffers = vec![];
+        let mut uniform_buffers_mapped = vec![];
+
+        for _frame in 0..constants::MAX_FRAMES_IN_FLIGHT {
+            let buffer = BufferInfo::new(
+                instance,
+                device_info,
+                buffer_size,
+                vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+            );
+
+            let uniform_buffer_mapped = unsafe {
+                device_info
+                    .logical_device
+                    .map_memory(
+                        buffer.buffer_memory,
+                        0,
+                        buffer_size,
+                        vk::MemoryMapFlags::empty(),
+                    )
+                    .expect("failed to map uniform buffer memory")
+                    as *mut UniformBufferObject
+            };
+
+            uniform_buffers.push(buffer);
+            uniform_buffers_mapped.push(uniform_buffer_mapped);
+        }
+
+        (uniform_buffers, uniform_buffers_mapped)
+    }
+
+    fn create_descriptor_set_layout(device_info: &DeviceInfo) -> vk::DescriptorSetLayout {
+        let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX);
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(slice::from_ref(&ubo_layout_binding));
+
+        unsafe {
+            device_info
+                .logical_device
+                .create_descriptor_set_layout(&layout_info, None)
+                .expect("Failed to create descriptor set layout")
+        }
     }
 
     fn create_index_buffer(instance: &ash::Instance, device_info: &DeviceInfo) -> BufferInfo {
@@ -413,6 +518,16 @@ impl VulkanBackend {
         )
     }
 
+    fn update_uniform_buffer(&mut self, current_frame: u32, delta_time: f32) {
+        self.ubo.model = Matrix4::from_axis_angle(Vector3::new(0.0,0.0,1.0), cgmath::Deg(90.0) * delta_time) * self.ubo.model;
+
+        let current_mapped_memory = self.uniform_buffers_mapped[current_frame as usize];
+
+        let slice = slice::from_ref(&self.ubo);
+
+        unsafe { current_mapped_memory.copy_from_nonoverlapping(slice.as_ptr(), slice.len()) };
+    }
+
     pub fn begin_render_pass(&self, image_index: u32, current_frame: u32) {
         let clear_values = [ash::vk::ClearValue {
             color: ash::vk::ClearColorValue {
@@ -482,10 +597,18 @@ impl VulkanBackend {
 
             self.device_info.logical_device.cmd_bind_index_buffer(
                 self.command_buffer_info.command_buffers[current_frame as usize],
-                self._index_buffer_info.buffer,
+                self.index_buffer_info.buffer,
                 0,
                 vk::IndexType::UINT16,
             );
+
+            self.device_info.logical_device.cmd_bind_descriptor_sets(
+                self.command_buffer_info.command_buffers[current_frame as usize],
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_info.pipeline_layout,
+                0,
+                &[self.descriptor_sets[current_frame as usize]],
+                &[]);
 
             self.device_info.logical_device.cmd_draw_indexed(
                 self.command_buffer_info.command_buffers[current_frame as usize],
@@ -509,9 +632,7 @@ impl VulkanBackend {
         }
     }
 
-    pub fn draw_frame(&mut self) {
-        println!("draw frame");
-
+    pub fn draw_frame(&mut self, delta_time: f32) {
         let current_in_flight_fence = self.in_flight_fences[self.current_frame as usize];
         let current_image_available_semaphore =
             self.image_available_semaphores[self.current_frame as usize];
@@ -566,6 +687,8 @@ impl VulkanBackend {
             .record_command_buffer(&self.device_info.logical_device, self.current_frame);
 
         self.begin_render_pass(image_index, self.current_frame);
+
+        self.update_uniform_buffer(self.current_frame, delta_time);
 
         let semaphore = [current_render_finished_semaphore];
 

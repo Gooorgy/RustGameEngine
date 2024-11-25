@@ -1,6 +1,7 @@
 use std::mem::offset_of;
 
 use ash::vk;
+use cgmath::{Matrix4};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -34,4 +35,12 @@ impl Vertex {
             },
         ]
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct UniformBufferObject {
+    pub model: Matrix4<f32>,
+    pub view: Matrix4<f32>,
+    pub proj: Matrix4<f32>,
 }

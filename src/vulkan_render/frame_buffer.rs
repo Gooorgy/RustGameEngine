@@ -13,6 +13,7 @@ pub fn create_buffers(
             .attachment_count(1)
             .attachments(&image_view)
             .width(swapchain_extend.width)
+            .layers(1)
             .height(swapchain_extend.height);
 
         let buffer = unsafe {

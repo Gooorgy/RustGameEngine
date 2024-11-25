@@ -1,3 +1,6 @@
+use std::io::Write;
+use std::time::Instant;
+
 use new::vulkan_render::vulkan_backend::VulkanBackend;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -8,20 +11,30 @@ const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
-#[derive(Default)]
 struct AppWindow {
     window: Option<winit::window::Window>,
     vulkan_app: Option<VulkanBackend>,
+    last_frame_time: Instant,
+}
+
+impl Default for AppWindow {
+    fn default() -> Self {
+        Self {
+            window: None,
+            vulkan_app: None,
+            last_frame_time: Instant::now(),
+        }
+    }
 }
 
 impl ApplicationHandler for AppWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let monitor = event_loop.primary_monitor();
-        let x = Some(winit::window::Fullscreen::Borderless(monitor));
+        let _x = Some(winit::window::Fullscreen::Borderless(monitor));
         let window_attributes = Window::default_attributes()
             .with_title(WINDOW_TITLE)
-            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
-            .with_fullscreen(x);
+            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
+        // .with_fullscreen(x);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
         self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap()).expect(""));
     }
@@ -37,7 +50,12 @@ impl ApplicationHandler for AppWindow {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => match self.vulkan_app {
                 Some(ref mut app) => {
-                    app.draw_frame();
+                    let time_elapsed = self.last_frame_time.elapsed();
+                    self.last_frame_time = Instant::now();
+                    let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
+                    print!("\r{}", delta_time);
+                    std::io::stdout().flush().unwrap();
+                    app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();
                     Window::request_redraw(window);
                 }

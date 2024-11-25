@@ -1,4 +1,4 @@
-use std::{ffi::CString, fs, io, path::Path, ptr};
+use std::{ffi::CString, fs, io, path::Path, ptr, slice};
 
 use ash::vk;
 
@@ -11,11 +11,11 @@ const SHADER_EXTENSION: &str = ".spv";
 
 pub struct PipelineInfo {
     pub graphics_pipelines: Vec<vk::Pipeline>,
-    _pipeline_layout: vk::PipelineLayout,
+    pub pipeline_layout: vk::PipelineLayout,
 }
 
 impl PipelineInfo {
-    pub fn new(render_pass: &vk::RenderPass, logical_device: &ash::Device) -> PipelineInfo {
+    pub fn new(render_pass: &vk::RenderPass, logical_device: &ash::Device, set_layout: &vk::DescriptorSetLayout) -> PipelineInfo {
         let vert_shader_code =
             Self::read_shader_file(VERTEX_SHADER).expect("Unable to read vertex file");
         let frag_shader_code =
@@ -55,7 +55,7 @@ impl PipelineInfo {
 
         let input_assembly_create_info = ash::vk::PipelineInputAssemblyStateCreateInfo::default()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .primitive_restart_enable(true);
+            .primitive_restart_enable(false);
 
         let viewport_state_create_info = ash::vk::PipelineViewportStateCreateInfo::default()
             .viewport_count(1)
@@ -68,7 +68,9 @@ impl PipelineInfo {
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0_f32)
             .cull_mode(vk::CullModeFlags::BACK)
-            .front_face(vk::FrontFace::CLOCKWISE);
+            .front_face(vk::FrontFace::CLOCKWISE)
+            .cull_mode(vk::CullModeFlags::BACK)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
 
         let multisampling_create_info = ash::vk::PipelineMultisampleStateCreateInfo {
             s_type: ash::vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -93,11 +95,12 @@ impl PipelineInfo {
 
         let color_blend_attachments = [color_blend_attachment];
         let color_blending_create_info = ash::vk::PipelineColorBlendStateCreateInfo::default()
-            .logic_op_enable(true)
+            .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
             .attachments(&color_blend_attachments);
 
-        let pipeline_layout_create_info = ash::vk::PipelineLayoutCreateInfo::default();
+        let pipeline_layout_create_info = ash::vk::PipelineLayoutCreateInfo::default()
+            .set_layouts(slice::from_ref(set_layout));
 
         let pipeline_layout = unsafe {
             logical_device
@@ -118,7 +121,8 @@ impl PipelineInfo {
             .render_pass(*render_pass)
             .subpass(0)
             .base_pipeline_handle(vk::Pipeline::null())
-            .base_pipeline_index(-1);
+            .base_pipeline_index(-1)
+            ;
 
         let graphics_pipelines = unsafe {
             logical_device
@@ -137,7 +141,7 @@ impl PipelineInfo {
 
         Self {
             graphics_pipelines,
-            _pipeline_layout: pipeline_layout,
+            pipeline_layout: pipeline_layout,
         }
     }
 

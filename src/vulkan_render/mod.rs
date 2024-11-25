@@ -1,6 +1,7 @@
 mod buffer;
 mod command_buffer;
 mod constants;
+mod descriptors;
 mod device;
 mod frame_buffer;
 mod graphics_pipeline;

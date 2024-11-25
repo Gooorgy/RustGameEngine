@@ -6,5 +6,6 @@ edition = "2021"
 [dependencies]
 ash = "0.38.0"
 ash-window = "0.13.0"
+cgmath = "0.18.0"
 num = "0.4.3"
 winit = "0.30.3"
