@@ -5,11 +5,18 @@ use std::{
     mem, ptr,
 };
 
+use ash::{
+    vk::{self},
+    Instance,
+};
 use std::time::Instant;
-use ash::{vk::{self}};
 
-use ash::vk::DescriptorSet;
-use cgmath::{Matrix4, Point3, Vector3};
+use ash::vk::{
+    CommandBuffer, DescriptorSet, DeviceMemory, Extent3D, Image, ImageAspectFlags,
+    ImageSubresourceRange,
+};
+use cgmath::{assert_abs_diff_eq, Matrix4, Point3, Vector3};
+use image::{DynamicImage, GenericImageView, ImageReader};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 use crate::{INDICES, VERTICES};
@@ -20,7 +27,7 @@ use super::{
     constants, descriptors,
     device::{self, DeviceInfo},
     frame_buffer,
-    graphics_pipeline::{PipelineInfo},
+    graphics_pipeline::PipelineInfo,
     structs::{UniformBufferObject, Vertex},
     surface::{self, SurfaceInfo},
     swapchain::{self, SwapchainInfo},
@@ -50,6 +57,10 @@ pub struct VulkanBackend {
     descriptor_sets: Vec<DescriptorSet>,
     start_time: Instant,
     ubo: UniformBufferObject,
+    texture_image: vk::Image,
+    texture_image_memory: vk::DeviceMemory,
+    texture_image_view: vk::ImageView,
+    texture_sampler: vk::Sampler,
 }
 
 impl VulkanBackend {
@@ -64,9 +75,19 @@ impl VulkanBackend {
         let image_views = Self::create_image_views(&swapchain_info, &device_info.logical_device);
 
         let render_pass = Self::create_render_pass(&swapchain_info, &device_info.logical_device);
+
+        let (texture_image, texture_image_memory) =
+            Self::create_texture_image(&device_info, &instance);
+        let texture_image_view = Self::create_texture_image_view(&device_info, texture_image);
+        let texture_sampler = Self::create_texture_sampler(&device_info, &instance);
+
+
         let descriptor_set_layout = Self::create_descriptor_set_layout(&device_info);
-        let pipeline_info =
-            PipelineInfo::new(&render_pass, &device_info.logical_device, &descriptor_set_layout);
+        let pipeline_info = PipelineInfo::new(
+            &render_pass,
+            &device_info.logical_device,
+            &descriptor_set_layout,
+        );
 
         let frame_buffers = frame_buffer::create_buffers(
             &device_info.logical_device,
@@ -74,6 +95,8 @@ impl VulkanBackend {
             &render_pass,
             &swapchain_info.swapchain_extent,
         );
+
+
 
         let vertex_buffer_info = Self::create_vertex_buffer(&instance, &device_info);
         let index_buffer_info = Self::create_index_buffer(&instance, &device_info);
@@ -89,6 +112,8 @@ impl VulkanBackend {
             descriptor_set_layout,
             &uniform_buffers,
             swapchain_info.swapchain_images.len() as u32,
+            texture_image_view,
+            texture_sampler
         );
 
         let command_buffer_info = CommandBufferInfo::new(&device_info);
@@ -98,10 +123,9 @@ impl VulkanBackend {
 
         let start_time = Instant::now();
 
-        let aspect_ratio =
-        swapchain_info.swapchain_extent.width as f32
+        let aspect_ratio = swapchain_info.swapchain_extent.width as f32
             / swapchain_info.swapchain_extent.height as f32;
-        let  mut ubo = UniformBufferObject {
+        let mut ubo = UniformBufferObject {
             model: Matrix4::from_angle_z(cgmath::Deg(90.0)),
             view: Matrix4::look_at_rh(
                 Point3::new(2.0, 2.0, 2.0),
@@ -136,7 +160,320 @@ impl VulkanBackend {
             descriptor_sets,
             start_time,
             ubo,
+            texture_image,
+            texture_image_memory,
+            texture_image_view,
+            texture_sampler,
         })
+    }
+
+    fn create_texture_sampler(device_info: &DeviceInfo, instance: &Instance) -> vk::Sampler {
+        let device_properties =
+            unsafe { instance.get_physical_device_properties(device_info._physical_device) };
+
+        let sampler_info = vk::SamplerCreateInfo::default()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::REPEAT)
+            .address_mode_v(vk::SamplerAddressMode::REPEAT)
+            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            .anisotropy_enable(true)
+            .max_anisotropy(device_properties.limits.max_sampler_anisotropy)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(0.0);
+
+        unsafe {
+            device_info
+                .logical_device
+                .create_sampler(&sampler_info, None)
+                .expect("failed to create sampler")
+        }
+    }
+
+    fn create_texture_image_view(device_info: &DeviceInfo, image: vk::Image) -> vk::ImageView {
+        let view_info = vk::ImageViewCreateInfo::default()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(vk::Format::R8G8B8A8_SRGB)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            );
+
+        unsafe {
+            device_info
+                .logical_device
+                .create_image_view(&view_info, None)
+                .expect("failed to create image view")
+        }
+    }
+
+    fn copy_buffy_to_image(
+        device_info: &DeviceInfo,
+        buffer: vk::Buffer,
+        image: vk::Image,
+        width: u32,
+        height: u32,
+    ) {
+        let command_buffer = BufferInfo::begin_single_time_command(device_info);
+
+        let region = vk::BufferImageCopy::default()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(
+                vk::ImageSubresourceLayers::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .mip_level(0)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            )
+            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+            .image_extent(vk::Extent3D {
+                height,
+                width,
+                depth: 1,
+            });
+
+        unsafe {
+            device_info.logical_device.cmd_copy_buffer_to_image(
+                command_buffer,
+                buffer,
+                image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[region],
+            );
+        }
+
+        BufferInfo::end_single_time_command(device_info, command_buffer);
+    }
+
+    fn transition_image_layout(
+        device_info: &DeviceInfo,
+        image: vk::Image,
+        format: vk::Format,
+        old_layout: vk::ImageLayout,
+        new_layout: vk::ImageLayout,
+    ) {
+        let command_buffer = BufferInfo::begin_single_time_command(device_info);
+
+
+        let src_access_mask;
+        let dst_access_mask;
+        let source_stage;
+        let destination_stage;
+
+        if old_layout == vk::ImageLayout::UNDEFINED
+            && new_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
+        {
+            src_access_mask = vk::AccessFlags::empty();
+            dst_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+
+            source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+            destination_stage = vk::PipelineStageFlags::TRANSFER;
+        } else if old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
+            && new_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+        {
+            src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+            dst_access_mask = vk::AccessFlags::SHADER_READ;
+
+            source_stage = vk::PipelineStageFlags::TRANSFER;
+            destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+        } else {
+            panic!("unsupported layout transition");
+        }
+
+        let barrier = vk::ImageMemoryBarrier::default()
+            .src_access_mask(src_access_mask)
+            .dst_access_mask(dst_access_mask)
+            .old_layout(old_layout)
+            .new_layout(new_layout)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(
+                ImageSubresourceRange::default()
+                    .aspect_mask(ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            );
+
+        unsafe {
+            device_info.logical_device.cmd_pipeline_barrier(
+                command_buffer,
+                source_stage,
+                destination_stage,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[barrier],
+            )
+        }
+
+        BufferInfo::end_single_time_command(device_info, command_buffer);
+    }
+
+    fn create_texture_image(
+        device_info: &DeviceInfo,
+        instance: &ash::Instance,
+    ) -> (Image, DeviceMemory) {
+        let mut dyn_image = image::open("E:\\rust\\new\\src\\texture.png").unwrap();
+        let image_width = dyn_image.width();
+        let image_height = dyn_image.height();
+
+        let image_size =
+            (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
+
+        let image_data = match &dyn_image {
+            image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => {
+                dyn_image.to_rgba8().into_raw()
+            }
+            _ => vec![],
+        };
+
+        let image_buffer = BufferInfo::new(
+            instance,
+            device_info,
+            image_size,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+        );
+        let image_buffer_mapped = unsafe {
+            device_info
+                .logical_device
+                .map_memory(
+                    image_buffer.buffer_memory,
+                    0,
+                    image_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("failed to map image buffer memory") as *mut u8
+        };
+
+        unsafe {
+            image_buffer_mapped.copy_from_nonoverlapping(image_data.as_ptr(), image_data.len());
+
+            device_info
+                .logical_device
+                .unmap_memory(image_buffer.buffer_memory);
+        }
+
+        let (image, device_memory) = Self::create_image(device_info, instance, dyn_image);
+
+        Self::transition_image_layout(
+            device_info,
+            image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+        Self::copy_buffy_to_image(
+            device_info,
+            image_buffer.buffer,
+            image,
+            image_width,
+            image_height,
+        );
+        Self::transition_image_layout(
+            device_info,
+            image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        );
+
+        unsafe {
+            device_info.logical_device.destroy_buffer(image_buffer.buffer, None);
+            device_info.logical_device.free_memory(image_buffer.buffer_memory, None);
+        }
+
+        (image, device_memory)
+    }
+
+    fn create_image(
+        device_info: &DeviceInfo,
+        instance: &Instance,
+        mut image: DynamicImage,
+    ) -> (vk::Image, vk::DeviceMemory) {
+        let image_info = vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(Extent3D {
+                height: image.height(),
+                width: image.width(),
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .format(vk::Format::R8G8B8A8_SRGB)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty());
+
+        let x = unsafe {
+            device_info
+                .logical_device
+                .create_image(&image_info, None)
+                .expect("failed to create image")
+        };
+
+        let mem_requirements =
+            unsafe { device_info.logical_device.get_image_memory_requirements(x) };
+
+        let memory_properties =
+            unsafe { instance.get_physical_device_memory_properties(device_info._physical_device) };
+
+        let allocate_info = vk::MemoryAllocateInfo::default()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(Self::find_memory_type(
+                mem_requirements.memory_type_bits,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                memory_properties,
+            ));
+
+        let allocated_memory = unsafe {
+            device_info
+                .logical_device
+                .allocate_memory(&allocate_info, None)
+                .expect("failed to allocate image memory")
+        };
+
+        unsafe {
+            device_info
+                .logical_device
+                .bind_image_memory(x, allocated_memory, 0)
+                .expect("failed to bind image memory");
+        }
+
+        return (x, allocated_memory);
+    }
+
+    fn find_memory_type(
+        type_filter: u32,
+        properties: vk::MemoryPropertyFlags,
+        memory_properties: vk::PhysicalDeviceMemoryProperties,
+    ) -> u32 {
+        for (i, memory_type) in memory_properties.memory_types.iter().enumerate() {
+            if (type_filter & (1 << i)) > 0 && memory_type.property_flags.contains(properties) {
+                return i as u32;
+            }
+        }
+
+        panic!()
     }
 
     fn create_uniform_buffers(
@@ -184,8 +521,16 @@ impl VulkanBackend {
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::VERTEX);
 
+        let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT);
+
+        let x = vec![ubo_layout_binding, sampler_layout_binding];
+
         let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
-            .bindings(slice::from_ref(&ubo_layout_binding));
+            .bindings(&x);
 
         unsafe {
             device_info
@@ -519,7 +864,9 @@ impl VulkanBackend {
     }
 
     fn update_uniform_buffer(&mut self, current_frame: u32, delta_time: f32) {
-        self.ubo.model = Matrix4::from_axis_angle(Vector3::new(0.0,0.0,1.0), cgmath::Deg(90.0) * delta_time) * self.ubo.model;
+        self.ubo.model =
+            Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), cgmath::Deg(90.0) * delta_time)
+                * self.ubo.model;
 
         let current_mapped_memory = self.uniform_buffers_mapped[current_frame as usize];
 
@@ -608,7 +955,8 @@ impl VulkanBackend {
                 self.pipeline_info.pipeline_layout,
                 0,
                 &[self.descriptor_sets[current_frame as usize]],
-                &[]);
+                &[],
+            );
 
             self.device_info.logical_device.cmd_draw_indexed(
                 self.command_buffer_info.command_buffers[current_frame as usize],

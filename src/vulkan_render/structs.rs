@@ -8,6 +8,7 @@ use cgmath::{Matrix4};
 pub struct Vertex {
     pub pos: [f32; 2],
     pub color: [f32; 3],
+    pub texCoord: [f32; 2],
 }
 
 impl Vertex {
@@ -19,7 +20,7 @@ impl Vertex {
         }]
     }
 
-    pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
+    pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
         [
             vk::VertexInputAttributeDescription {
                 location: 0,
@@ -32,6 +33,12 @@ impl Vertex {
                 location: 1,
                 format: vk::Format::R32G32B32_SFLOAT,
                 offset: offset_of!(Self, color) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 2,
+                format: vk::Format::R32G32_SFLOAT,
+                offset: offset_of!(Self, texCoord) as u32,
             },
         ]
     }

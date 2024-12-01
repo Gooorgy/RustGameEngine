@@ -1,7 +1,10 @@
+use super::device;
+use crate::vulkan_render::device::DeviceInfo;
+use ash::prelude::VkResult;
 use ash::vk;
 use core::panic;
-
-use super::device;
+use std::error::Error;
+use std::slice;
 
 pub struct BufferInfo {
     pub buffer: vk::Buffer,
@@ -72,15 +75,36 @@ impl BufferInfo {
         size: u64,
         device_info: &device::DeviceInfo,
     ) {
-        let buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-            .command_pool(device_info.command_pool)
+        let command_buffer = Self::begin_single_time_command(&device_info);
+
+        let copy_region = vk::BufferCopy {
+            src_offset: 0,
+            dst_offset: 0,
+            size,
+        };
+
+        unsafe {
+            device_info.logical_device.cmd_copy_buffer(
+                command_buffer,
+                src_buffer.buffer,
+                self.buffer,
+                &[copy_region],
+            )
+        };
+
+        Self::end_single_time_command(device_info, command_buffer);
+    }
+
+    pub fn begin_single_time_command(device_info: &DeviceInfo) -> vk::CommandBuffer {
+        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
+            .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1)
-            .level(vk::CommandBufferLevel::PRIMARY);
+            .command_pool(device_info.command_pool);
 
         let command_buffer = unsafe {
             device_info
                 .logical_device
-                .allocate_command_buffers(&buffer_allocate_info)
+                .allocate_command_buffers(&command_buffer_allocate_info)
                 .expect("Failed to allocate command buffer!")
         };
 
@@ -94,30 +118,22 @@ impl BufferInfo {
                 .expect("Failed to begin command buffer recording!");
         }
 
-        let copy_region = vk::BufferCopy {
-            src_offset: 0,
-            dst_offset: 0,
-            size,
-        };
+        command_buffer[0]
+    }
 
-        unsafe {
-            device_info.logical_device.cmd_copy_buffer(
-                command_buffer[0],
-                src_buffer.buffer,
-                self.buffer,
-                &[copy_region],
-            )
-        };
-
+    pub fn end_single_time_command(
+        device_info: &DeviceInfo,
+        command_buffer: vk::CommandBuffer,
+    ) {
         unsafe {
             device_info
                 .logical_device
-                .end_command_buffer(command_buffer[0])
-                .expect("Failed to end command buffer recording!");
-        }
+                .end_command_buffer(command_buffer)
+                .expect("Failed to end command buffer!");
+        };
 
-        let submit_info = vk::SubmitInfo::default().command_buffers(&command_buffer);
-
+        let submit_info =
+            vk::SubmitInfo::default().command_buffers(slice::from_ref(&command_buffer));
         unsafe {
             device_info
                 .logical_device
@@ -127,16 +143,14 @@ impl BufferInfo {
                     vk::Fence::null(),
                 )
                 .expect("Failed to submit queue!");
-
             device_info
                 .logical_device
                 .queue_wait_idle(device_info.queue_info.graphics_queue)
-                .expect("Failed to idle?!");
-
+                .expect("Failed to wait on queue!");
             device_info
                 .logical_device
-                .free_command_buffers(device_info.command_pool, &command_buffer);
-        };
+                .free_command_buffers(device_info.command_pool, &[command_buffer]);
+        }
     }
 
     pub fn destroy_buffer(self, logical_device: &ash::Device) {

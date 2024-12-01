@@ -5,18 +5,22 @@ pub const VERTICES: [Vertex; 4] = [
     Vertex {
         pos: [-0.5, -0.5],
         color: [1.0, 0.0, 0.0],
+        texCoord: [1.0, 0.0],
     },
     Vertex {
         pos: [0.5, -0.5],
         color: [0.0, 1.0, 0.0],
+        texCoord: [0.0, 0.0],
     },
     Vertex {
         pos: [0.5, 0.5],
         color: [0.0, 0.0, 1.0],
+        texCoord: [0.0, 1.0],
     },
     Vertex {
         pos: [-0.5, 0.5],
         color: [1.0, 1.0, 1.0],
+        texCoord: [1.0, 1.0],
     },
 ];
 

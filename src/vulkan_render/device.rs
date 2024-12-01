@@ -38,7 +38,7 @@ impl DeviceInfo {
             queue_create_infos.push(queue_create_info);
         }
 
-        let physical_device_features = vk::PhysicalDeviceFeatures::default();
+        let physical_device_features = vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
 
         let mut sync2_features =
             vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
