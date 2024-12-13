@@ -108,6 +108,15 @@ impl PipelineInfo {
                 .expect("Unable to create pipeline layout")
         };
 
+        let depth_stencil_state_create_info = ash::vk::PipelineDepthStencilStateCreateInfo::default()
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(vk::CompareOp::LESS)
+            .depth_bounds_test_enable(false)
+            .min_depth_bounds(0.0_f32)
+            .max_depth_bounds(1.0_f32)
+            .stencil_test_enable(false);
+
         let pipeline_create_info = ash::vk::GraphicsPipelineCreateInfo::default()
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input_info_create_info)
@@ -122,6 +131,7 @@ impl PipelineInfo {
             .subpass(0)
             .base_pipeline_handle(vk::Pipeline::null())
             .base_pipeline_index(-1)
+            .depth_stencil_state(&depth_stencil_state_create_info);
             ;
 
         let graphics_pipelines = unsafe {

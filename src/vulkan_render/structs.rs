@@ -1,14 +1,24 @@
 use std::mem::offset_of;
 
 use ash::vk;
-use cgmath::{Matrix4};
+use cgmath::{Matrix4, Vector2, Vector3};
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
-    pub pos: [f32; 2],
-    pub color: [f32; 3],
-    pub texCoord: [f32; 2],
+    pub pos: Vector3<f32>,
+    pub color: Vector3<f32>,
+    pub tex_coord: Vector2<f32>,
+}
+
+impl Default for Vertex {
+    fn default() -> Vertex {
+        Vertex {
+            pos: Vector3::new(0.0,0.0,0.0),
+            color: Vector3::new(0.0,0.0,0.0),
+            tex_coord: Vector2::new(0.0, 0.0,),
+        }
+    }
 }
 
 impl Vertex {
@@ -25,7 +35,7 @@ impl Vertex {
             vk::VertexInputAttributeDescription {
                 location: 0,
                 binding: 0,
-                format: vk::Format::R32G32_SFLOAT,
+                format: vk::Format::R32G32B32_SFLOAT,
                 offset: offset_of!(Self, pos) as u32,
             },
             vk::VertexInputAttributeDescription {
@@ -38,7 +48,7 @@ impl Vertex {
                 binding: 0,
                 location: 2,
                 format: vk::Format::R32G32_SFLOAT,
-                offset: offset_of!(Self, texCoord) as u32,
+                offset: offset_of!(Self, tex_coord) as u32,
             },
         ]
     }

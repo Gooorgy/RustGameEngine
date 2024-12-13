@@ -53,8 +53,8 @@ impl ApplicationHandler for AppWindow {
                     let time_elapsed = self.last_frame_time.elapsed();
                     self.last_frame_time = Instant::now();
                     let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
-                    print!("\r{}", delta_time);
-                    std::io::stdout().flush().unwrap();
+                    //print!("\r{}", delta_time);
+                    //std::io::stdout().flush().unwrap();
                     app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();
                     Window::request_redraw(window);

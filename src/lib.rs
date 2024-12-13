@@ -1,27 +1,27 @@
+use cgmath::{Vector2, Vector3};
 use vulkan_render::structs::Vertex;
-
 pub mod vulkan_render;
 pub const VERTICES: [Vertex; 4] = [
     Vertex {
-        pos: [-0.5, -0.5],
-        color: [1.0, 0.0, 0.0],
-        texCoord: [1.0, 0.0],
+        pos: Vector3::new(-1.0, 0.0, 1.0),
+        color: Vector3::new(1.0, 0.0, 0.0),
+        tex_coord: Vector2::new(0.0, 0.0),
     },
     Vertex {
-        pos: [0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
-        texCoord: [0.0, 0.0],
+        pos: Vector3::new(1.0, 0.0, 1.0),
+        color: Vector3::new(0.0, 1.0, 0.0),
+        tex_coord: Vector2::new(1.0, 0.0),
     },
     Vertex {
-        pos: [0.5, 0.5],
-        color: [0.0, 0.0, 1.0],
-        texCoord: [0.0, 1.0],
+        pos: Vector3::new(1.0, 0.0, -1.0),
+        color: Vector3::new(0.0, 0.0, 1.0),
+        tex_coord: Vector2::new(1.0, 1.0),
     },
     Vertex {
-        pos: [-0.5, 0.5],
-        color: [1.0, 1.0, 1.0],
-        texCoord: [1.0, 1.0],
-    },
+        pos: Vector3::new(-1.0, 0.0, -1.0),
+        color: Vector3::new(1.0, 1.0, 1.0),
+        tex_coord: Vector2::new(0.0, 1.0),
+    }
 ];
 
-pub const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
+pub const INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
