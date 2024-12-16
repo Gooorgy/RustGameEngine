@@ -1,21 +1,23 @@
-use super::{buffer::BufferInfo, constants, device::{self, DeviceInfo}, frame_buffer, image_util, structs::{UniformBufferObject, Vertex}, surface::{self, SurfaceInfo}, swapchain::{self, SwapchainInfo}};
-use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
-use ash::vk::{self, ClearValue, Extent2D, Extent3D, Framebuffer, Image, ImageView, Pipeline, Rect2D};
-use ash::vk::{DescriptorPool, ImageAspectFlags, MemoryPropertyFlags};
-use cgmath::{Matrix4, Point3, Vector2, Vector3};
-use core::slice;
-use image::{Frame, GenericImageView};
-use std::fmt::Debug;
-use std::{
-    error::Error,
-    ffi::CString
-    , mem, ptr,
+use super::{
+    buffer::BufferInfo,
+    constants,
+    device::{self, DeviceInfo},
+    image_util,
+    structs::{UniformBufferObject, Vertex},
+    surface::SurfaceInfo,
+    swapchain::{self, SwapchainInfo},
 };
-use ash::Instance;
-use winit::{raw_window_handle::HasDisplayHandle, window::Window};
+use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::graphics_pipeline::PipelineInfo;
 use crate::vulkan_render::scene::Entity;
-use crate::vulkan_render::structs::{AllocatedBuffer, AllocatedImage, FrameData, GPUMeshData, PushConstants};
+use crate::vulkan_render::structs::{AllocatedBuffer, AllocatedImage, FrameData, GPUMeshData};
+use ash::vk::{self, Extent2D, Extent3D, ImageView, Rect2D};
+use ash::vk::{DescriptorPool, ImageAspectFlags, MemoryPropertyFlags};
+use ash::Instance;
+use cgmath::{Matrix4, Point3, Vector3};
+use core::slice;
+use std::{error::Error, ffi::CString, mem, ptr};
+use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
@@ -30,7 +32,7 @@ pub struct VulkanBackend {
     image_views: Vec<ImageView>,
     pipeline: PipelineInfo,
     descriptor_set_layout: vk::DescriptorSetLayout,
-    gpu_mesh_data: GPUMeshData,
+    gpu_mesh_data: Vec<GPUMeshData>,
     descriptor_sets: Vec<vk::DescriptorSet>,
     ubo: UniformBufferObject,
     pub uniform_buffers: Vec<vk::Buffer>,
@@ -48,7 +50,8 @@ impl VulkanBackend {
         let swapchain_info = SwapchainInfo::new(&instance, &device_info, &surface_info);
         let frame_data = Self::construct_frame_data(&device_info);
 
-        let draw_image = Self::create_draw_image(&instance, &device_info, swapchain_info.swapchain_extent);
+        let draw_image =
+            Self::create_draw_image(&instance, &device_info, swapchain_info.swapchain_extent);
         let depth_image = Self::create_depth_resources(&instance, &device_info, &swapchain_info);
         let image_views = Self::create_image_views(&swapchain_info, &device_info);
 
@@ -60,7 +63,6 @@ impl VulkanBackend {
         let texture_image_view = Self::create_texture_image_view(&device_info, texture_image.0);
         let texture_sampler = Self::create_texture_sampler(&device_info, &instance);
 
-
         let descriptor_pool = Self::create_descriptor_pool(
             &device_info,
             swapchain_info.swapchain_images.len() as u32,
@@ -69,7 +71,7 @@ impl VulkanBackend {
         let (uniform_buffers, uniform_buffer_memory, uniform_buffers_mapped) =
             Self::create_uniform_buffers(&device_info, &instance);
 
-       let descriptor_sets = Self::create_descriptor_sets(
+        let descriptor_sets = Self::create_descriptor_sets(
             &device_info,
             swapchain_info.swapchain_images.len() as u32,
             descriptor_set_layout,
@@ -78,7 +80,6 @@ impl VulkanBackend {
             texture_image_view,
             texture_sampler,
         );
-
 
         let aspect_ratio = swapchain_info.swapchain_extent.width as f32
             / swapchain_info.swapchain_extent.height as f32;
@@ -93,9 +94,6 @@ impl VulkanBackend {
         };
 
         ubo.proj[1][1] *= -1.0;
-
-
-
 
         let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, &scene);
         Ok(Self {
@@ -116,47 +114,63 @@ impl VulkanBackend {
             ubo,
             uniform_buffers,
             uniform_buffer_memory,
-            uniform_buffers_mapped
+            uniform_buffers_mapped,
         })
     }
 
-    fn upload_meshes(instance: &Instance, device_info: &DeviceInfo, scene: &Entity) -> GPUMeshData {
+    fn upload_meshes(
+        instance: &Instance,
+        device_info: &DeviceInfo,
+        scene: &Entity,
+    ) -> Vec<GPUMeshData> {
         let vertices = &scene.mesh.vertices;
         let indices = &scene.mesh.indices;
 
         let vertex_buffer = Self::create_vertex_buffer(instance, device_info, vertices);
         let index_buffer = Self::create_index_buffer(instance, device_info, indices);
 
+        let mut mesh_data = vec![];
 
-        let buffer_address_info = vk::BufferDeviceAddressInfo::default()
-            .buffer(vertex_buffer.buffer);
-
-        //let vertex_buffer_address = unsafe { device_info.logical_device.get_buffer_device_address(&buffer_address_info) };
-
-        GPUMeshData {
+        mesh_data.push(GPUMeshData {
             vertex_buffer,
-            //vertex_buffer_address
             index_buffer,
             index_count: indices.len() as u32,
+        });
+
+        if scene.children.len() > 0 {
+            let child = scene.children.get(0).unwrap();
+            let mut child_data = Self::upload_meshes(instance, device_info, child);
+            mesh_data.append(&mut child_data);
         }
 
+        mesh_data
     }
 
-    fn create_draw_image(instance: &Instance, device_info: &DeviceInfo, extent: Extent2D) -> AllocatedImage {
+    fn create_draw_image(
+        instance: &Instance,
+        device_info: &DeviceInfo,
+        extent: Extent2D,
+    ) -> AllocatedImage {
         let (image, image_memory) = Self::create_image(
             device_info,
             instance,
             extent.width,
             extent.height,
             vk::Format::R16G16B16A16_SFLOAT,
-            vk::ImageTiling::OPTIMAL,vk::ImageUsageFlags::TRANSFER_DST
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST
                 | vk::ImageUsageFlags::TRANSFER_SRC
                 | vk::ImageUsageFlags::STORAGE
                 | vk::ImageUsageFlags::COLOR_ATTACHMENT,
-            MemoryPropertyFlags::DEVICE_LOCAL);
+            MemoryPropertyFlags::DEVICE_LOCAL,
+        );
 
-        let image_view = Self::create_image_view(device_info, image, vk::Format::R16G16B16A16_SFLOAT, vk::ImageAspectFlags::COLOR);
-
+        let image_view = Self::create_image_view(
+            device_info,
+            image,
+            vk::Format::R16G16B16A16_SFLOAT,
+            vk::ImageAspectFlags::COLOR,
+        );
 
         AllocatedImage {
             image,
@@ -177,16 +191,15 @@ impl VulkanBackend {
         let mut frame_data = vec![];
 
         for _frame in 0..MAX_FRAMES_IN_FLIGHT {
-            let (swapchain_semaphore, render_semaphore, render_fence) = Self::create_sync_objects(&device_info.logical_device);
+            let (swapchain_semaphore, render_semaphore, render_fence) =
+                Self::create_sync_objects(&device_info.logical_device);
 
-            frame_data.push(
-                FrameData {
-                    swapchain_semaphore,
-                    render_semaphore,
-                    render_fence,
-                    command_buffer: command_buffers[_frame as usize]
-                }
-            )
+            frame_data.push(FrameData {
+                swapchain_semaphore,
+                render_semaphore,
+                render_fence,
+                command_buffer: command_buffers[_frame as usize],
+            })
         }
 
         frame_data
@@ -201,7 +214,7 @@ impl VulkanBackend {
         current_frame
     }
 
-    pub fn draw_frame(&mut self, delta_time: f32, scene: &Entity) {
+    pub fn draw_frame(&mut self, delta_time: f32) {
         let current_frame = self.get_current_frame();
 
         let render_fence = current_frame.render_fence;
@@ -254,17 +267,18 @@ impl VulkanBackend {
 
             self.device_info
                 .logical_device
-                .begin_command_buffer(
-                    command_buffer,
-                    &command_buffer_begin_info,
-                )
+                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
                 .expect("failed to begin command buffer")
         }
-        
-        //self.begin_render_pass(image_index);
 
-        image_util::transition_image_layout(&self.device_info, &command_buffer, self.draw_image.image, vk::ImageLayout::UNDEFINED, vk::ImageLayout::GENERAL, false);
-        //image_util::transition_image_layout(&self.device_info, &command_buffer, self.depth_image.image, vk::ImageLayout::UNDEFINED, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL, true);
+        image_util::transition_image_layout(
+            &self.device_info,
+            &command_buffer,
+            self.draw_image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::GENERAL,
+            false,
+        );
 
         let color_attachment = vk::RenderingAttachmentInfo::default()
             .image_view(self.draw_image.image_view)
@@ -276,13 +290,13 @@ impl VulkanBackend {
             .image_view(self.depth_image.image_view)
             .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
             .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE).clear_value(            vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            },
-        },);
-
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .clear_value(vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            });
 
         let color_attachments = [color_attachment];
         let begin_render_info = vk::RenderingInfo::default()
@@ -296,9 +310,10 @@ impl VulkanBackend {
 
         self.update_uniform_buffer(self.frame_index as u32, delta_time);
 
-
         unsafe {
-            self.device_info.logical_device.cmd_begin_rendering(command_buffer, &begin_render_info)
+            self.device_info
+                .logical_device
+                .cmd_begin_rendering(command_buffer, &begin_render_info)
         }
 
         let viewport = ash::vk::Viewport {
@@ -311,11 +326,9 @@ impl VulkanBackend {
         };
 
         unsafe {
-            self.device_info.logical_device.cmd_set_viewport(
-                command_buffer,
-                0,
-                &[viewport],
-            );
+            self.device_info
+                .logical_device
+                .cmd_set_viewport(command_buffer, 0, &[viewport]);
         }
 
         let scissor = ash::vk::Rect2D {
@@ -324,11 +337,9 @@ impl VulkanBackend {
         };
 
         unsafe {
-            self.device_info.logical_device.cmd_set_scissor(
-                command_buffer,
-                0,
-                &[scissor],
-            );
+            self.device_info
+                .logical_device
+                .cmd_set_scissor(command_buffer, 0, &[scissor]);
         }
 
         unsafe {
@@ -340,53 +351,99 @@ impl VulkanBackend {
 
             let x = self.descriptor_sets[self.frame_index];
 
-            self.device_info.logical_device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout, 0,&[x],&[])
+            self.device_info.logical_device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline.pipeline_layout,
+                0,
+                &[x],
+                &[],
+            )
         }
 
+        for gpu_mesh in &self.gpu_mesh_data {
+            unsafe {
+                self.device_info.logical_device.cmd_bind_index_buffer(
+                    command_buffer,
+                    gpu_mesh.index_buffer.buffer,
+                    0,
+                    vk::IndexType::UINT32,
+                );
 
-        unsafe {
-            self.device_info.logical_device.cmd_bind_index_buffer(command_buffer, self.gpu_mesh_data.index_buffer.buffer, 0, vk::IndexType::UINT32);
+                self.device_info.logical_device.cmd_bind_vertex_buffers(
+                    command_buffer,
+                    0,
+                    &[gpu_mesh.vertex_buffer.buffer],
+                    &[0],
+                );
 
-            self.device_info.logical_device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.gpu_mesh_data.vertex_buffer.buffer], &[0]);
-
-
-        /*    let push_constants = PushConstants {
-                vertex_buffer_address: self.gpu_mesh_data.vertex_buffer_address,
-            };
-
-            let x = bincode::serialize(&push_constants).expect("Unable to serialize PushConstants");
-
-            self.device_info.logical_device.cmd_push_constants(command_buffer, self.pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, x.as_slice());*/
-
-            self.device_info.logical_device.cmd_draw_indexed(command_buffer, self.gpu_mesh_data.index_count, 1, 0, 0, 0);
+                self.device_info.logical_device.cmd_draw_indexed(
+                    command_buffer,
+                    gpu_mesh.index_count,
+                    1,
+                    0,
+                    0,
+                    0,
+                );
+            }
         }
 
-        ///
-        ///
-        /// DRAW GEO HERE
-        ///
-        ///
-        ///
-
-
         unsafe {
-            self.device_info.logical_device.cmd_end_rendering(command_buffer);
+            self.device_info
+                .logical_device
+                .cmd_end_rendering(command_buffer);
 
-            image_util::transition_image_layout(&self.device_info, &command_buffer, self.draw_image.image, vk::ImageLayout::GENERAL, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, false);
-            image_util::transition_image_layout(&self.device_info, &command_buffer, self.swapchain_info.swapchain_images[image_index as usize], vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL, false);
+            image_util::transition_image_layout(
+                &self.device_info,
+                &command_buffer,
+                self.draw_image.image,
+                vk::ImageLayout::GENERAL,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                false,
+            );
+            image_util::transition_image_layout(
+                &self.device_info,
+                &command_buffer,
+                self.swapchain_info.swapchain_images[image_index as usize],
+                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                false,
+            );
 
             let draw_extend = Extent2D {
                 height: self.draw_image.image_extent.height,
                 width: self.draw_image.image_extent.width,
             };
 
-            image_util::copy_image_to_image(&self.device_info.logical_device, &command_buffer, self.draw_image.image,self.swapchain_info.swapchain_images[image_index as usize], draw_extend, self.swapchain_info.swapchain_extent);
-            image_util::transition_image_layout(&self.device_info, &command_buffer, self.swapchain_info.swapchain_images[image_index as usize], vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL, false);
-            image_util::transition_image_layout(&self.device_info, &command_buffer, self.swapchain_info.swapchain_images[image_index as usize], vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL, vk::ImageLayout::PRESENT_SRC_KHR, false);
+            image_util::copy_image_to_image(
+                &self.device_info.logical_device,
+                &command_buffer,
+                self.draw_image.image,
+                self.swapchain_info.swapchain_images[image_index as usize],
+                draw_extend,
+                self.swapchain_info.swapchain_extent,
+            );
+            image_util::transition_image_layout(
+                &self.device_info,
+                &command_buffer,
+                self.swapchain_info.swapchain_images[image_index as usize],
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                false,
+            );
+            image_util::transition_image_layout(
+                &self.device_info,
+                &command_buffer,
+                self.swapchain_info.swapchain_images[image_index as usize],
+                vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                vk::ImageLayout::PRESENT_SRC_KHR,
+                false,
+            );
 
-
-
-            self.device_info.logical_device.end_command_buffer(command_buffer).expect("failed to end command buffer");
+            self.device_info
+                .logical_device
+                .end_command_buffer(command_buffer)
+                .expect("failed to end command buffer");
         }
 
         let command_buffer_submit_info = [vk::CommandBufferSubmitInfo::default()
@@ -405,13 +462,6 @@ impl VulkanBackend {
             .device_index(0)
             .value(1)];
 
-
-        //self.update_uniform_buffer(self.current_frame, delta_time);
-
-        let semaphore = [swapchain_semaphore];
-
-        let binding = [render_semaphore];
-        let binding2 = [command_buffer];
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(&command_buffer_submit_info)
             .wait_semaphore_infos(&wait_info)
@@ -456,54 +506,7 @@ impl VulkanBackend {
         };
     }
 
-    fn load_model() -> (Vec<Vertex>, Vec<u32>) {
-        let load_options = tobj::LoadOptions {
-            single_index: true,
-            ..Default::default()
-        };
-
-        let (models, mat) = tobj::load_obj(
-            "E:\\rust\\new\\src\\models\\test.obj",
-            &tobj::GPU_LOAD_OPTIONS,
-        )
-        .expect("failed to load model file");
-
-        let model = models.first().unwrap();
-        let x = &model.mesh;
-
-        println!("indices len: {}", x.indices.len());
-        println!("texind len: {}", x.texcoord_indices.len());
-
-        println!("pos len: {}", x.positions.len());
-        println!("texcoord len: {}", x.texcoords.len());
-
-        let mut vertices = vec![];
-
-        let vert_count = x.positions.len() / 3;
-        for i in 0..vert_count {
-            let pos: Vector3<f32> = Vector3::new(
-                x.positions[i * 3],
-                x.positions[i * 3 + 1],
-                x.positions[i * 3 + 2],
-            );
-
-            let tex_coord: Vector2<f32> = Vector2::new(x.texcoords[i * 2], x.texcoords[i * 2 + 1]);
-
-            let vert = Vertex {
-                pos,
-                color: Vector3::new(1.0, 1.0, 1.0),
-                tex_coord,
-            };
-
-            vertices.push(vert);
-        }
-
-        (vertices, x.indices.clone())
-    }
-
-    fn create_sync_objects(
-        device: &ash::Device,
-    ) -> (vk::Semaphore, vk::Semaphore, vk::Fence) {
+    fn create_sync_objects(device: &ash::Device) -> (vk::Semaphore, vk::Semaphore, vk::Fence) {
         let semaphore_create_info = vk::SemaphoreCreateInfo {
             s_type: vk::StructureType::SEMAPHORE_CREATE_INFO,
             ..Default::default()
@@ -519,7 +522,6 @@ impl VulkanBackend {
             let swapchain_semaphore = device
                 .create_semaphore(&semaphore_create_info, None)
                 .expect("");
-
 
             let render_semaphore = device
                 .create_semaphore(&semaphore_create_info, None)
@@ -612,10 +614,6 @@ impl VulkanBackend {
         )
     }
 
-    fn has_stencil_component(format: vk::Format) -> bool {
-        format == vk::Format::D32_SFLOAT || format == vk::Format::D24_UNORM_S8_UINT
-    }
-
     fn find_supported_format(
         instance: &ash::Instance,
         device_info: &DeviceInfo,
@@ -641,19 +639,6 @@ impl VulkanBackend {
 
         panic!("Failed to find supported format");
     }
-
-    /*    fn record_command_buffer(&self) {
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo::default();
-        unsafe {
-            self.device_info
-                .logical_device
-                .begin_command_buffer(
-                    self.command_buffer_info[self.current_frame as usize],
-                    &command_buffer_begin_info,
-                )
-                .expect("failed to begin command buffer")
-        };
-    }*/
 
     fn create_command_buffers(device_info: &DeviceInfo) -> Vec<vk::CommandBuffer> {
         let command_buffer_alloc_info = vk::CommandBufferAllocateInfo::default()
@@ -849,7 +834,7 @@ impl VulkanBackend {
         device_info: &DeviceInfo,
         instance: &ash::Instance,
     ) -> (vk::Image, vk::DeviceMemory) {
-        let mut dyn_image = image::open("E:\\rust\\new\\src\\texture.png").unwrap();
+        let dyn_image = image::open("E:\\rust\\new\\src\\texture.png").unwrap();
         let image_width = dyn_image.width();
         let image_height = dyn_image.height();
 
@@ -890,7 +875,7 @@ impl VulkanBackend {
                 .unmap_memory(image_buffer.buffer_memory);
         }
 
-        let (mut image, device_memory) = Self::create_image(
+        let (image, device_memory) = Self::create_image(
             device_info,
             instance,
             dyn_image.width(),
@@ -909,7 +894,7 @@ impl VulkanBackend {
             image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            false
+            false,
         );
 
         BufferInfo::end_single_time_command(device_info, cmd);
@@ -923,14 +908,13 @@ impl VulkanBackend {
         );
         let cmd = BufferInfo::begin_single_time_command(device_info);
 
-
         image_util::transition_image_layout(
             device_info,
             &cmd,
             image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            false
+            false,
         );
 
         BufferInfo::end_single_time_command(device_info, cmd);
@@ -1214,7 +1198,7 @@ impl VulkanBackend {
 
         AllocatedBuffer {
             buffer: index_buffer,
-            buffer_memory: index_buffer_memory
+            buffer_memory: index_buffer_memory,
         }
     }
 
@@ -1262,76 +1246,6 @@ impl VulkanBackend {
         AllocatedBuffer {
             buffer: vertex_buffer,
             buffer_memory: vertex_buffer_memory,
-        }
-    }
-
-    fn create_render_pass(
-        device_info: &DeviceInfo,
-        instance: &ash::Instance,
-        swapchain_info: &SwapchainInfo,
-    ) -> ash::vk::RenderPass {
-        let color_attachment = ash::vk::AttachmentDescription {
-            format: swapchain_info.swapchain_image_format.format,
-            samples: ash::vk::SampleCountFlags::TYPE_1,
-            load_op: ash::vk::AttachmentLoadOp::CLEAR,
-            store_op: ash::vk::AttachmentStoreOp::STORE,
-            stencil_load_op: ash::vk::AttachmentLoadOp::DONT_CARE,
-            stencil_store_op: ash::vk::AttachmentStoreOp::DONT_CARE,
-            initial_layout: ash::vk::ImageLayout::UNDEFINED,
-            final_layout: ash::vk::ImageLayout::PRESENT_SRC_KHR,
-            ..Default::default()
-        };
-
-        let color_attachment_ref = ash::vk::AttachmentReference {
-            attachment: 0,
-            layout: ash::vk::ImageLayout::ATTACHMENT_OPTIMAL,
-        };
-
-        let depth_attachment = vk::AttachmentDescription::default()
-            .format(Self::find_depth_format(instance, device_info))
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-        let depth_attachment_ref = vk::AttachmentReference::default()
-            .attachment(1)
-            .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-        let subpass = ash::vk::SubpassDescription::default()
-            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(slice::from_ref(&color_attachment_ref))
-            .depth_stencil_attachment(&depth_attachment_ref);
-
-        let subpass_dependency = ash::vk::SubpassDependency {
-            src_subpass: ash::vk::SUBPASS_EXTERNAL,
-            dst_subpass: 0,
-            src_stage_mask: ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-                | ash::vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-            src_access_mask: ash::vk::AccessFlags::empty(),
-            dst_stage_mask: ash::vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-                | ash::vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-            dst_access_mask: ash::vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-                | ash::vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-            ..Default::default()
-        };
-
-        let binding = [color_attachment, depth_attachment];
-        let binding2 = [subpass_dependency];
-        let binding3 = [subpass];
-        let render_pass_create_info = ash::vk::RenderPassCreateInfo::default()
-            .attachments(&binding)
-            .dependencies(&binding2)
-            .subpasses(&binding3);
-
-        unsafe {
-            device_info
-                .logical_device
-                .create_render_pass(&render_pass_create_info, None)
-                .expect("Unable to create render pass")
         }
     }
 
@@ -1386,7 +1300,7 @@ impl VulkanBackend {
         image_views
     }
 
-  fn recreate_swapchain(&mut self) {
+    fn recreate_swapchain(&mut self) {
         unsafe { self.device_info.logical_device.device_wait_idle().unwrap() }
 
         self.cleanup_swapchain();
@@ -1396,7 +1310,8 @@ impl VulkanBackend {
         self.swapchain_info =
             swapchain::SwapchainInfo::new(&self.instance, &self.device_info, &self.surface_info);
         self.image_views = Self::create_image_views(&self.swapchain_info, &self.device_info);
-        let depth_image = Self::create_depth_resources(&self.instance, &self.device_info, &self.swapchain_info);
+        let depth_image =
+            Self::create_depth_resources(&self.instance, &self.device_info, &self.swapchain_info);
 
         self.depth_image = depth_image;
     }
@@ -1425,8 +1340,6 @@ impl VulkanBackend {
         }
     }
 
-
-
     fn update_uniform_buffer(&mut self, current_frame: u32, delta_time: f32) {
         self.ubo.model =
             Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), cgmath::Deg(90.0) * delta_time)
@@ -1438,6 +1351,4 @@ impl VulkanBackend {
 
         unsafe { current_mapped_memory.copy_from_nonoverlapping(slice.as_ptr(), slice.len()) };
     }
-
-
 }

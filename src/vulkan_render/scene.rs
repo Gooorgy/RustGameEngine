@@ -33,7 +33,7 @@ impl Entity {
     pub fn new<P>(path: P)-> Entity where
         P: AsRef<Path>, {
         let (models, mat) = tobj::load_obj(
-            "E:\\rust\\new\\src\\models\\test.obj",
+            path.as_ref(),
             &tobj::GPU_LOAD_OPTIONS,
         )
             .expect("failed to load model file");

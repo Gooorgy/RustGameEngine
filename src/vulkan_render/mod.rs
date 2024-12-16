@@ -8,7 +8,6 @@ mod graphics_pipeline;
 pub mod structs;
 mod surface;
 mod swapchain;
-mod validation;
 pub mod vulkan_backend;
 mod shader;
 pub mod scene;

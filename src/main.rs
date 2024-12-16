@@ -21,11 +21,16 @@ struct AppWindow {
 
 impl Default for AppWindow {
     fn default() -> Self {
+        let mut scene = Entity::new("E:\\rust\\new\\src\\models\\test.obj");
+
+        scene.children.push(Entity::new("E:\\rust\\new\\src\\models\\test2.obj"));
+
+
         Self {
             window: None,
             vulkan_app: None,
             last_frame_time: Instant::now(),
-            scene: Entity::new("E:\\rust\\new\\src\\models\\test.obj")
+            scene
         }
     }
 }
@@ -59,7 +64,7 @@ impl ApplicationHandler for AppWindow {
                     let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
                     print!("\r{}", delta_time);
                     std::io::stdout().flush().unwrap();
-                    app.draw_frame(delta_time, &self.scene);
+                    app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();
                     Window::request_redraw(window);
                 }
