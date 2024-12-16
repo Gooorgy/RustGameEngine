@@ -2,6 +2,44 @@ use std::mem::offset_of;
 
 use ash::vk;
 use cgmath::{Matrix4, Vector2, Vector3};
+use serde::Serialize;
+
+pub struct FrameData {
+    pub render_semaphore: vk::Semaphore,
+    pub swapchain_semaphore: vk::Semaphore,
+    pub render_fence: vk::Fence,
+    pub command_buffer: vk::CommandBuffer,
+}
+
+pub struct GPUMeshData {
+    pub vertex_buffer: AllocatedBuffer,
+    pub index_buffer: AllocatedBuffer,
+    pub index_count: u32,
+    //pub vertex_buffer_address: vk::DeviceAddress,
+}
+
+#[derive(Serialize)]
+pub struct PushConstants {
+    pub vertex_buffer_address: vk::DeviceAddress,
+}
+
+pub struct AllocatedBuffer {
+    pub buffer: vk::Buffer,
+    pub buffer_memory: vk::DeviceMemory,
+}
+
+pub struct AllocatedImage {
+    pub image: vk::Image,
+    pub image_view: vk::ImageView,
+    pub image_extent: vk::Extent3D,
+    pub image_format: vk::Format,
+    pub image_memory: vk::DeviceMemory,
+}
+
+pub struct Material {
+    pub pipeline: vk::Pipeline,
+    pub pipeline_layout: vk::PipelineLayout,
+}
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]

@@ -1,7 +1,7 @@
 use std::{ffi::CString, fs, io, path::Path, ptr, slice};
 
 use ash::vk;
-
+use ash::vk::PipelineRenderingCreateInfo;
 use super::structs::Vertex;
 
 const FRAGMENT_SHADER: &str = "frag";
@@ -15,7 +15,7 @@ pub struct PipelineInfo {
 }
 
 impl PipelineInfo {
-    pub fn new(render_pass: &vk::RenderPass, logical_device: &ash::Device, set_layout: &vk::DescriptorSetLayout) -> PipelineInfo {
+    pub fn new(logical_device: &ash::Device, set_layout: &vk::DescriptorSetLayout) -> PipelineInfo {
         let vert_shader_code =
             Self::read_shader_file(VERTEX_SHADER).expect("Unable to read vertex file");
         let frag_shader_code =
@@ -117,6 +117,10 @@ impl PipelineInfo {
             .max_depth_bounds(1.0_f32)
             .stencil_test_enable(false);
 
+        let mut ddd = vk::PipelineRenderingCreateInfo::default()
+            .depth_attachment_format(vk::Format::D32_SFLOAT)
+            .color_attachment_formats(&[vk::Format::R16G16B16A16_SFLOAT]);
+
         let pipeline_create_info = ash::vk::GraphicsPipelineCreateInfo::default()
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input_info_create_info)
@@ -127,11 +131,11 @@ impl PipelineInfo {
             .color_blend_state(&color_blending_create_info)
             .dynamic_state(&dynamic_state_create_info)
             .layout(pipeline_layout)
-            .render_pass(*render_pass)
             .subpass(0)
             .base_pipeline_handle(vk::Pipeline::null())
             .base_pipeline_index(-1)
-            .depth_stencil_state(&depth_stencil_state_create_info);
+            .depth_stencil_state(&depth_stencil_state_create_info)
+            .push_next(&mut ddd)
             ;
 
         let graphics_pipelines = unsafe {

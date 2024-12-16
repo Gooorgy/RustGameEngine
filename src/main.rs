@@ -6,6 +6,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
+use new::vulkan_render::scene::Entity;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -15,6 +16,7 @@ struct AppWindow {
     window: Option<winit::window::Window>,
     vulkan_app: Option<VulkanBackend>,
     last_frame_time: Instant,
+    scene: Entity,
 }
 
 impl Default for AppWindow {
@@ -23,6 +25,7 @@ impl Default for AppWindow {
             window: None,
             vulkan_app: None,
             last_frame_time: Instant::now(),
+            scene: Entity::new("E:\\rust\\new\\src\\models\\test.obj")
         }
     }
 }
@@ -36,7 +39,8 @@ impl ApplicationHandler for AppWindow {
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
         // .with_fullscreen(x);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
-        self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap()).expect(""));
+
+        self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap(), &self.scene).expect(""));
     }
 
     // Handle window event
@@ -53,9 +57,9 @@ impl ApplicationHandler for AppWindow {
                     let time_elapsed = self.last_frame_time.elapsed();
                     self.last_frame_time = Instant::now();
                     let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
-                    //print!("\r{}", delta_time);
-                    //std::io::stdout().flush().unwrap();
-                    app.draw_frame(delta_time);
+                    print!("\r{}", delta_time);
+                    std::io::stdout().flush().unwrap();
+                    app.draw_frame(delta_time, &self.scene);
                     let window = &self.window.as_ref().unwrap();
                     Window::request_redraw(window);
                 }

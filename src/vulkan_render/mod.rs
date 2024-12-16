@@ -10,3 +10,6 @@ mod surface;
 mod swapchain;
 mod validation;
 pub mod vulkan_backend;
+mod shader;
+pub mod scene;
+pub mod image_util;

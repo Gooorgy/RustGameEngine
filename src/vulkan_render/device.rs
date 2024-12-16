@@ -4,7 +4,7 @@ use ash::vk;
 
 use super::surface::SurfaceInfo;
 
-const DEVICE_EXTENSIONS: [&CStr; 2] = [vk::KHR_SWAPCHAIN_NAME, vk::KHR_SYNCHRONIZATION2_NAME];
+const DEVICE_EXTENSIONS: [&CStr; 3] = [vk::KHR_SWAPCHAIN_NAME, vk::KHR_SYNCHRONIZATION2_NAME, vk::KHR_DYNAMIC_RENDERING_NAME ];
 
 pub struct DeviceInfo {
     pub _physical_device: vk::PhysicalDevice,
@@ -40,12 +40,17 @@ impl DeviceInfo {
 
         let physical_device_features = vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
 
-        let mut sync2_features =
+
+            let physical = vk::PhysicalDeviceFeatures2::default();
+
+        let mut pg = vk::PhysicalDeviceVulkan13Features::default().dynamic_rendering(true).synchronization2(true);
+
+       let mut sync2_features =
             vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
 
         let binding = DEVICE_EXTENSIONS.map(|name| name.as_ptr());
         let create_info = vk::DeviceCreateInfo::default()
-            .push_next(&mut sync2_features)
+            .push_next(&mut pg)
             .queue_create_infos(queue_create_infos.as_slice())
             .enabled_features(&physical_device_features)
             .enabled_extension_names(binding.as_slice());
