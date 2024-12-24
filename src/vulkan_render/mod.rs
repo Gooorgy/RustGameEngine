@@ -12,3 +12,4 @@ pub mod vulkan_backend;
 mod shader;
 pub mod scene;
 pub mod image_util;
+mod camera;

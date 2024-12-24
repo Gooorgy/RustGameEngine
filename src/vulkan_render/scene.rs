@@ -1,13 +1,17 @@
+use std::cell::{RefCell, UnsafeCell};
+use std::ops::Deref;
 use std::path::Path;
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
+use std::rc::{Rc, Weak};
+use nalgebra::{Matrix4, Vector2, Vector3};
+use typed_arena::Arena;
 use crate::vulkan_render::structs::Vertex;
 
-struct Transform {
-    position: Vector3<f32>,
-    rotation: Vector3<f32>,
-    scale: Vector3<f32>,
+pub struct Transform {
+    pub position: Vector3<f32>,
+    pub rotation: Vector3<f32>,
+    pub scale: Vector3<f32>,
 
-    model: Matrix4<f32>,
+    pub model: Matrix4<f32>,
 }
 
 impl Default for Transform {
@@ -16,22 +20,22 @@ impl Default for Transform {
             position: Vector3::new(0.0,0.0,0.0),
             rotation: Vector3::new(0.0,0.0,0.0),
             scale: Vector3::new(1.0,1.0,1.0),
-            model: Matrix4::from_value(1.0)
+            model: Matrix4::identity(),
         }
     }
 }
 
-pub struct Entity {
+pub struct SceneNode {
     pub transform: Transform,
     pub mesh: Mesh,
 
-    pub parent: Option<Box<Entity>>,
-    pub children: Vec<Entity>,
+    pub parent: Option<Weak<RefCell<SceneNode>>>,
+    pub children: Vec<Rc<RefCell<SceneNode>>>,
 }
 
-impl Entity {
-    pub fn new<P>(path: P)-> Entity where
-        P: AsRef<Path>, {
+impl SceneNode {
+    pub fn new<P>(path: P)-> Rc<RefCell<Self>>
+        where P: AsRef<Path>, {
         let (models, mat) = tobj::load_obj(
             path.as_ref(),
             &tobj::GPU_LOAD_OPTIONS,
@@ -63,18 +67,71 @@ impl Entity {
 
             vertices.push(vert);
         }
-
-        Entity {
-            transform: Transform::default(),
+        let mut transform = Transform::default();
+        transform.scale = Vector3::new(0.75,0.75,0.75);
+        transform.position = Vector3::new(0.0,1.0,0.5);
+        Rc::new(RefCell::new(SceneNode {
+            transform,
             mesh: Mesh {
                 vertices,
                 indices: mesh.indices.clone(),
             },
             parent: None,
-            children: vec![],
+            children: Vec::new(),
+        }))
+    }
+
+    pub fn add_child<P>(parent: Rc<RefCell<SceneNode>>, path: P) where P: AsRef<Path> {
+        let x = Self::new(path);
+
+        parent.borrow_mut().children.push(x.clone());
+        x.borrow_mut().set_parent(Some(parent));
+    }
+
+    pub fn remove_child(&mut self, child: &Rc<RefCell<SceneNode>>) {
+        if let Some(pos) = self.children.iter().position(|x| Rc::ptr_eq(x, child)) {
+            self.children.remove(pos);
         }
     }
+
+    pub fn get_local__model_matrix(&self) -> Matrix4<f32> {
+        let transform_x = glm::rotate(&Matrix4::identity(), self.transform.rotation.x.to_radians(), &Vector3::new(1.0,0.0,0.0));
+        let transform_y = glm::rotate(&Matrix4::identity(), self.transform.rotation.y.to_radians(), &Vector3::new(0.0,1.0,0.0));
+        let transform_z = glm::rotate(&Matrix4::identity(), self.transform.rotation.z.to_radians(), &Vector3::new(0.0,0.0,1.0));
+
+        let rotation_matrix = transform_x * transform_y * transform_z;
+
+        glm::translate(&Matrix4::identity(), &self.transform.position) * rotation_matrix * glm::scale(&Matrix4::identity(), &self.transform.scale)
+    }
+
+    pub fn get_transform(&self) -> &Transform {
+        &self.transform
+    }
+
+    pub fn update(node: Rc<RefCell<SceneNode>>) {
+        {
+           let mut m_node = node.borrow_mut();
+
+            match m_node.parent.clone() {
+                Some(p) => {
+                    let parent_model = p.upgrade().unwrap().borrow().transform.model;
+                    m_node.transform.model = parent_model * m_node.get_local__model_matrix();
+                },
+                _ => {
+                    m_node.transform.model = m_node.get_local__model_matrix();
+                }
+            };
+        }
+        for child in node.borrow().children.iter() {
+            Self::update(child.clone());
+        }
+    }
+
+    fn set_parent(&mut self, parent: Option<Rc<RefCell<SceneNode>>>) {
+        self.parent = parent.map(|p| Rc::downgrade(&p));
+    }
 }
+
 
 pub struct Mesh {
     pub vertices: Vec<Vertex>,

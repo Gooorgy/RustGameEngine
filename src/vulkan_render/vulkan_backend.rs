@@ -9,15 +9,21 @@ use super::{
 };
 use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::graphics_pipeline::PipelineInfo;
-use crate::vulkan_render::scene::Entity;
-use crate::vulkan_render::structs::{AllocatedBuffer, AllocatedImage, FrameData, GPUMeshData};
+use crate::vulkan_render::scene::{SceneNode};
+use crate::vulkan_render::structs::{AllocatedBuffer, AllocatedImage, FrameData, GPUMeshData, UboDynamicData};
 use ash::vk::{self, Extent2D, Extent3D, ImageView, Rect2D};
 use ash::vk::{DescriptorPool, ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
-use cgmath::{Matrix4, Point3, Vector3};
 use core::slice;
 use std::{error::Error, ffi::CString, mem, ptr};
+use std::cell::RefCell;
+use std::ffi::c_void;
+use std::rc::Rc;
+use std::slice::Iter;
+use glm::{Mat4, Vec3};
+use nalgebra::{min, Matrix4, Point3, Vector3};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
+use crate::vulkan_render::camera::Camera;
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
@@ -35,13 +41,14 @@ pub struct VulkanBackend {
     gpu_mesh_data: Vec<GPUMeshData>,
     descriptor_sets: Vec<vk::DescriptorSet>,
     ubo: UniformBufferObject,
-    pub uniform_buffers: Vec<vk::Buffer>,
-    pub uniform_buffer_memory: Vec<vk::DeviceMemory>,
-    pub uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
+    pub uniform_buffers: Vec<AllocatedBuffer>,
+    pub dynamic_uniform_buffers: Vec<AllocatedBuffer>,
+    pub camera: Camera,
+    dynamic_offset: u64,
 }
 
 impl VulkanBackend {
-    pub fn new(window: &Window, scene: &Entity) -> Result<Self, Box<dyn Error>> {
+    pub fn new(window: &Window, scene: Rc<RefCell<SceneNode>>) -> Result<Self, Box<dyn Error>> {
         let entry = unsafe { ash::Entry::load()? };
         let instance = Self::create_instance(&entry, window);
         let surface_info = SurfaceInfo::new(&entry, &instance, window);
@@ -68,8 +75,8 @@ impl VulkanBackend {
             swapchain_info.swapchain_images.len() as u32,
         );
 
-        let (uniform_buffers, uniform_buffer_memory, uniform_buffers_mapped) =
-            Self::create_uniform_buffers(&device_info, &instance);
+        let (uniform_buffers, dynamic_uniform_buffers, dynamic_aligment) =
+            Self::create_uniform_buffers(&device_info, &instance, 2);
 
         let descriptor_sets = Self::create_descriptor_sets(
             &device_info,
@@ -77,6 +84,8 @@ impl VulkanBackend {
             descriptor_set_layout,
             descriptor_pool,
             &uniform_buffers,
+            &dynamic_uniform_buffers,
+            dynamic_aligment,
             texture_image_view,
             texture_sampler,
         );
@@ -84,18 +93,13 @@ impl VulkanBackend {
         let aspect_ratio = swapchain_info.swapchain_extent.width as f32
             / swapchain_info.swapchain_extent.height as f32;
         let mut ubo = UniformBufferObject {
-            model: Matrix4::from_angle_z(cgmath::Deg(90.0)),
-            view: Matrix4::look_at_rh(
-                Point3::new(2.0, 2.0, 2.0),
-                Point3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, 1.0),
-            ),
-            proj: cgmath::perspective(cgmath::Deg(45.0), aspect_ratio, 0.1, 10.0),
+            view: glm::look_at(&Vector3::new(2.0,2.0,2.0), &Vector3::new(0.0,0.0,0.0), &Vector3::new(0.0,0.0,1.0)),
+            proj: glm::perspective(45.0_f32.to_radians(), aspect_ratio,0.1, 10.0),
         };
 
-        ubo.proj[1][1] *= -1.0;
+        ubo.proj[(1,1)] *= -1.0;
 
-        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, &scene);
+        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, scene);
         Ok(Self {
             _entry: entry,
             instance,
@@ -113,18 +117,20 @@ impl VulkanBackend {
             descriptor_sets,
             ubo,
             uniform_buffers,
-            uniform_buffer_memory,
-            uniform_buffers_mapped,
+            dynamic_uniform_buffers,
+            camera: Camera::new(),
+            dynamic_offset: dynamic_aligment,
         })
     }
 
     fn upload_meshes(
         instance: &Instance,
         device_info: &DeviceInfo,
-        scene: &Entity,
+        scene: Rc<RefCell<SceneNode>>,
     ) -> Vec<GPUMeshData> {
-        let vertices = &scene.mesh.vertices;
-        let indices = &scene.mesh.indices;
+        let node = scene.borrow();
+        let vertices = &node.mesh.vertices;
+        let indices = &node.mesh.indices;
 
         let vertex_buffer = Self::create_vertex_buffer(instance, device_info, vertices);
         let index_buffer = Self::create_index_buffer(instance, device_info, indices);
@@ -135,10 +141,11 @@ impl VulkanBackend {
             vertex_buffer,
             index_buffer,
             index_count: indices.len() as u32,
+            world_model: node.transform.model,
         });
 
-        if scene.children.len() > 0 {
-            let child = scene.children.get(0).unwrap();
+        if node.children.len() > 0 {
+            let child = node.children[0].clone();
             let mut child_data = Self::upload_meshes(instance, device_info, child);
             mesh_data.append(&mut child_data);
         }
@@ -308,8 +315,6 @@ impl VulkanBackend {
             .color_attachments(&color_attachments)
             .depth_attachment(&depth_attachment);
 
-        self.update_uniform_buffer(self.frame_index as u32, delta_time);
-
         unsafe {
             self.device_info
                 .logical_device
@@ -348,20 +353,42 @@ impl VulkanBackend {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.pipeline.graphics_pipelines[0],
             );
+        }
+        let aspect_ratio = self.swapchain_info.swapchain_extent.width as f32
+            / self.swapchain_info.swapchain_extent.height as f32;
+
+        let view = self.camera.get_view_matrix();
+        let mut projection = glm::perspective(aspect_ratio,70_f32.to_radians(), 0.01, 100.0);
+        projection[(1,1)] *= -1.0;
+
+        self.ubo.view = view;
+        self.ubo.proj = projection;
+
+        self.update_dynamic_uniform_buffers(self.frame_index);
+
+        for (i,gpu_mesh) in self.gpu_mesh_data.iter_mut().enumerate() {
 
             let x = self.descriptor_sets[self.frame_index];
 
-            self.device_info.logical_device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.pipeline_layout,
-                0,
-                &[x],
-                &[],
-            )
-        }
+            unsafe {
+                self.device_info.logical_device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline.pipeline_layout,
+                    0,
+                    &[x],
+                    &[(i as u32 * self.dynamic_offset as u32) ],
+                )
+            }
 
-        for gpu_mesh in &self.gpu_mesh_data {
+            //self.ubo.model = gpu_mesh.world_model;
+            let frame_index = self.frame_index;
+            let current_mapped_memory = self.uniform_buffers[frame_index].mapped_buffer as *mut UniformBufferObject;
+
+            let slice = slice::from_ref(&self.ubo);
+
+            unsafe { current_mapped_memory.copy_from_nonoverlapping(slice.as_ptr(), slice.len()) };
+
             unsafe {
                 self.device_info.logical_device.cmd_bind_index_buffer(
                     command_buffer,
@@ -659,7 +686,9 @@ impl VulkanBackend {
         descriptor_count: u32,
         descriptor_set_layout: vk::DescriptorSetLayout,
         descriptor_pool: DescriptorPool,
-        uniform_buffers: &Vec<vk::Buffer>,
+        uniform_buffers: &Vec<AllocatedBuffer>,
+        dynamic_buffers: &Vec<AllocatedBuffer>,
+        dynamic_alignment: u64,
         texture_image_view: vk::ImageView,
         texture_sampler: vk::Sampler,
     ) -> Vec<vk::DescriptorSet> {
@@ -681,9 +710,14 @@ impl VulkanBackend {
 
         for i in 0..descriptor_count {
             let buffer_info = vk::DescriptorBufferInfo::default()
-                .buffer(uniform_buffers[i as usize])
+                .buffer(uniform_buffers[i as usize].buffer)
                 .offset(0)
                 .range(std::mem::size_of::<UniformBufferObject>() as u64);
+
+            let dynamic_buffer_info = vk::DescriptorBufferInfo::default()
+                .buffer(dynamic_buffers[i as usize].buffer)
+                .offset(0)
+                .range(dynamic_alignment);
 
             let image_info = [vk::DescriptorImageInfo::default()
                 .image_view(texture_image_view)
@@ -711,6 +745,17 @@ impl VulkanBackend {
                     .descriptor_count(1)
                     .image_info(image_info.as_slice()),
             );
+
+            write_descriptor_sets.push(
+                vk::WriteDescriptorSet::default()
+                    .dst_set(descriptor_sets[i as usize])
+                    .dst_binding(2)
+                    .dst_array_element(0)
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
+                    .descriptor_count(1)
+                    .buffer_info(slice::from_ref(&dynamic_buffer_info)),
+            );
+
             println!("Write descriptor sets");
             unsafe {
                 device_info
@@ -734,10 +779,17 @@ impl VulkanBackend {
                 .ty(vk::DescriptorType::UNIFORM_BUFFER),
         );
 
+
         pool_sizes.push(
             vk::DescriptorPoolSize::default()
                 .descriptor_count(descriptor_count)
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
+        );
+
+        pool_sizes.push(
+            vk::DescriptorPoolSize::default()
+                .descriptor_count(descriptor_count)
+                .ty(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC),
         );
 
         let descriptor_pool_info = vk::DescriptorPoolCreateInfo::default()
@@ -1064,16 +1116,24 @@ impl VulkanBackend {
     fn create_uniform_buffers(
         device_info: &DeviceInfo,
         instance: &ash::Instance,
+        mesh_count: u32,
     ) -> (
-        Vec<vk::Buffer>,
-        Vec<vk::DeviceMemory>,
-        Vec<*mut UniformBufferObject>,
+        Vec<AllocatedBuffer>,
+        Vec<AllocatedBuffer>,
+        u64
     ) {
+        let mut dynamic_alignment = mem::size_of::<UboDynamicData>() as u64;
+        let min_ubo_alignment = device_info.min_ubo_alignment;
+
+        if(min_ubo_alignment > 0) {
+            dynamic_alignment = (dynamic_alignment + min_ubo_alignment - 1) & !(min_ubo_alignment - 1);
+        }
+
         let buffer_size = mem::size_of::<UniformBufferObject>() as u64;
+        let dynamic_buffer_size = dynamic_alignment * mesh_count as u64;
 
         let mut uniform_buffers = vec![];
-        let mut uniform_buffers_memory = vec![];
-        let mut uniform_buffers_mapped = vec![];
+        let mut dynamic_uniform_buffers = vec![];
 
         for _frame in 0..constants::MAX_FRAMES_IN_FLIGHT {
             let (buffer, device_memory) = Self::create_buffer(
@@ -1084,24 +1144,53 @@ impl VulkanBackend {
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             );
 
-            uniform_buffers.push(buffer);
-            uniform_buffers_memory.push(device_memory);
-
             let mapped_memory = unsafe {
                 device_info
                     .logical_device
                     .map_memory(device_memory, 0, buffer_size, vk::MemoryMapFlags::empty())
-                    .expect("failed to map memory") as *mut UniformBufferObject
+                    .expect("failed to map memory")
             };
 
-            uniform_buffers_mapped.push(mapped_memory);
+            uniform_buffers.push(
+                AllocatedBuffer {
+                    buffer,
+                    buffer_memory: device_memory,
+                    mapped_buffer: mapped_memory,
+                }
+            );
+
+            let (buffer, device_memory) = Self::create_buffer(
+                instance,
+                device_info,
+                dynamic_buffer_size,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE,
+            );
+
+            let mapped_memory = unsafe {
+                device_info
+                    .logical_device
+                    .map_memory(device_memory, 0, dynamic_buffer_size, vk::MemoryMapFlags::empty())
+                    .expect("failed to map memory")
+            };
+
+            dynamic_uniform_buffers.push(
+                AllocatedBuffer {
+                    buffer,
+                    buffer_memory: device_memory,
+                    mapped_buffer: mapped_memory,
+                }
+            )
+
+
         }
 
         (
             uniform_buffers,
-            uniform_buffers_memory,
-            uniform_buffers_mapped,
-        )
+            dynamic_uniform_buffers,
+            dynamic_alignment
+            )
+
     }
 
     fn create_descriptor_set_layout(device_info: &DeviceInfo) -> vk::DescriptorSetLayout {
@@ -1117,7 +1206,13 @@ impl VulkanBackend {
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT);
 
-        let x = vec![ubo_layout_binding, sampler_layout_binding];
+        let dynamic_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(2)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX);
+
+        let x = vec![ubo_layout_binding, sampler_layout_binding, dynamic_layout_binding];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&x);
 
@@ -1199,6 +1294,7 @@ impl VulkanBackend {
         AllocatedBuffer {
             buffer: index_buffer,
             buffer_memory: index_buffer_memory,
+            mapped_buffer: ptr::null_mut(),
         }
     }
 
@@ -1246,6 +1342,7 @@ impl VulkanBackend {
         AllocatedBuffer {
             buffer: vertex_buffer,
             buffer_memory: vertex_buffer_memory,
+            mapped_buffer: ptr::null_mut(),
         }
     }
 
@@ -1340,15 +1437,28 @@ impl VulkanBackend {
         }
     }
 
-    fn update_uniform_buffer(&mut self, current_frame: u32, delta_time: f32) {
-        self.ubo.model =
-            Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), cgmath::Deg(90.0) * delta_time)
-                * self.ubo.model;
+    fn update_dynamic_uniform_buffers(&mut self, image_index: usize) {
 
-        let current_mapped_memory = self.uniform_buffers_mapped[current_frame as usize];
+        let x = self.gpu_mesh_data.iter().map(|data| UboDynamicData {
+            model: data.world_model,
+        }).collect::<Vec<_>>();
 
-        let slice = slice::from_ref(&self.ubo);
+/*        for gpu_mesh in self.gpu_mesh_data.iter() {
+            let x = gpu_mesh.world_model;
+            let data = UboDynamicData {
+                model: x,
+            };
+            let slice = slice::from_ref(&data);
 
-        unsafe { current_mapped_memory.copy_from_nonoverlapping(slice.as_ptr(), slice.len()) };
+        }*/
+
+        let mem = self.dynamic_uniform_buffers[image_index].mapped_buffer as *mut UboDynamicData;
+
+            unsafe { mem.copy_from_nonoverlapping(x.as_ptr(),x.len()) };
+        let x = vk::MappedMemoryRange::default().memory(self.dynamic_uniform_buffers[image_index].buffer_memory).size(
+            self.dynamic_offset
+        );
+
+        unsafe { self.device_info.logical_device.flush_mapped_memory_ranges(&[x]).expect("d"); }
     }
 }

@@ -12,6 +12,7 @@ pub struct DeviceInfo {
     pub queue_info: QueueInfo,
     pub command_pool: vk::CommandPool,
     pub swapchain_support_details: SwapChainSupportDetails,
+    pub min_ubo_alignment: u64,
 }
 
 impl DeviceInfo {
@@ -68,6 +69,10 @@ impl DeviceInfo {
 
         let command_pool = Self::create_command_pool(&logical_device, &queue_indices);
 
+        let min_ubo_alignment = unsafe {
+            let xc = instance.get_physical_device_properties(physical_device);
+            xc.limits.min_uniform_buffer_offset_alignment as u64};
+
         Self {
             logical_device,
             _physical_device: physical_device,
@@ -79,6 +84,7 @@ impl DeviceInfo {
             },
             swapchain_support_details,
             command_pool,
+            min_ubo_alignment,
         }
     }
 

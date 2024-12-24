@@ -1,7 +1,8 @@
+use std::ffi::c_void;
 use std::mem::offset_of;
 
 use ash::vk;
-use cgmath::{Matrix4, Vector2, Vector3};
+use nalgebra::{Matrix4, Vector2, Vector3};
 use serde::Serialize;
 
 pub struct FrameData {
@@ -15,7 +16,7 @@ pub struct GPUMeshData {
     pub vertex_buffer: AllocatedBuffer,
     pub index_buffer: AllocatedBuffer,
     pub index_count: u32,
-    //pub vertex_buffer_address: vk::DeviceAddress,
+    pub world_model: Matrix4<f32>,
 }
 
 #[derive(Serialize)]
@@ -26,6 +27,7 @@ pub struct PushConstants {
 pub struct AllocatedBuffer {
     pub buffer: vk::Buffer,
     pub buffer_memory: vk::DeviceMemory,
+    pub mapped_buffer: *mut c_void
 }
 
 pub struct AllocatedImage {
@@ -95,7 +97,12 @@ impl Vertex {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct UniformBufferObject {
-    pub model: Matrix4<f32>,
     pub view: Matrix4<f32>,
     pub proj: Matrix4<f32>,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct UboDynamicData {
+    pub model: Matrix4<f32>,
 }
