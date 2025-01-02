@@ -7,23 +7,20 @@ use super::{
     surface::SurfaceInfo,
     swapchain::{self, SwapchainInfo},
 };
+use crate::vulkan_render::camera::Camera;
 use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::graphics_pipeline::PipelineInfo;
-use crate::vulkan_render::scene::{SceneNode};
+use crate::vulkan_render::scene::SceneNode;
 use crate::vulkan_render::structs::{AllocatedBuffer, AllocatedImage, FrameData, GPUMeshData, UboDynamicData};
 use ash::vk::{self, Extent2D, Extent3D, ImageView, Rect2D};
 use ash::vk::{DescriptorPool, ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
 use core::slice;
-use std::{error::Error, ffi::CString, mem, ptr};
+use nalgebra::Vector3;
 use std::cell::RefCell;
-use std::ffi::c_void;
 use std::rc::Rc;
-use std::slice::Iter;
-use glm::{Mat4, Vec3};
-use nalgebra::{min, Matrix4, Point3, Vector3};
+use std::{error::Error, ffi::CString, mem, ptr};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
-use crate::vulkan_render::camera::Camera;
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
@@ -381,7 +378,6 @@ impl VulkanBackend {
                 )
             }
 
-            //self.ubo.model = gpu_mesh.world_model;
             let frame_index = self.frame_index;
             let current_mapped_memory = self.uniform_buffers[frame_index].mapped_buffer as *mut UniformBufferObject;
 
@@ -886,7 +882,7 @@ impl VulkanBackend {
         device_info: &DeviceInfo,
         instance: &ash::Instance,
     ) -> (vk::Image, vk::DeviceMemory) {
-        let dyn_image = image::open("E:\\rust\\new\\src\\texture.png").unwrap();
+        let dyn_image = image::open(".\\resources\\textures\\texture.png").unwrap();
         let image_width = dyn_image.width();
         let image_height = dyn_image.height();
 

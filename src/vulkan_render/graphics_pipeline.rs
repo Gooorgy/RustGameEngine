@@ -6,7 +6,7 @@ use super::structs::Vertex;
 
 const FRAGMENT_SHADER: &str = "frag";
 const VERTEX_SHADER: &str = "vert";
-const SHADER_PATH: &str = ".\\src\\shaders";
+const SHADER_PATH: &str = ".\\resources\\shaders";
 const SHADER_EXTENSION: &str = ".spv";
 
 pub struct PipelineInfo {

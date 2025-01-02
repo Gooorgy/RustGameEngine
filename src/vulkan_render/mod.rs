@@ -13,3 +13,4 @@ mod shader;
 pub mod scene;
 pub mod image_util;
 mod camera;
+mod descriptor;

@@ -11,6 +11,8 @@ use winit::{application::ApplicationHandler, dpi::LogicalSize};
 use new::vulkan_render::scene;
 use new::vulkan_render::scene::{SceneNode};
 
+const MODEL_PATH: &str = ".\\resources\\models";
+
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -23,11 +25,11 @@ struct AppWindow {
 
 impl Default for AppWindow {
     fn default() -> Self {
-        let mut scene_root = SceneNode::new("E:\\rust\\new\\src\\models\\test.obj");
+        let scene_root = SceneNode::new(".\\resources\\models\\test.obj",".\\resources\\textures\\texture.png");
 
         //scene_root.borrow_mut().add_child("E:\\rust\\new\\src\\models\\test2.obj");
 
-        SceneNode::add_child(scene_root.clone(), "E:\\rust\\new\\src\\models\\test2.obj");
+        SceneNode::add_child(scene_root.clone(), ".\\resources\\models\\test2.obj", ".\\resources\\textures\\texture.png");
         SceneNode::update(scene_root.clone());
         Self {
             window: None,
@@ -42,12 +44,18 @@ impl ApplicationHandler for AppWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let monitor = event_loop.primary_monitor();
         let _x = Some(winit::window::Fullscreen::Borderless(monitor));
+        let d = Some(winit::window::CursorGrabMode::Locked);
+        let c = winit::window::Cursor::default();
         let window_attributes = Window::default_attributes()
             .with_title(WINDOW_TITLE)
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
-        // .with_fullscreen(x);
+            //.with_fullscreen(_x);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
 
+/*        match &self.window {
+            Some(window) => { window.set_cursor_grab(winit::window::CursorGrabMode::Locked).expect("TODO: panic message"); },
+            _ => {},
+        }*/
         self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap(), self.scene.clone()).expect(""));
     }
 
@@ -78,7 +86,7 @@ impl ApplicationHandler for AppWindow {
         }
     }
 
-    fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: DeviceEvent) {
+    fn device_event(&mut self, event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
         let vulkan_app = self.vulkan_app.as_mut().unwrap();
         match event {
             DeviceEvent::MouseMotion { delta } => {
