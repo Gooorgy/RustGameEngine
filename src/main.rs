@@ -8,8 +8,9 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
+use new::terrain::generator::{generate_mesh, new_terrain};
 use new::vulkan_render::scene;
-use new::vulkan_render::scene::{SceneNode};
+use new::vulkan_render::scene::{Mesh, SceneNode};
 
 const MODEL_PATH: &str = ".\\resources\\models";
 
@@ -21,14 +22,15 @@ struct AppWindow {
     vulkan_app: Option<VulkanBackend>,
     last_frame_time: Instant,
     scene: Rc<RefCell<SceneNode>>,
+    terrain: Mesh,
 }
 
 impl Default for AppWindow {
     fn default() -> Self {
         let scene_root = SceneNode::new(".\\resources\\models\\test.obj",".\\resources\\textures\\texture.png");
-
         //scene_root.borrow_mut().add_child("E:\\rust\\new\\src\\models\\test2.obj");
-
+        let terrain = new_terrain(123, 150);
+        let mesh = generate_mesh(terrain);
         SceneNode::add_child(scene_root.clone(), ".\\resources\\models\\test2.obj", ".\\resources\\textures\\texture.png");
         SceneNode::update(scene_root.clone());
         Self {
@@ -36,6 +38,7 @@ impl Default for AppWindow {
             vulkan_app: None,
             last_frame_time: Instant::now(),
             scene: scene_root,
+            terrain: mesh,
         }
     }
 }
@@ -56,7 +59,7 @@ impl ApplicationHandler for AppWindow {
             Some(window) => { window.set_cursor_grab(winit::window::CursorGrabMode::Locked).expect("TODO: panic message"); },
             _ => {},
         }*/
-        self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap(), self.scene.clone()).expect(""));
+        self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap(), self.scene.clone(), self.terrain.clone()).expect(""));
     }
 
     // Handle window event

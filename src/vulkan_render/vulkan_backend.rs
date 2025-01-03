@@ -10,7 +10,7 @@ use super::{
 use crate::vulkan_render::camera::Camera;
 use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::graphics_pipeline::PipelineInfo;
-use crate::vulkan_render::scene::SceneNode;
+use crate::vulkan_render::scene::{Mesh, SceneNode};
 use crate::vulkan_render::structs::{AllocatedBuffer, AllocatedImage, FrameData, GPUMeshData, UboDynamicData};
 use ash::vk::{self, Extent2D, Extent3D, ImageView, Rect2D};
 use ash::vk::{DescriptorPool, ImageAspectFlags, MemoryPropertyFlags};
@@ -45,7 +45,7 @@ pub struct VulkanBackend {
 }
 
 impl VulkanBackend {
-    pub fn new(window: &Window, scene: Rc<RefCell<SceneNode>>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(window: &Window, scene: Rc<RefCell<SceneNode>>, terrain_mesh: Mesh) -> Result<Self, Box<dyn Error>> {
         let entry = unsafe { ash::Entry::load()? };
         let instance = Self::create_instance(&entry, window);
         let surface_info = SurfaceInfo::new(&entry, &instance, window);
@@ -92,11 +92,12 @@ impl VulkanBackend {
         let mut ubo = UniformBufferObject {
             view: glm::look_at(&Vector3::new(2.0,2.0,2.0), &Vector3::new(0.0,0.0,0.0), &Vector3::new(0.0,0.0,1.0)),
             proj: glm::perspective(45.0_f32.to_radians(), aspect_ratio,0.1, 10.0),
+
         };
 
         ubo.proj[(1,1)] *= -1.0;
 
-        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, scene);
+        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, scene, terrain_mesh);
         Ok(Self {
             _entry: entry,
             instance,
@@ -124,13 +125,14 @@ impl VulkanBackend {
         instance: &Instance,
         device_info: &DeviceInfo,
         scene: Rc<RefCell<SceneNode>>,
+        mesh: Mesh
     ) -> Vec<GPUMeshData> {
         let node = scene.borrow();
-        let vertices = &node.mesh.vertices;
-        let indices = &node.mesh.indices;
+        let vertices = mesh.vertices;
+        let indices = mesh.indices;
 
-        let vertex_buffer = Self::create_vertex_buffer(instance, device_info, vertices);
-        let index_buffer = Self::create_index_buffer(instance, device_info, indices);
+        let vertex_buffer = Self::create_vertex_buffer(instance, device_info, &vertices);
+        let index_buffer = Self::create_index_buffer(instance, device_info, &indices);
 
         let mut mesh_data = vec![];
 
@@ -141,11 +143,11 @@ impl VulkanBackend {
             world_model: node.transform.model,
         });
 
-        if node.children.len() > 0 {
+/*        if node.children.len() > 0 {
             let child = node.children[0].clone();
-            let mut child_data = Self::upload_meshes(instance, device_info, child);
+            let mut child_data = Self::upload_meshes(instance, device_info, child, mesh.clone());
             mesh_data.append(&mut child_data);
-        }
+        }*/
 
         mesh_data
     }
@@ -355,7 +357,7 @@ impl VulkanBackend {
             / self.swapchain_info.swapchain_extent.height as f32;
 
         let view = self.camera.get_view_matrix();
-        let mut projection = glm::perspective(aspect_ratio,70_f32.to_radians(), 0.01, 100.0);
+        let mut projection = glm::perspective(aspect_ratio,70_f32.to_radians(), 0.01, 10000.0);
         projection[(1,1)] *= -1.0;
 
         self.ubo.view = view;

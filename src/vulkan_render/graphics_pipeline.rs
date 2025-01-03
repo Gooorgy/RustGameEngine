@@ -1,7 +1,6 @@
 use std::{ffi::CString, fs, io, path::Path, ptr, slice};
 
 use ash::vk;
-use ash::vk::PipelineRenderingCreateInfo;
 use super::structs::Vertex;
 
 const FRAGMENT_SHADER: &str = "frag";

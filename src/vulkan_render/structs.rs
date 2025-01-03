@@ -2,6 +2,7 @@ use std::ffi::c_void;
 use std::mem::offset_of;
 
 use ash::vk;
+use glm::Vec4;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use serde::Serialize;
 

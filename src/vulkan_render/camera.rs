@@ -15,7 +15,7 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Self {
-            position: Vec3::new(0.0,0.0,5.0),
+            position: Vec3::new(0.0,1700.0,1700.0),
             velocity: Vec3::new(0.0,0.0,0.0),
             pitch: 0.0,
             yaw: 0.0,
@@ -25,10 +25,9 @@ impl Camera {
     pub fn update(&mut self, delta_time: f32) {
         let camera_rotation = self.get_rotation_matrix();
 
-        let ff = camera_rotation * (Vec4::new(self.velocity.x,self.velocity.y,self.velocity.z,0.0) * delta_time);
+        let ff = camera_rotation * (Vec4::new(self.velocity.x,self.velocity.y,self.velocity.z,0.0) * 500.0 * delta_time);
 
         let x= vec3(ff.x,ff.y,ff.z);
-
         self.position += x;
     }
 
@@ -51,6 +50,9 @@ impl Camera {
     pub fn process_cursor_moved(&mut self, mouse_x: f32, mouse_y: f32) {
         self.yaw += mouse_x / 200.0;
         self.pitch -= mouse_y / 200.0;
+
+        if self.pitch > 1.5 { self.pitch = 1.5; }
+        if self.pitch < -1.5 { self.pitch = -1.5; }
     }
 
     pub fn get_view_matrix(&self) -> Mat4 {

@@ -47,7 +47,7 @@ impl SceneNode {
         let mesh = Self::load_model(model_path);
         let texture = Self::load_texture(texture_path);
         let mut transform = Transform::default();
-        transform.scale = Vector3::new(0.75,0.75,0.75);
+        transform.scale = Vector3::new(1.0,1.0,1.0);
         transform.position = Vector3::new(0.0,1.0,0.5);
         Rc::new(RefCell::new(SceneNode {
             transform,
@@ -169,6 +169,7 @@ impl SceneNode {
 }
 
 
+#[derive(Clone)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
