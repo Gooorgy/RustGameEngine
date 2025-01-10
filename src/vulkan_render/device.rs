@@ -4,7 +4,11 @@ use ash::vk;
 
 use super::surface::SurfaceInfo;
 
-const DEVICE_EXTENSIONS: [&CStr; 3] = [vk::KHR_SWAPCHAIN_NAME, vk::KHR_SYNCHRONIZATION2_NAME, vk::KHR_DYNAMIC_RENDERING_NAME ];
+const DEVICE_EXTENSIONS: [&CStr; 3] = [
+    vk::KHR_SWAPCHAIN_NAME,
+    vk::KHR_SYNCHRONIZATION2_NAME,
+    vk::KHR_DYNAMIC_RENDERING_NAME,
+];
 
 pub struct DeviceInfo {
     pub _physical_device: vk::PhysicalDevice,
@@ -39,19 +43,16 @@ impl DeviceInfo {
             queue_create_infos.push(queue_create_info);
         }
 
-        let physical_device_features = vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
+        let physical_device_features =
+            vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
 
-
-            let physical = vk::PhysicalDeviceFeatures2::default();
-
-        let mut pg = vk::PhysicalDeviceVulkan13Features::default().dynamic_rendering(true).synchronization2(true);
-
-       let mut sync2_features =
-            vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
+        let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
+            .dynamic_rendering(true)
+            .synchronization2(true);
 
         let binding = DEVICE_EXTENSIONS.map(|name| name.as_ptr());
         let create_info = vk::DeviceCreateInfo::default()
-            .push_next(&mut pg)
+            .push_next(&mut vulkan_13_features)
             .queue_create_infos(queue_create_infos.as_slice())
             .enabled_features(&physical_device_features)
             .enabled_extension_names(binding.as_slice());
@@ -71,7 +72,8 @@ impl DeviceInfo {
 
         let min_ubo_alignment = unsafe {
             let xc = instance.get_physical_device_properties(physical_device);
-            xc.limits.min_uniform_buffer_offset_alignment as u64};
+            xc.limits.min_uniform_buffer_offset_alignment as u64
+        };
 
         Self {
             logical_device,

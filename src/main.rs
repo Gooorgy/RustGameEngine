@@ -1,18 +1,14 @@
+use new::terrain::generator::{generate_mesh, new_terrain};
+use new::vulkan_render::scene::{Mesh, SceneNode};
+use new::vulkan_render::vulkan_backend::VulkanBackend;
 use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
-use typed_arena::Arena;
-use new::vulkan_render::vulkan_backend::VulkanBackend;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
-use new::terrain::generator::{generate_mesh, new_terrain};
-use new::vulkan_render::scene;
-use new::vulkan_render::scene::{Mesh, SceneNode};
-
-const MODEL_PATH: &str = ".\\resources\\models";
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -27,11 +23,18 @@ struct AppWindow {
 
 impl Default for AppWindow {
     fn default() -> Self {
-        let scene_root = SceneNode::new(".\\resources\\models\\test.obj",".\\resources\\textures\\texture.png");
+        let scene_root = SceneNode::new(
+            ".\\resources\\models\\test.obj",
+            ".\\resources\\textures\\texture.png",
+        );
         //scene_root.borrow_mut().add_child("E:\\rust\\new\\src\\models\\test2.obj");
         let terrain = new_terrain(123, 150);
         let mesh = generate_mesh(terrain);
-        SceneNode::add_child(scene_root.clone(), ".\\resources\\models\\test2.obj", ".\\resources\\textures\\texture.png");
+        SceneNode::add_child(
+            scene_root.clone(),
+            ".\\resources\\models\\test2.obj",
+            ".\\resources\\textures\\texture.png",
+        );
         SceneNode::update(scene_root.clone());
         Self {
             window: None,
@@ -45,21 +48,19 @@ impl Default for AppWindow {
 
 impl ApplicationHandler for AppWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let monitor = event_loop.primary_monitor();
-        let _x = Some(winit::window::Fullscreen::Borderless(monitor));
-        let d = Some(winit::window::CursorGrabMode::Locked);
-        let c = winit::window::Cursor::default();
         let window_attributes = Window::default_attributes()
             .with_title(WINDOW_TITLE)
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
-            //.with_fullscreen(_x);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
 
-/*        match &self.window {
-            Some(window) => { window.set_cursor_grab(winit::window::CursorGrabMode::Locked).expect("TODO: panic message"); },
-            _ => {},
-        }*/
-        self.vulkan_app = Some(VulkanBackend::new(self.window.as_ref().unwrap(), self.scene.clone(), self.terrain.clone()).expect(""));
+        self.vulkan_app = Some(
+            VulkanBackend::new(
+                self.window.as_ref().unwrap(),
+                self.scene.clone(),
+                self.terrain.clone(),
+            )
+            .expect(""),
+        );
     }
 
     // Handle window event
@@ -89,15 +90,20 @@ impl ApplicationHandler for AppWindow {
         }
     }
 
-    fn device_event(&mut self, event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
         let vulkan_app = self.vulkan_app.as_mut().unwrap();
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                vulkan_app.camera.process_cursor_moved(delta.0 as f32, delta.1 as f32);
-            },
-            DeviceEvent::Key(input) => {
-                vulkan_app.camera.process_keyboard_event(input)
+                vulkan_app
+                    .camera
+                    .process_cursor_moved(delta.0 as f32, delta.1 as f32);
             }
+            DeviceEvent::Key(input) => vulkan_app.camera.process_keyboard_event(input),
             _ => {}
         }
     }

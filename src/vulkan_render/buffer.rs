@@ -1,8 +1,115 @@
-use super::device;
+use super::{device, utils};
 use crate::vulkan_render::device::DeviceInfo;
-use ash::vk;
+use ash::vk::{BufferUsageFlags, DeviceMemory, DeviceSize, MappedMemoryRange, MemoryPropertyFlags};
+use ash::{vk, Instance};
 use core::panic;
+use std::ffi::c_void;
 use std::slice;
+
+pub struct AllocatedBuffer {
+    pub buffer: vk::Buffer,
+    pub buffer_memory: DeviceMemory,
+    pub mapped_buffer: *mut c_void,
+}
+
+impl AllocatedBuffer {
+    pub fn new(
+        device_info: &DeviceInfo,
+        instance: &Instance,
+        buffer_size: DeviceSize,
+        usage: BufferUsageFlags,
+        memory_property_flags: MemoryPropertyFlags,
+    ) -> Self {
+        let (buffer, buffer_memory) = Self::create_buffer(
+            instance,
+            device_info,
+            buffer_size,
+            usage,
+            memory_property_flags,
+        );
+        let mapped_buffer = unsafe {
+            device_info
+                .logical_device
+                .map_memory(buffer_memory, 0, buffer_size, vk::MemoryMapFlags::empty())
+                .expect("failed to map memory")
+        };
+
+        AllocatedBuffer {
+            buffer,
+            buffer_memory,
+            mapped_buffer,
+        }
+    }
+
+    pub fn update_buffer<T>(&mut self, data: &[T]) {
+        let current_mapped_memory = self.mapped_buffer as *mut T;
+
+        unsafe { current_mapped_memory.copy_from_nonoverlapping(data.as_ptr(), data.len()) };
+    }
+
+    pub fn flush_mapped_memory_ranges(
+        &mut self,
+        device: &ash::Device,
+        mapped_memory_range: MappedMemoryRange,
+    ) {
+        unsafe {
+            device
+                .flush_mapped_memory_ranges(&[mapped_memory_range])
+                .expect("d");
+        }
+    }
+
+    pub fn create_buffer(
+        instance: &Instance,
+        device_info: &DeviceInfo,
+        size: DeviceSize,
+        usage: BufferUsageFlags,
+        memory_property_flags: MemoryPropertyFlags,
+    ) -> (vk::Buffer, DeviceMemory) {
+        let buffer_create_info = vk::BufferCreateInfo::default()
+            .size(size)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let buffer = unsafe {
+            device_info
+                .logical_device
+                .create_buffer(&buffer_create_info, None)
+                .expect("failed to create buffer")
+        };
+
+        let mem_requirements = unsafe {
+            device_info
+                .logical_device
+                .get_buffer_memory_requirements(buffer)
+        };
+        let memory_properties =
+            unsafe { instance.get_physical_device_memory_properties(device_info._physical_device) };
+        let memory_alloc_info = vk::MemoryAllocateInfo::default()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(utils::find_memory_type(
+                mem_requirements.memory_type_bits,
+                memory_property_flags,
+                memory_properties,
+            ));
+
+        let buffer_memory = unsafe {
+            device_info
+                .logical_device
+                .allocate_memory(&memory_alloc_info, None)
+                .expect("failed to allocate memory")
+        };
+
+        unsafe {
+            device_info
+                .logical_device
+                .bind_buffer_memory(buffer, buffer_memory, 0)
+                .expect("failed to bind buffer");
+        }
+
+        (buffer, buffer_memory)
+    }
+}
 
 pub struct BufferInfo {
     pub buffer: vk::Buffer,
@@ -119,10 +226,7 @@ impl BufferInfo {
         command_buffer[0]
     }
 
-    pub fn end_single_time_command(
-        device_info: &DeviceInfo,
-        command_buffer: vk::CommandBuffer,
-    ) {
+    pub fn end_single_time_command(device_info: &DeviceInfo, command_buffer: vk::CommandBuffer) {
         unsafe {
             device_info
                 .logical_device

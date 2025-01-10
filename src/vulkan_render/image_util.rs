@@ -1,25 +1,156 @@
-use ash::vk;
-use ash::vk::ImageSubresourceLayers;
-use crate::vulkan_render::buffer::BufferInfo;
 use crate::vulkan_render::device::DeviceInfo;
+use crate::vulkan_render::utils;
+use ash::vk::{DeviceMemory, Extent3D, Format, Image, ImageAspectFlags, ImageCreateInfo, ImageSubresourceLayers, ImageTiling, ImageUsageFlags, ImageView, MemoryPropertyFlags};
+use ash::{vk, Device, Instance};
+
+pub struct AllocatedImage {
+    pub image: Image,
+    pub image_view: ImageView,
+    pub image_memory: DeviceMemory,
+    pub image_extent: Extent3D,
+    pub image_format: Format,
+}
+
+impl AllocatedImage {
+    pub fn new(
+        device_info: &DeviceInfo,
+        instance: &Instance,
+        width: u32,
+        height: u32,
+        format: Format,
+        aspect_flags: ImageAspectFlags,
+        tiling: ImageTiling,
+        usage: ImageUsageFlags,
+        mem_properties: MemoryPropertyFlags,
+    ) -> Self {
+        let extent = Extent3D {
+            width,
+            height,
+            depth: 1,
+        };
+
+        let image = Self::create_image(&device_info.logical_device, format, tiling, usage, extent);
+        let image_memory = Self::allocate_image(device_info, instance, &image, mem_properties);
+        let image_view = Self::create_image_view(device_info, &image, format, aspect_flags);
+
+        Self {
+            image,
+            image_view,
+            image_memory,
+            image_format: format,
+            image_extent: extent,
+        }
+    }
+
+    pub fn create_image(
+        device: &Device,
+        format: Format,
+        tiling: ImageTiling,
+        usage: ImageUsageFlags,
+        extent: Extent3D
+    ) -> Image {
+        let image_create_info = ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .format(format)
+            .tiling(tiling)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty());
+
+        unsafe {
+            device
+                .create_image(&image_create_info, None)
+                .expect("failed to create image")
+        }
+    }
+
+    fn allocate_image(
+        device_info: &DeviceInfo,
+        instance: &Instance,
+        image: &Image,
+        mem_properties: MemoryPropertyFlags
+    ) -> DeviceMemory {
+        let mem_requirements =
+            unsafe { device_info.logical_device.get_image_memory_requirements(*image) };
+
+        let memory_properties =
+            unsafe { instance.get_physical_device_memory_properties(device_info._physical_device) };
+
+        let allocate_info = vk::MemoryAllocateInfo::default()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(utils::find_memory_type(
+                mem_requirements.memory_type_bits,
+                mem_properties,
+                memory_properties,
+            ));
+
+        let allocated_memory = unsafe {
+            device_info
+                .logical_device
+                .allocate_memory(&allocate_info, None)
+                .expect("failed to allocate image memory")
+        };
+
+        unsafe {
+            device_info
+                .logical_device
+                .bind_image_memory(*image, allocated_memory, 0)
+                .expect("failed to bind image memory");
+        }
+
+        allocated_memory
+    }
+
+    pub fn create_image_view(
+        device_info: &DeviceInfo,
+        image: &Image,
+        format: Format,
+        image_aspect_flags: ImageAspectFlags,
+    ) -> ImageView {
+        let view_info = vk::ImageViewCreateInfo::default()
+            .image(*image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(image_aspect_flags)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            );
+
+        unsafe {
+            device_info
+                .logical_device
+                .create_image_view(&view_info, None)
+                .expect("failed to create image view")
+        }
+    }
+}
 
 pub fn copy_image_to_image(
-    device: &ash::Device,
+    device: &Device,
     command_buffer: &vk::CommandBuffer,
-    src_image: vk::Image,
-    dst_image: vk::Image,
+    src_image: Image,
+    dst_image: Image,
     src_size: vk::Extent2D,
-    dst_size: vk::Extent2D
+    dst_size: vk::Extent2D,
 ) {
     let mut blit_region = vk::ImageBlit2::default()
         .src_subresource(ImageSubresourceLayers {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
+            aspect_mask: ImageAspectFlags::COLOR,
             layer_count: 1,
             base_array_layer: 0,
             mip_level: 0,
         })
         .dst_subresource(ImageSubresourceLayers {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
+            aspect_mask: ImageAspectFlags::COLOR,
             layer_count: 1,
             base_array_layer: 0,
             mip_level: 0,
@@ -43,48 +174,26 @@ pub fn copy_image_to_image(
         .filter(vk::Filter::LINEAR)
         .regions(&regions);
 
-    unsafe {
-        device.cmd_blit_image2(*command_buffer,&blit_info)
-    }
+    unsafe { device.cmd_blit_image2(*command_buffer, &blit_info) }
 }
 
 pub fn transition_image_layout(
     device_info: &DeviceInfo,
     command_buffer: &vk::CommandBuffer,
-    image: vk::Image,
+    image: Image,
     old_layout: vk::ImageLayout,
     new_layout: vk::ImageLayout,
-    depth: bool
+    depth: bool,
 ) {
-    //let command_buffer = BufferInfo::begin_single_time_command(device_info);
-
-    let mut aspect_mask = vk::ImageAspectFlags::COLOR;
-    if(depth) {
-        aspect_mask = vk::ImageAspectFlags::DEPTH;
+    let mut aspect_mask = ImageAspectFlags::COLOR;
+    if depth {
+        aspect_mask = ImageAspectFlags::DEPTH;
     }
 
-    let mut src_access_mask;
-    let mut dst_access_mask;
-    let mut source_stage;
-    let mut destination_stage;
-
-    if old_layout == vk::ImageLayout::UNDEFINED
-        && new_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
-    {
-        src_access_mask = vk::AccessFlags::empty();
-        dst_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-
-        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
-        destination_stage = vk::PipelineStageFlags::TRANSFER;
-    } else if old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
-        && new_layout == ash::vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
-    {
-        src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
-        dst_access_mask = vk::AccessFlags::SHADER_READ;
-
-        source_stage = vk::PipelineStageFlags::TRANSFER;
-        destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
-    }
+    let src_access_mask;
+    let dst_access_mask;
+    let source_stage;
+    let destination_stage;
 
     src_access_mask = vk::AccessFlags::MEMORY_WRITE;
     dst_access_mask = vk::AccessFlags::MEMORY_READ | vk::AccessFlags::MEMORY_WRITE;
@@ -120,6 +229,68 @@ pub fn transition_image_layout(
             &[barrier],
         )
     }
+}
 
-    //BufferInfo::end_single_time_command(device_info, command_buffer);
+pub fn create_image(
+    device_info: &DeviceInfo,
+    instance: &Instance,
+    width: u32,
+    height: u32,
+    format: Format,
+    tiling: ImageTiling,
+    usage: ImageUsageFlags,
+    mem_properties: MemoryPropertyFlags,
+) -> (Image, DeviceMemory) {
+    let image_info = ImageCreateInfo::default()
+        .image_type(vk::ImageType::TYPE_2D)
+        .extent(Extent3D {
+            height,
+            width,
+            depth: 1,
+        })
+        .mip_levels(1)
+        .array_layers(1)
+        .format(format)
+        .tiling(tiling)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .usage(usage)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .flags(vk::ImageCreateFlags::empty());
+
+    let x = unsafe {
+        device_info
+            .logical_device
+            .create_image(&image_info, None)
+            .expect("failed to create image")
+    };
+
+    let mem_requirements = unsafe { device_info.logical_device.get_image_memory_requirements(x) };
+
+    let memory_properties =
+        unsafe { instance.get_physical_device_memory_properties(device_info._physical_device) };
+
+    let allocate_info = vk::MemoryAllocateInfo::default()
+        .allocation_size(mem_requirements.size)
+        .memory_type_index(utils::find_memory_type(
+            mem_requirements.memory_type_bits,
+            mem_properties,
+            memory_properties,
+        ));
+
+    let allocated_memory = unsafe {
+        device_info
+            .logical_device
+            .allocate_memory(&allocate_info, None)
+            .expect("failed to allocate image memory")
+    };
+
+    unsafe {
+        device_info
+            .logical_device
+            .bind_image_memory(x, allocated_memory, 0)
+            .expect("failed to bind image memory");
+    }
+
+    return (x, allocated_memory);
 }

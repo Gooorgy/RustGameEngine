@@ -1,7 +1,6 @@
 use std::ptr;
 
 use ash::{khr, vk};
-use crate::vulkan_render::structs::AllocatedImage;
 use super::{constants, device, surface::SurfaceInfo};
 
 pub struct SwapchainInfo {
@@ -11,8 +10,6 @@ pub struct SwapchainInfo {
 
     pub swapchain_image_format: vk::SurfaceFormatKHR,
     pub swapchain_extent: vk::Extent2D,
-
-    pub frame_buffers: Vec<vk::Framebuffer>,
 }
 
 impl SwapchainInfo {
@@ -96,15 +93,12 @@ impl SwapchainInfo {
 
         let swapchain_images = unsafe { swapchain_device.get_swapchain_images(swapchain) };
 
-        let mut frame_buffers = vec![];
-
         SwapchainInfo {
             swapchain_device,
             swapchain,
             swapchain_images: swapchain_images.unwrap(),
             swapchain_image_format: surface_format,
             swapchain_extent: extent,
-            frame_buffers
         }
     }
 
