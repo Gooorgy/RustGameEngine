@@ -4,10 +4,11 @@ use ash::vk;
 
 use super::surface::SurfaceInfo;
 
-const DEVICE_EXTENSIONS: [&CStr; 3] = [
+const DEVICE_EXTENSIONS: [&CStr; 4] = [
     vk::KHR_SWAPCHAIN_NAME,
     vk::KHR_SYNCHRONIZATION2_NAME,
     vk::KHR_DYNAMIC_RENDERING_NAME,
+    vk::EXT_CONSERVATIVE_RASTERIZATION_NAME,
 ];
 
 pub struct DeviceInfo {
@@ -42,9 +43,11 @@ impl DeviceInfo {
 
             queue_create_infos.push(queue_create_info);
         }
+        let conservatice =vk::PhysicalDeviceConservativeRasterizationPropertiesEXT::default();
 
         let physical_device_features =
-            vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true);
+            vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true).depth_clamp(true);
+
 
         let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
             .dynamic_rendering(true)

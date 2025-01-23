@@ -13,14 +13,20 @@ use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::frame_manager::FrameManager;
 use crate::vulkan_render::image_util::AllocatedImage;
 use crate::vulkan_render::scene::{Mesh, SceneNode};
-use crate::vulkan_render::structs::{GPUMeshData, ModelDynamicUbo};
-use ash::vk::{self, Extent2D, Extent3D, ImageView, Rect2D};
+use crate::vulkan_render::structs::{Cascade, CascadeShadowPushConsts, CascadeShadowUbo, GPUMeshData, LightingUbo, ModelDynamicUbo};
+use ash::vk::{self, Extent2D, Extent3D, ImageView, PipelineBindPoint, Rect2D, ShaderStageFlags};
 use ash::vk::{ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
+use glm::{normalize, vec2, vec3, vec3_to_vec4, vec4, Mat4, Vec3};
+use nalgebra::Point3;
+use num::traits::real::Real;
+use num::Float;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{error::Error, ffi::CString, mem, ptr};
+use std::{error::Error, f32, ffi::CString, mem, ptr};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
+
+const SHADOW_MAP_CASCADE_COUNT: usize = 3;
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
@@ -32,6 +38,11 @@ pub struct VulkanBackend {
     gpu_mesh_data: Vec<GPUMeshData>,
     pub camera: Camera,
     frame_manager: FrameManager,
+    cascades: Vec<Cascade>,
+    mesh: Mesh,
+    cascade_complete: bool,
+    pub locked_cascade: bool,
+    cam_view_proj: Mat4,
 }
 
 impl VulkanBackend {
@@ -50,9 +61,9 @@ impl VulkanBackend {
 
         let texture_image = Self::create_texture_image(&device_info, &instance);
         let texture_image_view = Self::create_texture_image_view(&device_info, texture_image.0);
-        let texture_sampler = utils::create_texture_sampler(&device_info, &instance);
+        let texture_sampler = utils::create_texture_sampler(&device_info, &instance, false);
 
-        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, scene, terrain_mesh);
+        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, scene, &terrain_mesh);
 
         let frame_manager = FrameManager::new(
             &device_info,
@@ -62,7 +73,16 @@ impl VulkanBackend {
             gpu_mesh_data.len(),
             &texture_sampler,
             &texture_image_view,
+            SHADOW_MAP_CASCADE_COUNT,
         );
+
+        let cascades = vec![
+            Cascade::default(),
+            Cascade::default(),
+            Cascade::default(),
+            Cascade::default(),
+        ];
+
         Ok(Self {
             _entry: entry,
             instance,
@@ -73,6 +93,11 @@ impl VulkanBackend {
             gpu_mesh_data,
             camera: Camera::new(),
             frame_manager,
+            cascades,
+            mesh: terrain_mesh,
+            cascade_complete: false,
+            locked_cascade: false,
+            cam_view_proj: Mat4::identity(),
         })
     }
 
@@ -80,11 +105,11 @@ impl VulkanBackend {
         instance: &Instance,
         device_info: &DeviceInfo,
         scene: Rc<RefCell<SceneNode>>,
-        mesh: Mesh,
+        mesh: &Mesh,
     ) -> Vec<GPUMeshData> {
         let node = scene.borrow();
-        let vertices = mesh.vertices;
-        let indices = mesh.indices;
+        let vertices = mesh.vertices.clone();
+        let indices = mesh.indices.clone();
 
         let vertex_buffer = Self::create_vertex_buffer(instance, device_info, &vertices);
         let index_buffer = Self::create_index_buffer(instance, device_info, &indices);
@@ -104,6 +129,15 @@ impl VulkanBackend {
     pub fn draw_frame(&mut self, _delta_time: f32) {
         self.update_camera();
         self.update_world();
+        if (!self.locked_cascade) {
+            self.cam_view_proj =
+                self.camera.get_projection_matrix() * self.camera.get_view_matrix();
+
+            self.update_cascades();
+        }
+
+        self.update_cascade_memory();
+        self.update_lighting_memory();
 
         let current_frame = self.frame_manager.get_current_frame();
         unsafe {
@@ -170,6 +204,16 @@ impl VulkanBackend {
         image_util::transition_image_layout(
             &self.device_info,
             &current_frame.command_buffer,
+            current_frame.pos_image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::GENERAL,
+            false,
+        );
+
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
             current_frame.normal_image.image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
@@ -188,19 +232,54 @@ impl VulkanBackend {
         image_util::transition_image_layout(
             &self.device_info,
             &current_frame.command_buffer,
+            current_frame.shadow_cascades[0].shadow_depth_image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
+            true,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
+            current_frame.shadow_cascades[1].shadow_depth_image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
+            true,
+        );
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
+            current_frame.shadow_cascades[2].shadow_depth_image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
+            true,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
             current_frame.draw_image.image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
             false,
         );
 
-        //self.render_offscreen_shadow_map(command_buffer);
+        self.render_cascade_shadow_map();
         self.render_scene();
 
         image_util::transition_image_layout(
             &self.device_info,
             &current_frame.command_buffer,
             current_frame.albedo_image.image,
+            vk::ImageLayout::GENERAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            false,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
+            current_frame.pos_image.image,
             vk::ImageLayout::GENERAL,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             false,
@@ -219,6 +298,33 @@ impl VulkanBackend {
             &self.device_info,
             &current_frame.command_buffer,
             current_frame.depth_image.image,
+            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            true,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
+            current_frame.shadow_cascades[0].shadow_depth_image.image,
+            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            true,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
+            current_frame.shadow_cascades[1].shadow_depth_image.image,
+            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            true,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &current_frame.command_buffer,
+            current_frame.shadow_cascades[2].shadow_depth_image.image,
             vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             true,
@@ -366,18 +472,20 @@ impl VulkanBackend {
                 .cmd_begin_rendering(current_frame.command_buffer, &begin_render_info)
         }
 
-        self.set_viewport_scissor();
+        let width = self.swapchain_info.swapchain_extent.width as f32;
+        let height = self.swapchain_info.swapchain_extent.height as f32;
+        self.set_viewport_scissor(width, height);
 
         unsafe {
             self.device_info.logical_device.cmd_bind_pipeline(
                 current_frame.command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
+                PipelineBindPoint::GRAPHICS,
                 self.frame_manager.lighting_pipeline.pipelines[0],
             );
 
             self.device_info.logical_device.cmd_bind_descriptor_sets(
                 current_frame.command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
+                PipelineBindPoint::GRAPHICS,
                 self.frame_manager.lighting_pipeline.pipeline_layout,
                 0,
                 &[current_frame.descriptor_lighting_set],
@@ -403,6 +511,18 @@ impl VulkanBackend {
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE);
 
+        let normal_attachment = vk::RenderingAttachmentInfo::default()
+            .image_view(current_frame.normal_image.image_view)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE);
+
+        let pos_attachment = vk::RenderingAttachmentInfo::default()
+            .image_view(current_frame.pos_image.image_view)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE);
+
         let depth_attachment = vk::RenderingAttachmentInfo::default()
             .image_view(current_frame.depth_image.image_view)
             .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
@@ -415,7 +535,7 @@ impl VulkanBackend {
                 },
             });
 
-        let color_attachments = [color_attachment];
+        let color_attachments = [color_attachment, normal_attachment, pos_attachment];
         let begin_render_info = vk::RenderingInfo::default()
             .render_area(Rect2D {
                 extent: self.swapchain_info.swapchain_extent,
@@ -431,12 +551,14 @@ impl VulkanBackend {
                 .cmd_begin_rendering(current_frame.command_buffer, &begin_render_info)
         }
 
-        self.set_viewport_scissor();
+        let width = self.swapchain_info.swapchain_extent.width as f32;
+        let height = self.swapchain_info.swapchain_extent.height as f32;
+        self.set_viewport_scissor(width, height);
 
         unsafe {
             self.device_info.logical_device.cmd_bind_pipeline(
                 current_frame.command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
+                PipelineBindPoint::GRAPHICS,
                 self.frame_manager.gbuffer_pipeline.pipelines[0],
             );
         }
@@ -445,7 +567,7 @@ impl VulkanBackend {
             unsafe {
                 self.device_info.logical_device.cmd_bind_descriptor_sets(
                     current_frame.command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
+                    PipelineBindPoint::GRAPHICS,
                     self.frame_manager.gbuffer_pipeline.pipeline_layout,
                     0,
                     &[current_frame.descriptor_gbuffer_set],
@@ -479,6 +601,123 @@ impl VulkanBackend {
             }
         }
 
+/*        for (index, cascade) in self.cascades.iter().enumerate() {
+            let color = vec3(
+                (index as f32 * 0.3) % 1.0,
+                0.5,
+                1.0 - (index as f32 * 0.3) % 1.0,
+            );
+
+            let mut frustum_corners;
+            if (index == 3) {
+                frustum_corners = self.get_cascade_frustum_corners(&self.cam_view_proj, color);
+            } else {
+                frustum_corners =
+                    self.get_cascade_frustum_corners(&cascade.cascade_view_proj, color);
+            }
+
+            let vertex_buffer_size = (frustum_corners.len() * mem::size_of::<Vertex>()) as u64;
+
+            let vertex_buffer = unsafe {
+                self.device_info
+                    .logical_device
+                    .create_buffer(
+                        &vk::BufferCreateInfo {
+                            size: vertex_buffer_size,
+                            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+                            sharing_mode: vk::SharingMode::EXCLUSIVE,
+                            ..Default::default()
+                        },
+                        None,
+                    )
+                    .expect("Create vertex buffer failed.")
+            };
+
+            let mem_requirements = unsafe {
+                self.device_info
+                    .logical_device
+                    .get_buffer_memory_requirements(vertex_buffer)
+            };
+
+            let memory_properties = unsafe {
+                self.instance
+                    .get_physical_device_memory_properties(self.device_info._physical_device)
+            };
+
+            // Allocate and bind memory to the buffer
+            let memory_info = vk::MemoryAllocateInfo {
+                allocation_size: vertex_buffer_size,
+                memory_type_index: utils::find_memory_type(
+                    mem_requirements.memory_type_bits,
+                    MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT,
+                    memory_properties,
+                ),
+                ..Default::default()
+            };
+
+            let vertex_buffer_memory = unsafe {
+                self.device_info
+                    .logical_device
+                    .allocate_memory(&memory_info, None)
+                    .expect("Allocate vertex buffer memory failed.")
+            };
+
+            unsafe {
+                self.device_info
+                    .logical_device
+                    .bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)
+                    .expect("Bind buffer memory failed.")
+            };
+
+            // Copy the vertex data to the buffer
+            unsafe {
+                let ptr = self
+                    .device_info
+                    .logical_device
+                    .map_memory(
+                        vertex_buffer_memory,
+                        0,
+                        vertex_buffer_size,
+                        vk::MemoryMapFlags::empty(),
+                    )
+                    .expect("Map memory failed.") as *mut Vertex;
+
+                ptr::copy_nonoverlapping(frustum_corners.as_ptr(), ptr, frustum_corners.len());
+
+                self.device_info
+                    .logical_device
+                    .unmap_memory(vertex_buffer_memory);
+
+                self.device_info.logical_device.cmd_bind_pipeline(
+                    current_frame.command_buffer,
+                    PipelineBindPoint::GRAPHICS,
+                    self.frame_manager.line_pipeline.pipelines[0],
+                );
+                self.device_info.logical_device.cmd_bind_descriptor_sets(
+                    current_frame.command_buffer,
+                    PipelineBindPoint::GRAPHICS,
+                    self.frame_manager.line_pipeline.pipeline_layout,
+                    0,
+                    &[current_frame.descriptor_gbuffer_set],
+                    &[(0 * self.frame_manager.model_ubo_alignment as u32)],
+                );
+
+                self.device_info.logical_device.cmd_bind_vertex_buffers(
+                    current_frame.command_buffer,
+                    0,
+                    &[vertex_buffer],
+                    &[0],
+                );
+
+                self.device_info.logical_device.cmd_draw(
+                    current_frame.command_buffer,
+                    frustum_corners.len() as u32,
+                    1,
+                    0,
+                    0,
+                );
+            }
+        }*/
         unsafe {
             self.device_info
                 .logical_device
@@ -486,21 +725,158 @@ impl VulkanBackend {
         }
     }
 
-    fn set_viewport_scissor(&self) {
+    fn get_frustum_corners(&self, mat: Mat4) -> Vec<Vec3> {
+        let mut frustum_corners = vec![
+            vec3(-1.0, 1.0, 0.0),  // near top-left
+            vec3(1.0, 1.0, 0.0),   // near top-right
+            vec3(1.0, -1.0, 0.0),  // near bottom-right
+            vec3(-1.0, -1.0, 0.0), // near bottom-left
+            vec3(-1.0, 1.0, 1.0),  // far top-left
+            vec3(1.0, 1.0, 1.0),   // far top-right
+            vec3(1.0, -1.0, 1.0),  // far bottom-right
+            vec3(-1.0, -1.0, 1.0), // far bottom-left
+        ];
+
+        for i in 0..8 {
+            let corner = mat
+                * vec4(
+                    frustum_corners[i].x,
+                    frustum_corners[i].y,
+                    frustum_corners[i].z,
+                    1.0,
+                );
+            frustum_corners[i] = corner.xyz() / corner.w; // Divide by w for homogeneous coordinates
+        }
+
+        frustum_corners
+    }
+
+    fn render_cascade_shadow_map(&self) {
+        let current_frame = self.frame_manager.get_current_frame();
+
+        for cascade_index in 0..SHADOW_MAP_CASCADE_COUNT {
+            let depth_attachment = vk::RenderingAttachmentInfo::default()
+                .image_view(
+                    current_frame.shadow_cascades[cascade_index]
+                        .shadow_depth_image
+                        .image_view,
+                )
+                .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                });
+
+            let begin_render_info = vk::RenderingInfo::default()
+                .render_area(Rect2D {
+                    extent: Extent2D {
+                        width: 4096,
+                        height: 4096,
+                    },
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                })
+                .layer_count(1)
+                .depth_attachment(&depth_attachment);
+
+            unsafe {
+                self.device_info
+                    .logical_device
+                    .cmd_begin_rendering(current_frame.command_buffer, &begin_render_info)
+            }
+
+            self.set_viewport_scissor(4096.0, 4096.0);
+
+            unsafe {
+                self.device_info.logical_device.cmd_bind_pipeline(
+                    current_frame.command_buffer,
+                    PipelineBindPoint::GRAPHICS,
+                    self.frame_manager.shadow_map_pipeline.pipelines[0],
+                );
+            }
+
+            for (i, gpu_mesh) in self.gpu_mesh_data.iter().enumerate() {
+                unsafe {
+                    self.device_info.logical_device.cmd_bind_descriptor_sets(
+                        current_frame.command_buffer,
+                        PipelineBindPoint::GRAPHICS,
+                        self.frame_manager.shadow_map_pipeline.pipeline_layout,
+                        0,
+                        &[current_frame.shadow_map_set],
+                        &[],
+                    )
+                }
+
+                let push = CascadeShadowPushConsts {
+                    pos: [0.0, 0.0, 0.0, 0.0],
+                    index: cascade_index as u32,
+                };
+
+                let x = bincode::serialize(&push).expect("");
+
+                unsafe {
+                    self.device_info.logical_device.cmd_push_constants(
+                        current_frame.command_buffer,
+                        self.frame_manager.shadow_map_pipeline.pipeline_layout,
+                        ShaderStageFlags::VERTEX,
+                        0,
+                        &x,
+                    );
+
+                    self.device_info.logical_device.cmd_bind_index_buffer(
+                        current_frame.command_buffer,
+                        gpu_mesh.index_buffer.buffer,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+
+                    self.device_info.logical_device.cmd_bind_vertex_buffers(
+                        current_frame.command_buffer,
+                        0,
+                        &[gpu_mesh.vertex_buffer.buffer],
+                        &[0],
+                    );
+
+                    self.device_info.logical_device.cmd_draw_indexed(
+                        current_frame.command_buffer,
+                        gpu_mesh.index_count,
+                        1,
+                        0,
+                        0,
+                        0,
+                    );
+                }
+            }
+
+            unsafe {
+                self.device_info
+                    .logical_device
+                    .cmd_end_rendering(current_frame.command_buffer);
+            }
+        }
+    }
+
+    fn set_viewport_scissor(&self, width: f32, height: f32) {
         let current_frame = self.frame_manager.get_current_frame();
 
         let viewport = vk::Viewport {
             x: 0.0f32,
             y: 0.0f32,
-            width: self.swapchain_info.swapchain_extent.width as f32,
-            height: self.swapchain_info.swapchain_extent.height as f32,
+            width: width,
+            height: height,
             min_depth: 0 as f32,
             max_depth: 1f32,
         };
 
         let scissor = Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
-            extent: self.swapchain_info.swapchain_extent,
+            extent: Extent2D {
+                width: width as u32,
+                height: height as u32,
+            },
         };
 
         unsafe {
@@ -519,14 +895,10 @@ impl VulkanBackend {
     }
 
     fn update_camera(&mut self) {
-        let current_frame = self.frame_manager.get_mut_current_frame();
-
-        let aspect_ratio = self.swapchain_info.swapchain_extent.width as f32
-            / self.swapchain_info.swapchain_extent.height as f32;
-
         let view = self.camera.get_view_matrix();
-        let mut projection = glm::perspective(aspect_ratio, 70_f32.to_radians(), 0.01, 10000.0);
-        projection[(1, 1)] *= -1.0;
+        let projection = self.camera.get_projection_matrix();
+
+        let current_frame = self.frame_manager.get_mut_current_frame();
 
         let ubo = CameraMvpUbo {
             view,
@@ -558,6 +930,130 @@ impl VulkanBackend {
                 .logical_device
                 .flush_mapped_memory_ranges(&[mapped_memory_range])
                 .expect("failed to flush mapped memory range");
+        }
+    }
+
+    fn update_lighting_memory(&mut self) {
+        let current_frame = self.frame_manager.get_mut_current_frame();
+        current_frame.update_lighting_buffer(LightingUbo {
+            light_direction: vec3_to_vec4(&glm::normalize(&vec3(0.5, 1.0, 0.5))),
+
+            // w is intensity
+            light_color: vec4(1.0, 1.0, 1.0, 1.0),
+            ambient_light: vec4(0.1, 0.1, 0.1, 0.2),
+            cascade_depths: vec4(self.cascades[0].cascade_depth,self.cascades[1].cascade_depth,self.cascades[2].cascade_depth, 1.0),
+        })
+    }
+
+    fn update_cascade_memory(&mut self) {
+        let current_frame = self.frame_manager.get_mut_current_frame();
+
+        let shadow_cascades = self
+            .cascades
+            .iter()
+            .map(|casc| CascadeShadowUbo {
+                cascade_view_proj: casc.cascade_view_proj,
+                //cascade_split: casc.cascade_depth,
+            })
+            .collect::<Vec<_>>();
+
+        current_frame.update_shadow_map_buffer(shadow_cascades);
+
+    }
+
+    pub fn update_cascades(&mut self) {
+        let lambda = 0.9;
+        let mut splits = [0.0; SHADOW_MAP_CASCADE_COUNT + 1];
+
+        for i in 0..=SHADOW_MAP_CASCADE_COUNT {
+            let near = self.camera.near_clip;
+            let far = self.camera.far_clip;
+            let idm = i as f32 / SHADOW_MAP_CASCADE_COUNT as f32;
+
+            let log = near * (far / near).powf(idm);
+            let uniform = near + (far - near) * idm;
+
+            splits[i] = log * lambda + uniform * (1.0 - lambda);
+        }
+
+        for i in 0..SHADOW_MAP_CASCADE_COUNT {
+            let split_start = splits[i];
+            let split_end = splits[i + 1];
+
+            let frustum_corners = [
+                vec3(-1.0, -1.0, 0.0),
+                vec3(1.0, -1.0, 0.0),
+                vec3(1.0, 1.0, 0.0),
+                vec3(-1.0, 1.0, 0.0),
+                vec3(-1.0, -1.0, 1.0),
+                vec3(1.0, -1.0, 1.0),
+                vec3(1.0, 1.0, 1.0),
+                vec3(-1.0, 1.0, 1.0),
+            ];
+
+            let mut corners_world = [Vec3::zeros(); 8];
+
+            let projection_matrix = self.camera.get_projection_matrix_with_splits(split_start, split_end);
+            let inv_projection_view = glm::inverse(&(projection_matrix * self.camera.get_view_matrix()));
+            for (j, corner) in frustum_corners.iter().enumerate() {
+                let corner_world = inv_projection_view * vec4(corner.x, corner.y, corner.z, 1.0);
+                corners_world[j] = vec3(
+                    corner_world.x / corner_world.w,
+                    corner_world.y / corner_world.w,
+                    corner_world.z / corner_world.w,
+                );
+            }
+
+            let mut frustum_center = Vec3::zeros();
+            for corner in &corners_world {
+                frustum_center += *corner;
+            }
+            frustum_center /= corners_world.len() as f32;
+
+            let radius = corners_world
+                .iter()
+                .map(|corner| glm::distance(corner, &frustum_center))
+                .fold(0.0, f32::max);
+
+            let max_extents = vec3(radius, radius, radius);
+            let min_extents = -max_extents;
+
+            //vec3(0.5, 1.0, 0.0)
+
+
+            let camera_forward = glm::normalize(&(self.camera.get_view_matrix() * vec4(0.0, 0.0, 1.0, 0.0)).xyz());
+            let light_dir = glm::normalize(&vec3(0.5, 1.0, 0.5)); // Assuming directional light
+
+            // Offset the frustum center by the light direction for a better view
+            let light_position: Vec3 = frustum_center + light_dir * radius;
+
+            let mut up = vec3(0.0, 1.0, 0.0);
+            if normalize(&light_position).y > 0.98 {
+                up = vec3(0.0, 1.0, 0.0);
+            }
+
+            let light_view = glm::look_at(
+                &(light_position), // Light direction assumed to be -y
+                &frustum_center,
+                &up,
+            );
+
+            let mut light_projection = glm::ortho(
+                min_extents.x, max_extents.x,
+                min_extents.y, max_extents.y,
+                min_extents.z, max_extents.z - min_extents.z,
+            );
+
+            light_projection[(1, 1)] *= -1.0;
+
+            let normalized_start = split_start / self.camera.far_clip;
+            let normalized_end = split_end / self.camera.far_clip;
+            let dist = normalized_end - normalized_start;
+
+            self.cascades[i] = Cascade {
+                cascade_view_proj: light_projection * light_view,
+                cascade_depth: normalized_start + dist,
+            }
         }
     }
 
@@ -988,5 +1484,92 @@ impl VulkanBackend {
                 .swapchain_device
                 .destroy_swapchain(self.swapchain_info.swapchain, None)
         }
+    }
+
+    fn calculate_bounding_box(&self) -> (Vec3, Vec3) {
+        let mut min_corner = vec3(f32::MAX, f32::MAX, f32::MAX);
+        let mut max_corner = vec3(f32::MIN, f32::MIN, f32::MIN);
+
+        // Transform each vertex to world space and update the bounding box
+        for vertex in &self.mesh.vertices {
+            // Apply the object's transformation to the vertex (in local space)
+            let world_vertex = self.gpu_mesh_data[0]
+                .world_model
+                .transform_point(&Point3::from(vertex.pos));
+
+            // Update min and max corners
+            min_corner.x = min_corner.x.min(world_vertex.x);
+            min_corner.y = min_corner.y.min(world_vertex.y);
+            min_corner.z = min_corner.z.min(world_vertex.z);
+
+            max_corner.x = max_corner.x.max(world_vertex.x);
+            max_corner.y = max_corner.y.max(world_vertex.y);
+            max_corner.z = max_corner.z.max(world_vertex.z);
+        }
+
+        (min_corner, max_corner)
+    }
+
+    pub fn get_cascade_frustum_corners(&self, cascade_matrix: &Mat4, color: Vec3) -> Vec<Vertex> {
+        let inverse_matrix = glm::inverse(cascade_matrix);
+
+        // NDC corners of the unit cube
+        let ndc_corners = [
+            vec3(-1.0, -1.0, -1.0),
+            vec3(1.0, -1.0, -1.0),
+            vec3(1.0, 1.0, -1.0),
+            vec3(-1.0, 1.0, -1.0),
+            vec3(-1.0, -1.0, 1.0),
+            vec3(1.0, -1.0, 1.0),
+            vec3(1.0, 1.0, 1.0),
+            vec3(-1.0, 1.0, 1.0),
+        ];
+
+        // Transform corners to world space
+        let frustum_corners_world: Vec<Vec3> = ndc_corners
+            .iter()
+            .map(|corner| {
+                let world_space = inverse_matrix * vec4(corner.x, corner.y, corner.z, 1.0);
+                vec3(world_space.x, world_space.y, world_space.z) / world_space.w
+            })
+            .collect();
+
+        // Create lines connecting the corners
+        let mut lines = Vec::new();
+
+        let line_pairs = [
+            // Near plane
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),
+            // Far plane
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),
+            // Connecting lines
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),
+        ];
+
+        for &(start, end) in &line_pairs {
+            lines.push(Vertex {
+                pos: frustum_corners_world[start],
+                color,
+                tex_coord: vec2(0.0, 0.0),
+                normal: vec3(0.0, 0.0, 0.0),
+            });
+            lines.push(Vertex {
+                pos: frustum_corners_world[end],
+                color,
+                tex_coord: vec2(0.0, 0.0),
+                normal: vec3(0.0, 0.0, 0.0),
+            });
+        }
+
+        lines
     }
 }

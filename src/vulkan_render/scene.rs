@@ -47,7 +47,7 @@ impl SceneNode {
         let texture = Self::load_texture(texture_path);
         let mut transform = Transform::default();
         transform.scale = Vector3::new(1.0, 1.0, 1.0);
-        transform.position = Vector3::new(0.0, 1.0, 0.5);
+        transform.position = Vector3::new(0.0, 0.0, 0.0);
         Rc::new(RefCell::new(SceneNode {
             transform,
             mesh,
@@ -169,10 +169,13 @@ impl SceneNode {
             let tex_coord: Vector2<f32> =
                 Vector2::new(mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]);
 
+            //let normal = mesh.normals[i * 3];
+
             let vert = Vertex {
                 pos,
                 color: Vector3::new(1.0, 1.0, 1.0),
                 tex_coord,
+                normal: Vector3::new(0.0, 0.0, 0.0),
             };
 
             vertices.push(vert);

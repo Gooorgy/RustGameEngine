@@ -4,16 +4,23 @@ use crate::vulkan_render::descriptor::DescriptorManager;
 use crate::vulkan_render::device::DeviceInfo;
 use crate::vulkan_render::graphics_pipeline::PipelineInfo;
 use crate::vulkan_render::image_util::AllocatedImage;
-use crate::vulkan_render::structs::{CameraMvpUbo, LightingUbo, ModelDynamicUbo};
+use crate::vulkan_render::structs::{
+    CameraMvpUbo, CascadeShadowUbo, LightingUbo, ModelDynamicUbo,
+};
+use crate::vulkan_render::utils;
+use crate::vulkan_render::utils::get_buffer_alignment;
 use ash::vk::{
     BufferUsageFlags, DescriptorSet, Extent2D, Format, ImageAspectFlags, ImageView,
     MemoryPropertyFlags, Sampler,
 };
 use ash::{vk, Instance};
-use glm::{normalize, vec3, vec3_to_vec4, vec4};
+use glm::{normalize, vec3, vec3_to_vec4, vec4, Vec4};
 use std::mem;
-use crate::vulkan_render::utils;
-use crate::vulkan_render::utils::get_buffer_alignment;
+
+pub struct ShadowCascade {
+    pub shadow_depth_image: AllocatedImage,
+    pub cascade_sampler: Sampler,
+}
 
 #[allow(dead_code)]
 pub struct FrameData {
@@ -25,9 +32,11 @@ pub struct FrameData {
     pub camera_mvp_buffer: AllocatedBuffer,
     pub model_dynamic_buffer: AllocatedBuffer,
     pub lighting_buffer: AllocatedBuffer,
+    pub shadow_map_buffer: AllocatedBuffer,
 
     pub descriptor_gbuffer_set: DescriptorSet,
     pub descriptor_lighting_set: DescriptorSet,
+    pub shadow_map_set: DescriptorSet,
 
     pub albedo_image: AllocatedImage,
     pub albedo_sampler: Sampler,
@@ -38,8 +47,11 @@ pub struct FrameData {
     pub depth_image: AllocatedImage,
     pub depth_sampler: Sampler,
 
-    pub shadow_map_image: AllocatedImage,
+    pub shadow_cascades: Vec<ShadowCascade>,
     pub shadow_map_sampler: Sampler,
+
+    pub pos_image: AllocatedImage,
+    pub pos_sampler: Sampler,
 
     pub draw_image: AllocatedImage,
 }
@@ -57,6 +69,10 @@ impl FrameData {
     pub fn update_lighting_buffer(&mut self, mvp: LightingUbo) {
         self.lighting_buffer.update_buffer(&[mvp]);
     }
+
+    pub fn update_shadow_map_buffer(&mut self, mvp: Vec<CascadeShadowUbo>) {
+        self.shadow_map_buffer.update_buffer(&mvp);
+    }
 }
 
 pub struct FrameManager {
@@ -66,7 +82,9 @@ pub struct FrameManager {
     _descriptor_manager: DescriptorManager,
     pub gbuffer_pipeline: PipelineInfo,
     pub lighting_pipeline: PipelineInfo,
-    pub model_ubo_alignment: u64
+    pub shadow_map_pipeline: PipelineInfo,
+    pub line_pipeline: PipelineInfo,
+    pub model_ubo_alignment: u64,
 }
 
 impl FrameManager {
@@ -78,6 +96,7 @@ impl FrameManager {
         mesh_count: usize,
         texture_sampler: &Sampler,
         texture_image_view: &ImageView,
+        cascade_count: usize
     ) -> Self {
         let image_width = extent2d.width;
         let image_height = extent2d.height;
@@ -94,6 +113,16 @@ impl FrameManager {
             &descriptor_manager.global_lighting_layout,
         );
 
+        let shadow_map_pipeline = PipelineInfo::create_shadow_map_pipeline(
+            &device_info.logical_device,
+            &descriptor_manager.global_shadow_map_layout,
+        );
+
+        let line_pipeline = PipelineInfo::create_line_pipeline(
+            &device_info.logical_device,
+            &descriptor_manager.global_gbuffer_layout
+        );
+
         let model_ubo_alignment = get_buffer_alignment::<ModelDynamicUbo>(device_info);
 
         for frame in 0..max_frames {
@@ -102,20 +131,30 @@ impl FrameManager {
                 Self::create_sync_objects(&device_info.logical_device);
 
             let camera_mvp_buffer = Self::create_camera_mvp_buffer(device_info, instance);
-            let model_dynamic_buffer =
-                Self::create_model_dynamic_uniform_buffer(device_info, instance, mesh_count, model_ubo_alignment);
+            let model_dynamic_buffer = Self::create_model_dynamic_uniform_buffer(
+                device_info,
+                instance,
+                mesh_count,
+                model_ubo_alignment,
+            );
             let lighting_buffer = Self::create_lighting_buffer(device_info, instance);
+            let shadow_map_buffer = Self::create_shadow_map_buffer(device_info, instance, cascade_count);
 
-            let (albedo_image, normal_image, depth_image, shadow_map_image, draw_image) =
+            let (albedo_image, normal_image, depth_image, draw_image, pos_image) =
                 Self::create_images(device_info, instance, image_width, image_height);
 
-            let albedo_sampler = utils::create_texture_sampler(device_info, instance);
-            let normal_sampler = utils::create_texture_sampler(device_info, instance);
-            let depth_sampler = utils::create_texture_sampler(device_info, instance);
-            let shadow_map_sampler = utils::create_texture_sampler(device_info, instance);
+            let albedo_sampler = utils::create_texture_sampler(device_info, instance, false);
+            let normal_sampler = utils::create_texture_sampler(device_info, instance, false);
+            let depth_sampler = utils::create_texture_sampler(device_info, instance, false);
+            let pos_sampler = utils::create_texture_sampler(device_info, instance, false);
+
+
+            let shadow_cascades = Self::create_shadow_cascades(&device_info, &instance, cascade_count);
+            let shadow_map_sampler = utils::create_texture_sampler(device_info, instance, true);
 
             let gbuffer_descriptor_set =
                 descriptor_manager.create_gbuffer_descriptor_set(&device_info.logical_device);
+
             descriptor_manager.update_gbuffer_descriptor_set(
                 device_info,
                 &camera_mvp_buffer,
@@ -128,6 +167,7 @@ impl FrameManager {
 
             let lighting_descriptor_set =
                 descriptor_manager.create_lighting_descriptor_set(&device_info.logical_device);
+
             descriptor_manager.update_lighting_descriptor_set(
                 device_info,
                 &lighting_buffer,
@@ -138,6 +178,20 @@ impl FrameManager {
                 &depth_image.image_view,
                 &depth_sampler,
                 lighting_descriptor_set,
+                &shadow_cascades,
+                &shadow_map_buffer,
+                &camera_mvp_buffer,
+                &pos_image.image_view,
+                &pos_sampler
+            );
+
+            let shadow_map_descriptor_set =
+                descriptor_manager.create_shadow_map_descriptor_set(&device_info.logical_device);
+
+            descriptor_manager.update_shadow_map_descriptor_set(
+                device_info,
+                &shadow_map_buffer,
+                shadow_map_descriptor_set,
             );
 
             frame_data.push(FrameData {
@@ -148,16 +202,20 @@ impl FrameManager {
                 camera_mvp_buffer,
                 model_dynamic_buffer,
                 lighting_buffer,
+                shadow_map_buffer,
                 descriptor_gbuffer_set: gbuffer_descriptor_set,
                 descriptor_lighting_set: lighting_descriptor_set,
+                shadow_map_set: shadow_map_descriptor_set,
                 albedo_image,
                 albedo_sampler,
                 normal_image,
                 normal_sampler,
                 depth_image,
                 depth_sampler,
-                shadow_map_image,
+                shadow_cascades,
                 shadow_map_sampler,
+                pos_image,
+                pos_sampler,
                 draw_image,
             });
         }
@@ -169,7 +227,9 @@ impl FrameManager {
             frame_count: max_frames,
             gbuffer_pipeline: pipeline,
             lighting_pipeline,
-            model_ubo_alignment
+            shadow_map_pipeline,
+            line_pipeline,
+            model_ubo_alignment,
         }
     }
 
@@ -183,6 +243,38 @@ impl FrameManager {
 
     pub fn get_mut_current_frame(&mut self) -> &mut FrameData {
         self.frames.get_mut(self.current_frame).unwrap()
+    }
+
+    fn create_shadow_cascades(
+        device_info: &DeviceInfo,
+        instance: &Instance,
+        cascade_count: usize,
+    ) -> Vec<ShadowCascade> {
+        let mut cascades = vec![];
+
+        for cascade in 0..cascade_count {
+            let shadow_map_image = AllocatedImage::new(
+                device_info,
+                instance,
+                4096,
+                4096,
+                Format::D32_SFLOAT,
+                ImageAspectFlags::DEPTH,
+                vk::ImageTiling::OPTIMAL,
+                vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                    | vk::ImageUsageFlags::SAMPLED,
+                MemoryPropertyFlags::DEVICE_LOCAL,
+            );
+
+            let depth_sampler = utils::create_texture_sampler(device_info, instance, true);
+
+            cascades.push(ShadowCascade {
+                shadow_depth_image: shadow_map_image,
+                cascade_sampler: depth_sampler,
+            })
+        }
+
+        cascades
     }
 
     fn create_command_buffers(device_info: &DeviceInfo) -> Vec<vk::CommandBuffer> {
@@ -228,6 +320,7 @@ impl FrameManager {
             // w is intensity
             light_color: vec4(1.0, 1.0, 0.0, 2.0),
             ambient_light: vec4(0.1, 0.1, 0.1, 0.2),
+            cascade_depths: Vec4::zeros(),
         }]);
 
         buffer
@@ -247,6 +340,19 @@ impl FrameManager {
             dynamic_buffer_size,
             BufferUsageFlags::UNIFORM_BUFFER,
             MemoryPropertyFlags::HOST_VISIBLE,
+        );
+
+        buffer
+    }
+
+    fn create_shadow_map_buffer(device_info: &DeviceInfo, instance: &Instance, cascade_count: usize) -> AllocatedBuffer {
+        let buffer_size = (mem::size_of::<CascadeShadowUbo>() * cascade_count) as u64;
+        let buffer = AllocatedBuffer::new(
+            device_info,
+            instance,
+            buffer_size,
+            BufferUsageFlags::UNIFORM_BUFFER,
+            MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT,
         );
 
         buffer
@@ -286,7 +392,7 @@ impl FrameManager {
             instance,
             image_width,
             image_height,
-            Format::R16G16B16A16_SNORM,
+            Format::R16G16B16A16_SFLOAT,
             ImageAspectFlags::COLOR,
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::TRANSFER_DST
@@ -311,21 +417,6 @@ impl FrameManager {
             MemoryPropertyFlags::DEVICE_LOCAL,
         );
 
-        let shadow_map_image = AllocatedImage::new(
-            device_info,
-            instance,
-            2048,
-            2048,
-            Format::D32_SFLOAT,
-            ImageAspectFlags::DEPTH,
-            vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSFER_DST
-                | vk::ImageUsageFlags::TRANSFER_SRC
-                | vk::ImageUsageFlags::STORAGE
-                | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-            MemoryPropertyFlags::DEVICE_LOCAL,
-        );
-
         let draw_image = AllocatedImage::new(
             device_info,
             instance,
@@ -341,13 +432,22 @@ impl FrameManager {
             MemoryPropertyFlags::DEVICE_LOCAL,
         );
 
-        (
-            albedo_image,
-            normal_image,
-            depth_image,
-            shadow_map_image,
-            draw_image,
-        )
+        let pos_image = AllocatedImage::new(
+            device_info,
+            instance,
+            image_width,
+            image_height,
+            Format::R16G16B16A16_SFLOAT,
+            ImageAspectFlags::COLOR,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::SAMPLED,
+            MemoryPropertyFlags::DEVICE_LOCAL,
+        );
+
+        (albedo_image, normal_image, depth_image, draw_image, pos_image)
     }
 
     fn create_sync_objects(device: &ash::Device) -> (vk::Semaphore, vk::Semaphore, vk::Fence) {

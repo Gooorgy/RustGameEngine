@@ -10,6 +10,7 @@ use ash::vk::{
     SamplerMipmapMode,
 };
 use ash::{vk, Instance};
+use glm::{Mat4, Vec4};
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use serde::Serialize;
 
@@ -120,6 +121,7 @@ pub struct Vertex {
     pub pos: Vector3<f32>,
     pub color: Vector3<f32>,
     pub tex_coord: Vector2<f32>,
+    pub normal: Vector3<f32>,
 }
 
 impl Default for Vertex {
@@ -128,6 +130,7 @@ impl Default for Vertex {
             pos: Vector3::new(0.0, 0.0, 0.0),
             color: Vector3::new(0.0, 0.0, 0.0),
             tex_coord: Vector2::new(0.0, 0.0),
+            normal: Vector3::new(0.0, 0.0, 0.0),
         }
     }
 }
@@ -141,7 +144,7 @@ impl Vertex {
         }]
     }
 
-    pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
+    pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
         [
             vk::VertexInputAttributeDescription {
                 location: 0,
@@ -161,6 +164,12 @@ impl Vertex {
                 format: Format::R32G32_SFLOAT,
                 offset: offset_of!(Self, tex_coord) as u32,
             },
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 3,
+                format: Format::R32G32B32_SFLOAT,
+                offset: offset_of!(Self, normal) as u32,
+            },
         ]
     }
 }
@@ -178,36 +187,37 @@ pub struct ModelDynamicUbo {
     pub model: Matrix4<f32>,
 }
 
-#[repr(C, align(16))]
-#[derive(Clone, Debug, Copy)]
-pub struct AlignedVec(pub Vector3<f32>);
-#[repr(C, align(16))]
-#[derive(Clone, Debug, Copy)]
-pub struct AlignedFloat(pub f32);
-
-/*#[repr(C, align(16))]
-#[derive(Clone, Debug, Copy)]
-pub struct LightingUbo {
-    pub light_direction: Vector3<f32>,  // 12 bytes
-    pub _pad1: f32,                     // 4 bytes (to ensure 16-byte alignment)
-
-    pub light_color: Vector3<f32>,      // 12 bytes
-    pub _pad2: f32,                     // 4 bytes (to ensure 16-byte alignment)
-
-    pub light_intensity: f32,           // 4 bytes
-    pub _pad3: [f32; 3],                // 12 bytes (to ensure the next field aligns to a vec4)
-
-    pub ambient_color: Vector3<f32>,    // 12 bytes
-    pub _pad4: f32,                     // 4 bytes (to ensure 16-byte alignment)
-
-    pub ambient_intensity: f32,         // 4 bytes
-    pub _pad5: [f32; 3],
-}*/
-
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct LightingUbo {
     pub light_direction: Vector4<f32>,
     pub light_color: Vector4<f32>,
     pub ambient_light: Vector4<f32>,
+    pub cascade_depths: Vector4<f32>,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Default)]
+pub struct CascadeShadowUbo {
+    pub cascade_view_proj: Matrix4<f32>,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Default)]
+pub struct Cascade {
+    pub cascade_view_proj: Matrix4<f32>,
+    pub cascade_depth: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Serialize)]
+pub struct CascadeShadowPushConsts {
+    pub pos: [f32; 4],
+    pub index: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
+pub struct LineVertex {
+   pub pos: Vec4,
 }

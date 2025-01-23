@@ -1,16 +1,27 @@
 use crate::vulkan_render::scene::Mesh;
 use crate::vulkan_render::structs::Vertex;
-use glm::{vec2, vec3};
+use glm::{vec2, vec3, Vec3};
+use nalgebra::Vector3;
 use noise::{Fbm, MultiFractal, NoiseFn, Simplex};
 
-const VOXEL_SIZE: i32 = 100;
+const VOXEL_SIZE: i32 = 20;
 const VOXEL_SIZE_HALF: i32 = VOXEL_SIZE / 2;
-const BASE_HEIGHT: u32 = 15;
+const BASE_HEIGHT: u32 = 10;
+
+const NORMAL_TOP: Vec3 =Vector3::new(0.0f32, 1.0f32, 0.0f32);
+const NORMAL_BOTTOM: Vec3 = Vector3::new(0.0, -1.0, 0.0);
+const NORMAL_LEFT: Vec3 = Vector3::new(-1.0, 0.0, 0.0);
+const NORMAL_RIGHT: Vec3 = Vector3::new(1.0, 0.0, 0.0);
+const NORMAL_FRONT: Vec3 = Vector3::new(0.0, 0.0, 1.0);
+const NORMAL_BACK: Vec3 = Vector3::new(0.0, 0.0, -1.0);
+
+
 pub fn new_terrain(seed: u32, size: u32) -> Vec<Vec<Vec<u32>>> {
     let fbm_simplex = Fbm::<Simplex>::new(seed).set_octaves(5).set_frequency(0.01);
     let mut out = vec![vec![vec![0; size as usize]; size as usize]; size as usize];
     size as usize;
     for x in 0..size {
+
         for y in 0..50 {
             for z in 0..size {
                 if y < BASE_HEIGHT {
@@ -23,7 +34,7 @@ pub fn new_terrain(seed: u32, size: u32) -> Vec<Vec<Vec<u32>>> {
                 let density = fbm_simplex.get([x as f64, y as f64, z as f64]);
 
                 let scaled_noise_val = scale(density, -1.0, 1.0, 0.0, 1.0) * delta;
-                if scaled_noise_val > 0.5 {
+                if scaled_noise_val > 0.4 {
                     out[x as usize][y as usize][z as usize] = 1
                 }
             }
@@ -57,6 +68,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 255.0, 0.0),
                                     tex_coord: vec2(0.0, 0.0),
+                                    normal: NORMAL_TOP,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -66,6 +78,8 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 255.0, 0.0),
                                     tex_coord: vec2(1.0, 0.0),
+                                    normal: NORMAL_TOP,
+
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -75,6 +89,8 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 255.0, 0.0),
                                     tex_coord: vec2(1.0, 1.0),
+                                    normal: NORMAL_TOP,
+
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -84,6 +100,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 255.0, 0.0),
                                     tex_coord: vec2(0.0, 1.0),
+                                    normal: NORMAL_TOP,
                                 });
 
                                 indices.push(2 + element_index);
@@ -107,6 +124,8 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(255.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 0.0),
+                                    normal: NORMAL_BOTTOM,
+
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -116,6 +135,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(255.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 1.0),
+                                    normal: NORMAL_BOTTOM,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -125,6 +145,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(255.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 1.0),
+                                    normal: NORMAL_BOTTOM,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -134,6 +155,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(255.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 0.0),
+                                    normal: NORMAL_BOTTOM,
                                 });
 
                                 indices.push(0 + element_index);
@@ -158,6 +180,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 0.0),
+                                    normal: NORMAL_LEFT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -167,6 +190,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 1.0),
+                                    normal: NORMAL_LEFT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -176,6 +200,8 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 1.0),
+                                    normal: NORMAL_LEFT,
+
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -185,6 +211,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 0.0),
+                                    normal: NORMAL_LEFT,
                                 });
 
                                 indices.push(0 + element_index);
@@ -207,6 +234,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 0.0),
+                                    normal: NORMAL_RIGHT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -216,6 +244,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 1.0),
+                                    normal: NORMAL_RIGHT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -225,6 +254,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 1.0),
+                                    normal: NORMAL_RIGHT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -234,6 +264,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 0.0),
+                                    normal: NORMAL_RIGHT,
                                 });
 
                                 indices.push(2 + element_index);
@@ -256,6 +287,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 0.0),
+                                    normal: NORMAL_BACK,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -265,6 +297,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 1.0),
+                                    normal: NORMAL_BACK,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -274,6 +307,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 1.0),
+                                    normal: NORMAL_BACK,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -283,6 +317,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 0.0),
+                                    normal: NORMAL_BACK,
                                 });
 
                                 indices.push(2 + element_index);
@@ -305,6 +340,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 0.0),
+                                    normal: NORMAL_FRONT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -314,6 +350,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(0.0, 1.0),
+                                    normal: NORMAL_FRONT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -323,6 +360,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 1.0),
+                                    normal: NORMAL_FRONT,
                                 });
                                 vertices.push(Vertex {
                                     pos: vec3(
@@ -332,6 +370,7 @@ pub fn generate_mesh(terrain_data: Vec<Vec<Vec<u32>>>) -> Mesh {
                                     ),
                                     color: vec3(0.0, 0.0, 0.0),
                                     tex_coord: vec2(1.0, 0.0),
+                                    normal: NORMAL_FRONT,
                                 });
 
                                 indices.push(0 + element_index);

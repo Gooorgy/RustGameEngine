@@ -5,10 +5,11 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
-use winit::event::{DeviceEvent, DeviceId, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
+use winit::keyboard::KeyCode;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -103,7 +104,18 @@ impl ApplicationHandler for AppWindow {
                     .camera
                     .process_cursor_moved(delta.0 as f32, delta.1 as f32);
             }
-            DeviceEvent::Key(input) => vulkan_app.camera.process_keyboard_event(input),
+            DeviceEvent::Key(input) => {
+                if input.state == ElementState::Pressed {
+                    if input.physical_key == KeyCode::KeyL {
+                        vulkan_app.locked_cascade = true;
+                    }
+
+                    if input.physical_key == KeyCode::KeyK {
+                        vulkan_app.locked_cascade = false;
+                    }
+                }
+                vulkan_app.camera.process_keyboard_event(input)
+            },
             _ => {}
         }
     }

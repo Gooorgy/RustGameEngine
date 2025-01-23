@@ -1,4 +1,5 @@
-use glm::{vec3, Mat4, Vec3, Vec4};
+use std::char::from_u32;
+use glm::{vec3, vec4, Mat4, Vec3, Vec4};
 use winit::event::{ElementState, RawKeyEvent};
 use winit::keyboard::KeyCode;
 
@@ -8,15 +9,21 @@ pub struct Camera {
 
     pitch: f32,
     yaw: f32,
+
+    pub near_clip: f32,
+    pub far_clip: f32,
 }
 
 impl Camera {
     pub fn new() -> Self {
         Self {
-            position: Vec3::new(0.0, 1700.0, 1700.0),
+            position: Vec3::new(0.0, 500.0, 0.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
             pitch: 0.0,
             yaw: 0.0,
+
+            near_clip: 0.1,
+            far_clip: 1000.0,
         }
     }
 
@@ -25,7 +32,7 @@ impl Camera {
 
         let ff = camera_rotation
             * (Vec4::new(self.velocity.x, self.velocity.y, self.velocity.z, 0.0)
-                * 500.0
+                * 50.0
                 * delta_time);
 
         let x = vec3(ff.x, ff.y, ff.z);
@@ -76,12 +83,14 @@ impl Camera {
     }
 
     pub fn get_view_matrix(&self) -> Mat4 {
+        glm::inverse(&self.get_transform())
+    }
+
+    pub fn get_transform(&self) -> Mat4 {
         let camera_translation = glm::translate(&Mat4::identity(), &self.position);
         let camera_rotation = self.get_rotation_matrix();
 
-        let x = camera_translation * camera_rotation;
-
-        glm::inverse(&x)
+        camera_translation * camera_rotation
     }
 
     pub fn get_rotation_matrix(&self) -> Mat4 {
@@ -89,5 +98,33 @@ impl Camera {
         let yaw_rotation = glm::quat_angle_axis(self.yaw, &Vec3::new(0.0, -1.0, 0.0));
 
         glm::quat_to_mat4(&yaw_rotation) * glm::quat_to_mat4(&pitch_rotation)
+    }
+
+    pub fn get_projection_matrix(&self) -> Mat4 {
+        let aspect_ratio = 800.0 / 600.0;
+
+        let mut projection = glm::perspective(
+            aspect_ratio,
+            70_f32.to_radians(),
+            self.near_clip,
+            self.far_clip
+        );
+        projection[(1, 1)] *= -1.0;
+
+        projection
+    }
+
+    pub fn get_projection_matrix_with_splits(&self, near_clip: f32, far_clip: f32) -> Mat4 {
+        let aspect_ratio = 800.0 / 600.0;
+
+        let mut projection = glm::perspective(
+            aspect_ratio,
+            70_f32.to_radians(),
+            near_clip,
+            far_clip
+        );
+        projection[(1, 1)] *= -1.0;
+
+        projection
     }
 }

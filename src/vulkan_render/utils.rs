@@ -1,6 +1,6 @@
 use std::mem;
 use ash::{vk, Instance};
-use ash::vk::{MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
+use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
 use crate::vulkan_render::device::DeviceInfo;
 
 pub fn find_memory_type(
@@ -31,22 +31,24 @@ pub fn get_buffer_alignment<T>(
     dynamic_alignment
 }
 
-pub fn create_texture_sampler(device_info: &DeviceInfo, instance: &Instance) -> Sampler {
+pub fn create_texture_sampler(device_info: &DeviceInfo, instance: &Instance, shadow: bool) -> Sampler {
     let device_properties =
         unsafe { instance.get_physical_device_properties(device_info._physical_device) };
+
+    let compare_op = if shadow { CompareOp::LESS } else { CompareOp::ALWAYS };
 
     let sampler_info = vk::SamplerCreateInfo::default()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)
-        .address_mode_u(vk::SamplerAddressMode::REPEAT)
-        .address_mode_v(vk::SamplerAddressMode::REPEAT)
-        .address_mode_w(vk::SamplerAddressMode::REPEAT)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .anisotropy_enable(true)
         .max_anisotropy(device_properties.limits.max_sampler_anisotropy)
         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
         .unnormalized_coordinates(false)
-        .compare_enable(false)
-        .compare_op(vk::CompareOp::ALWAYS)
+        .compare_enable(shadow)
+        .compare_op(compare_op)
         .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
         .mip_lod_bias(0.0)
         .min_lod(0.0)
