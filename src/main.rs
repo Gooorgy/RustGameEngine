@@ -5,11 +5,10 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
-use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
-use winit::keyboard::KeyCode;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -20,11 +19,9 @@ struct AppWindow {
     last_frame_time: Instant,
     scene: Rc<RefCell<SceneNode>>,
     terrain: Mesh,
-    frames: usize,
 }
 
-impl AppWindow {
-}
+impl AppWindow {}
 
 impl Default for AppWindow {
     fn default() -> Self {
@@ -47,7 +44,6 @@ impl Default for AppWindow {
             last_frame_time: Instant::now(),
             scene: scene_root,
             terrain: mesh,
-            frames: 0,
         }
     }
 }
@@ -87,7 +83,12 @@ impl ApplicationHandler for AppWindow {
                     app.camera.update(delta_time);
                     app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();
-                    window.set_title(&format!("{} - FPS: {}- FrameTime: {}", WINDOW_TITLE, 1f32 / delta_time, delta_time));
+                    window.set_title(&format!(
+                        "{} - FPS: {}- FrameTime: {}",
+                        WINDOW_TITLE,
+                        1f32 / delta_time,
+                        delta_time
+                    ));
 
                     Window::request_redraw(window);
                 }
@@ -110,18 +111,7 @@ impl ApplicationHandler for AppWindow {
                     .camera
                     .process_cursor_moved(delta.0 as f32, delta.1 as f32);
             }
-            DeviceEvent::Key(input) => {
-                if input.state == ElementState::Pressed {
-                    if input.physical_key == KeyCode::KeyL {
-                        vulkan_app.locked_cascade = true;
-                    }
-
-                    if input.physical_key == KeyCode::KeyK {
-                        vulkan_app.locked_cascade = false;
-                    }
-                }
-                vulkan_app.camera.process_keyboard_event(input)
-            },
+            DeviceEvent::Key(input) => vulkan_app.camera.process_keyboard_event(input),
             _ => {}
         }
     }

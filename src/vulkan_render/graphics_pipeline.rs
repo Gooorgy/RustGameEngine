@@ -1,9 +1,11 @@
 use std::{ffi::CString, fs, io, mem, path::Path, ptr, slice};
 
-use super::structs::{CameraMvpUbo, CascadeShadowPushConsts, Vertex};
+use super::structs::{CascadeShadowPushConsts, Vertex};
+use ash::vk::{
+    ConservativeRasterizationModeEXT, DescriptorSetLayout, DynamicState,
+    PipelineColorBlendStateCreateInfo, PipelineDynamicStateCreateInfo, PushConstantRange,
+};
 use ash::{vk, Device};
-use ash::vk::{ConservativeRasterizationModeEXT, DescriptorSetLayout, DynamicState, PipelineColorBlendStateCreateInfo, PipelineDynamicStateCreateInfo, PushConstantRange};
-use crate::vulkan_render::descriptor::DescriptorManager;
 
 const SHADOW_SHADER: &str = "shadow";
 const FRAGMENT_SHADER: &str = "frag";
@@ -21,10 +23,11 @@ pub struct PipelineInfo {
     pub pipeline_layout: vk::PipelineLayout,
 }
 
-
 impl PipelineInfo {
-
-    pub fn create_line_pipeline(logical_device: &Device, desc_layout: &DescriptorSetLayout) -> PipelineInfo {
+    pub fn create_line_pipeline(
+        logical_device: &Device,
+        desc_layout: &DescriptorSetLayout,
+    ) -> PipelineInfo {
         let vert_shader_code =
             Self::read_shader_file(DEBUG_VERTEX).expect("Unable to read vertex file");
         let frag_shader_code =
@@ -147,7 +150,6 @@ impl PipelineInfo {
             pipelines: graphics_pipelines,
             pipeline_layout,
         }
-
     }
     pub fn new_gbuffer_pipeline(
         logical_device: &ash::Device,
@@ -175,7 +177,11 @@ impl PipelineInfo {
 
         let shader_stages = [vert_shader_stage_create_info, frag_shader_stage_create_info];
 
-        let dynamic_states = vec![DynamicState::VIEWPORT, DynamicState::SCISSOR, DynamicState::DEPTH_BIAS];
+        let dynamic_states = vec![
+            DynamicState::VIEWPORT,
+            DynamicState::SCISSOR,
+            DynamicState::DEPTH_BIAS,
+        ];
 
         let dynamic_state_create_info =
             PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
@@ -225,7 +231,11 @@ impl PipelineInfo {
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD);
 
-        let color_blend_attachments = [color_blend_attachment, color_blend_attachment, color_blend_attachment];
+        let color_blend_attachments = [
+            color_blend_attachment,
+            color_blend_attachment,
+            color_blend_attachment,
+        ];
         let color_blending_create_info = PipelineColorBlendStateCreateInfo::default()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
@@ -249,7 +259,11 @@ impl PipelineInfo {
 
         let mut rendering_info = vk::PipelineRenderingCreateInfo::default()
             .depth_attachment_format(vk::Format::D32_SFLOAT)
-            .color_attachment_formats(&[vk::Format::R16G16B16A16_SFLOAT, vk::Format::R16G16B16A16_SFLOAT, vk::Format::R16G16B16A16_SFLOAT]);
+            .color_attachment_formats(&[
+                vk::Format::R16G16B16A16_SFLOAT,
+                vk::Format::R16G16B16A16_SFLOAT,
+                vk::Format::R16G16B16A16_SFLOAT,
+            ]);
 
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo::default()
             .stages(&shader_stages)
@@ -399,7 +413,10 @@ impl PipelineInfo {
         }
     }
 
-    pub fn create_shadow_map_pipeline(logical_device: &ash::Device, set_layout: &DescriptorSetLayout) -> PipelineInfo {
+    pub fn create_shadow_map_pipeline(
+        logical_device: &ash::Device,
+        set_layout: &DescriptorSetLayout,
+    ) -> PipelineInfo {
         let shadow_shader_code =
             Self::read_shader_file(SHADOW_SHADER).expect("Unable to read vertex file");
 
@@ -434,9 +451,10 @@ impl PipelineInfo {
             .viewport_count(1)
             .scissor_count(1);
 
-        let mut conservative_rasterization_create_info = vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
-            .conservative_rasterization_mode(ConservativeRasterizationModeEXT::OVERESTIMATE)
-            .extra_primitive_overestimation_size(0.0);
+        let mut conservative_rasterization_create_info =
+            vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
+                .conservative_rasterization_mode(ConservativeRasterizationModeEXT::OVERESTIMATE)
+                .extra_primitive_overestimation_size(0.0);
 
         let rasterizer_create_info = vk::PipelineRasterizationStateCreateInfo::default()
             .depth_clamp_enable(true)
@@ -447,7 +465,6 @@ impl PipelineInfo {
             .cull_mode(vk::CullModeFlags::BACK)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .push_next(&mut conservative_rasterization_create_info);
-
 
         let multisampling_create_info = vk::PipelineMultisampleStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -464,11 +481,10 @@ impl PipelineInfo {
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             .offset(0)
             .size(mem::size_of::<CascadeShadowPushConsts>() as u32)];
-        
-        let pipeline_layout_create_info =
-            vk::PipelineLayoutCreateInfo::default()
-                .set_layouts(slice::from_ref(set_layout))
-                .push_constant_ranges(&push_constant_ranges);
+
+        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
+            .set_layouts(slice::from_ref(set_layout))
+            .push_constant_ranges(&push_constant_ranges);
 
         let pipeline_layout = unsafe {
             logical_device

@@ -1,6 +1,7 @@
 use crate::vulkan_render::buffer::AllocatedBuffer;
 use crate::vulkan_render::device::DeviceInfo;
-use crate::vulkan_render::structs::{CameraMvpUbo, Cascade, CascadeShadowUbo, LightingUbo};
+use crate::vulkan_render::frame_manager::ShadowCascade;
+use crate::vulkan_render::structs::{CameraMvpUbo, CascadeShadowUbo, LightingUbo};
 use ash::vk::{
     DescriptorPool, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
     DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBinding,
@@ -8,7 +9,6 @@ use ash::vk::{
 };
 use ash::{vk, Device};
 use std::{mem, slice};
-use crate::vulkan_render::frame_manager::ShadowCascade;
 
 /// Uniform buffer count: 1 for camera, 1 for lighting
 const GLOBAL_UNIFORM_BUFFER_COUNT: usize = 20;
@@ -191,7 +191,6 @@ impl DescriptorManager {
         camera_mvp_buffer: &AllocatedBuffer,
         pos_image_view: &ImageView,
         pos_sampler: &vk::Sampler,
-
     ) {
         let buffer_info = vk::DescriptorBufferInfo::default()
             .buffer(lighting_buffer.buffer)
@@ -402,38 +401,32 @@ impl DescriptorManager {
                 .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-
             // Shadow map
             DescriptorSetLayoutBinding::default()
                 .binding(4)
                 .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-
             DescriptorSetLayoutBinding::default()
                 .binding(5)
                 .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-
             DescriptorSetLayoutBinding::default()
                 .binding(6)
                 .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-
             DescriptorSetLayoutBinding::default()
                 .binding(7)
                 .descriptor_type(DescriptorType::UNIFORM_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-
             DescriptorSetLayoutBinding::default()
                 .binding(8)
                 .descriptor_type(DescriptorType::UNIFORM_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-
             DescriptorSetLayoutBinding::default()
                 .binding(9)
                 .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
@@ -451,7 +444,6 @@ impl DescriptorManager {
                 .expect("Failed to create global lighting descriptor set")
         }
     }
-
 
     fn create_global_gbuffer_layout(device: &Device) -> DescriptorSetLayout {
         let bindings = [

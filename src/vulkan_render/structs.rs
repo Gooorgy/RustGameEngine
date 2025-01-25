@@ -10,7 +10,7 @@ use ash::vk::{
     SamplerMipmapMode,
 };
 use ash::{vk, Instance};
-use glm::{Mat4, Vec4};
+use glm::{Vec4};
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use serde::Serialize;
 

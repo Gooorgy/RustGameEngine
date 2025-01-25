@@ -1,5 +1,4 @@
-use std::char::from_u32;
-use glm::{vec3, vec4, Mat4, Vec3, Vec4};
+use glm::{vec3, Mat4, Vec3, Vec4};
 use winit::event::{ElementState, RawKeyEvent};
 use winit::keyboard::KeyCode;
 
@@ -107,7 +106,7 @@ impl Camera {
             aspect_ratio,
             70_f32.to_radians(),
             self.near_clip,
-            self.far_clip
+            self.far_clip,
         );
         projection[(1, 1)] *= -1.0;
 
@@ -117,12 +116,8 @@ impl Camera {
     pub fn get_projection_matrix_with_splits(&self, near_clip: f32, far_clip: f32) -> Mat4 {
         let aspect_ratio = 800.0 / 600.0;
 
-        let mut projection = glm::perspective(
-            aspect_ratio,
-            70_f32.to_radians(),
-            near_clip,
-            far_clip
-        );
+        let mut projection =
+            glm::perspective(aspect_ratio, 70_f32.to_radians(), near_clip, far_clip);
         projection[(1, 1)] *= -1.0;
 
         projection

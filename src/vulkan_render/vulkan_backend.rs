@@ -13,17 +13,16 @@ use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::frame_manager::FrameManager;
 use crate::vulkan_render::image_util::AllocatedImage;
 use crate::vulkan_render::scene::{Mesh, SceneNode};
-use crate::vulkan_render::structs::{Cascade, CascadeShadowPushConsts, CascadeShadowUbo, GPUMeshData, LightingUbo, ModelDynamicUbo};
+use crate::vulkan_render::structs::{
+    Cascade, CascadeShadowPushConsts, CascadeShadowUbo, GPUMeshData, LightingUbo, ModelDynamicUbo,
+};
 use ash::vk::{self, Extent2D, Extent3D, ImageView, PipelineBindPoint, Rect2D, ShaderStageFlags};
 use ash::vk::{ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
-use glm::{normalize, vec2, vec3, vec3_to_vec4, vec4, Mat4, Vec3};
-use nalgebra::Point3;
-use num::traits::real::Real;
-use num::Float;
+use glm::{vec2, vec3, vec3_to_vec4, vec4, Mat4, Vec3};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{error::Error, f32, ffi::CString, mem, ptr};
+use std::{error::Error, ffi::CString, mem, ptr};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 const SHADOW_MAP_CASCADE_COUNT: usize = 3;
@@ -40,8 +39,6 @@ pub struct VulkanBackend {
     frame_manager: FrameManager,
     cascades: Vec<Cascade>,
     mesh: Mesh,
-    cascade_complete: bool,
-    pub locked_cascade: bool,
     cam_view_proj: Mat4,
 }
 
@@ -95,8 +92,6 @@ impl VulkanBackend {
             frame_manager,
             cascades,
             mesh: terrain_mesh,
-            cascade_complete: false,
-            locked_cascade: false,
             cam_view_proj: Mat4::identity(),
         })
     }
@@ -129,13 +124,7 @@ impl VulkanBackend {
     pub fn draw_frame(&mut self, _delta_time: f32) {
         self.update_camera();
         self.update_world();
-        if (!self.locked_cascade) {
-            self.cam_view_proj =
-                self.camera.get_projection_matrix() * self.camera.get_view_matrix();
-
-            self.update_cascades();
-        }
-
+        self.update_cascades();
         self.update_cascade_memory();
         self.update_lighting_memory();
 
@@ -209,7 +198,6 @@ impl VulkanBackend {
             vk::ImageLayout::GENERAL,
             false,
         );
-
 
         image_util::transition_image_layout(
             &self.device_info,
@@ -571,7 +559,7 @@ impl VulkanBackend {
                     self.frame_manager.gbuffer_pipeline.pipeline_layout,
                     0,
                     &[current_frame.descriptor_gbuffer_set],
-                    &[(i as u32 * self.frame_manager.model_ubo_alignment as u32)],
+                    &[i as u32 * self.frame_manager.model_ubo_alignment as u32],
                 )
             }
 
@@ -601,154 +589,11 @@ impl VulkanBackend {
             }
         }
 
-/*        for (index, cascade) in self.cascades.iter().enumerate() {
-            let color = vec3(
-                (index as f32 * 0.3) % 1.0,
-                0.5,
-                1.0 - (index as f32 * 0.3) % 1.0,
-            );
-
-            let mut frustum_corners;
-            if (index == 3) {
-                frustum_corners = self.get_cascade_frustum_corners(&self.cam_view_proj, color);
-            } else {
-                frustum_corners =
-                    self.get_cascade_frustum_corners(&cascade.cascade_view_proj, color);
-            }
-
-            let vertex_buffer_size = (frustum_corners.len() * mem::size_of::<Vertex>()) as u64;
-
-            let vertex_buffer = unsafe {
-                self.device_info
-                    .logical_device
-                    .create_buffer(
-                        &vk::BufferCreateInfo {
-                            size: vertex_buffer_size,
-                            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-                            sharing_mode: vk::SharingMode::EXCLUSIVE,
-                            ..Default::default()
-                        },
-                        None,
-                    )
-                    .expect("Create vertex buffer failed.")
-            };
-
-            let mem_requirements = unsafe {
-                self.device_info
-                    .logical_device
-                    .get_buffer_memory_requirements(vertex_buffer)
-            };
-
-            let memory_properties = unsafe {
-                self.instance
-                    .get_physical_device_memory_properties(self.device_info._physical_device)
-            };
-
-            // Allocate and bind memory to the buffer
-            let memory_info = vk::MemoryAllocateInfo {
-                allocation_size: vertex_buffer_size,
-                memory_type_index: utils::find_memory_type(
-                    mem_requirements.memory_type_bits,
-                    MemoryPropertyFlags::HOST_VISIBLE | MemoryPropertyFlags::HOST_COHERENT,
-                    memory_properties,
-                ),
-                ..Default::default()
-            };
-
-            let vertex_buffer_memory = unsafe {
-                self.device_info
-                    .logical_device
-                    .allocate_memory(&memory_info, None)
-                    .expect("Allocate vertex buffer memory failed.")
-            };
-
-            unsafe {
-                self.device_info
-                    .logical_device
-                    .bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)
-                    .expect("Bind buffer memory failed.")
-            };
-
-            // Copy the vertex data to the buffer
-            unsafe {
-                let ptr = self
-                    .device_info
-                    .logical_device
-                    .map_memory(
-                        vertex_buffer_memory,
-                        0,
-                        vertex_buffer_size,
-                        vk::MemoryMapFlags::empty(),
-                    )
-                    .expect("Map memory failed.") as *mut Vertex;
-
-                ptr::copy_nonoverlapping(frustum_corners.as_ptr(), ptr, frustum_corners.len());
-
-                self.device_info
-                    .logical_device
-                    .unmap_memory(vertex_buffer_memory);
-
-                self.device_info.logical_device.cmd_bind_pipeline(
-                    current_frame.command_buffer,
-                    PipelineBindPoint::GRAPHICS,
-                    self.frame_manager.line_pipeline.pipelines[0],
-                );
-                self.device_info.logical_device.cmd_bind_descriptor_sets(
-                    current_frame.command_buffer,
-                    PipelineBindPoint::GRAPHICS,
-                    self.frame_manager.line_pipeline.pipeline_layout,
-                    0,
-                    &[current_frame.descriptor_gbuffer_set],
-                    &[(0 * self.frame_manager.model_ubo_alignment as u32)],
-                );
-
-                self.device_info.logical_device.cmd_bind_vertex_buffers(
-                    current_frame.command_buffer,
-                    0,
-                    &[vertex_buffer],
-                    &[0],
-                );
-
-                self.device_info.logical_device.cmd_draw(
-                    current_frame.command_buffer,
-                    frustum_corners.len() as u32,
-                    1,
-                    0,
-                    0,
-                );
-            }
-        }*/
         unsafe {
             self.device_info
                 .logical_device
                 .cmd_end_rendering(current_frame.command_buffer);
         }
-    }
-
-    fn get_frustum_corners(&self, mat: Mat4) -> Vec<Vec3> {
-        let mut frustum_corners = vec![
-            vec3(-1.0, 1.0, 0.0),  // near top-left
-            vec3(1.0, 1.0, 0.0),   // near top-right
-            vec3(1.0, -1.0, 0.0),  // near bottom-right
-            vec3(-1.0, -1.0, 0.0), // near bottom-left
-            vec3(-1.0, 1.0, 1.0),  // far top-left
-            vec3(1.0, 1.0, 1.0),   // far top-right
-            vec3(1.0, -1.0, 1.0),  // far bottom-right
-            vec3(-1.0, -1.0, 1.0), // far bottom-left
-        ];
-
-        for i in 0..8 {
-            let corner = mat
-                * vec4(
-                    frustum_corners[i].x,
-                    frustum_corners[i].y,
-                    frustum_corners[i].z,
-                    1.0,
-                );
-            frustum_corners[i] = corner.xyz() / corner.w; // Divide by w for homogeneous coordinates
-        }
-
-        frustum_corners
     }
 
     fn render_cascade_shadow_map(&self) {
@@ -798,7 +643,7 @@ impl VulkanBackend {
                 );
             }
 
-            for (i, gpu_mesh) in self.gpu_mesh_data.iter().enumerate() {
+            for (_i, gpu_mesh) in self.gpu_mesh_data.iter().enumerate() {
                 unsafe {
                     self.device_info.logical_device.cmd_bind_descriptor_sets(
                         current_frame.command_buffer,
@@ -865,9 +710,9 @@ impl VulkanBackend {
         let viewport = vk::Viewport {
             x: 0.0f32,
             y: 0.0f32,
-            width: width,
-            height: height,
-            min_depth: 0 as f32,
+            width,
+            height,
+            min_depth: 0f32,
             max_depth: 1f32,
         };
 
@@ -941,7 +786,12 @@ impl VulkanBackend {
             // w is intensity
             light_color: vec4(1.0, 1.0, 1.0, 1.0),
             ambient_light: vec4(0.1, 0.1, 0.1, 0.2),
-            cascade_depths: vec4(self.cascades[0].cascade_depth,self.cascades[1].cascade_depth,self.cascades[2].cascade_depth, 1.0),
+            cascade_depths: vec4(
+                self.cascades[0].cascade_depth,
+                self.cascades[1].cascade_depth,
+                self.cascades[2].cascade_depth,
+                1.0,
+            ),
         })
     }
 
@@ -950,19 +800,18 @@ impl VulkanBackend {
 
         let shadow_cascades = self
             .cascades
-            .iter().take(3)
+            .iter()
+            .take(3)
             .map(|casc| CascadeShadowUbo {
                 cascade_view_proj: casc.cascade_view_proj,
-                //cascade_split: casc.cascade_depth,
             })
             .collect::<Vec<_>>();
 
         current_frame.update_shadow_map_buffer(shadow_cascades);
-
     }
 
     pub fn update_cascades(&mut self) {
-        let lambda = 0.7;
+        let lambda = 0.9;
         let mut splits = [0.0; SHADOW_MAP_CASCADE_COUNT + 1];
 
         for i in 0..=SHADOW_MAP_CASCADE_COUNT {
@@ -976,8 +825,7 @@ impl VulkanBackend {
             splits[i] = log * lambda + uniform * (1.0 - lambda);
         }
 
-        let voxel_size = 20.0; // Size of a voxel in world space
-        let shadow_map_resolution = 2096.0; // Shadow map resolution
+        let shadow_map_resolution = 4096.0; // Shadow map resolution
 
         for i in 0..SHADOW_MAP_CASCADE_COUNT {
             let split_start = splits[i];
@@ -996,8 +844,11 @@ impl VulkanBackend {
 
             let mut corners_world = [Vec3::zeros(); 8];
 
-            let projection_matrix = self.camera.get_projection_matrix_with_splits(split_start, split_end);
-            let inv_projection_view = glm::inverse(&(projection_matrix * self.camera.get_view_matrix()));
+            let projection_matrix = self
+                .camera
+                .get_projection_matrix_with_splits(split_start, split_end);
+            let inv_projection_view =
+                glm::inverse(&(projection_matrix * self.camera.get_view_matrix()));
             for (j, corner) in frustum_corners.iter().enumerate() {
                 let corner_world = inv_projection_view * vec4(corner.x, corner.y, corner.z, 1.0);
                 corners_world[j] = vec3(
@@ -1025,35 +876,30 @@ impl VulkanBackend {
             let snapped_min_extents = glm::floor(&(min_extents / texel_size)) * texel_size;
             let snapped_max_extents = glm::ceil(&(max_extents / texel_size)) * texel_size;
 
-
-
-            let camera_forward = glm::normalize(&(self.camera.get_view_matrix() * vec4(0.0, 0.0, 1.0, 0.0)).xyz());
             let light_dir = glm::normalize(&vec3(0.5, 1.0, 0.5)); // Assuming directional light
 
-            // Offset the frustum center by the light direction for a better view
             let light_position: Vec3 = frustum_center + light_dir * radius;
 
             let mut up = vec3(0.0, 1.0, 0.0);
-            if normalize(&light_position).y > 0.98 {
+            if glm::normalize(&light_position).y > 0.98 {
                 up = vec3(0.0, 1.0, 0.0);
             }
 
-            let light_view = glm::look_at(
-                &(light_position), // Light direction assumed to be -y
-                &frustum_center,
-                &up,
-            );
+            let light_view = glm::look_at(&(light_position), &frustum_center, &up);
 
             let mut light_projection = glm::ortho(
-                snapped_min_extents.x, snapped_max_extents.x,
-                snapped_min_extents.y, snapped_max_extents.y,
-                snapped_min_extents.z, snapped_max_extents.z - snapped_min_extents.z,
+                snapped_min_extents.x,
+                snapped_max_extents.x,
+                snapped_min_extents.y,
+                snapped_max_extents.y,
+                snapped_min_extents.z,
+                snapped_max_extents.z - snapped_min_extents.z,
             );
 
             light_projection[(1, 1)] *= -1.0;
 
-            let normalized_start = split_start ;
-            let normalized_end = split_end ;
+            let normalized_start = split_start;
+            let normalized_end = split_end;
             let dist = normalized_end - normalized_start;
 
             self.cascades[i] = Cascade {
@@ -1490,30 +1336,6 @@ impl VulkanBackend {
                 .swapchain_device
                 .destroy_swapchain(self.swapchain_info.swapchain, None)
         }
-    }
-
-    fn calculate_bounding_box(&self) -> (Vec3, Vec3) {
-        let mut min_corner = vec3(f32::MAX, f32::MAX, f32::MAX);
-        let mut max_corner = vec3(f32::MIN, f32::MIN, f32::MIN);
-
-        // Transform each vertex to world space and update the bounding box
-        for vertex in &self.mesh.vertices {
-            // Apply the object's transformation to the vertex (in local space)
-            let world_vertex = self.gpu_mesh_data[0]
-                .world_model
-                .transform_point(&Point3::from(vertex.pos));
-
-            // Update min and max corners
-            min_corner.x = min_corner.x.min(world_vertex.x);
-            min_corner.y = min_corner.y.min(world_vertex.y);
-            min_corner.z = min_corner.z.min(world_vertex.z);
-
-            max_corner.x = max_corner.x.max(world_vertex.x);
-            max_corner.y = max_corner.y.max(world_vertex.y);
-            max_corner.z = max_corner.z.max(world_vertex.z);
-        }
-
-        (min_corner, max_corner)
     }
 
     pub fn get_cascade_frustum_corners(&self, cascade_matrix: &Mat4, color: Vec3) -> Vec<Vertex> {
