@@ -950,7 +950,7 @@ impl VulkanBackend {
 
         let shadow_cascades = self
             .cascades
-            .iter()
+            .iter().take(3)
             .map(|casc| CascadeShadowUbo {
                 cascade_view_proj: casc.cascade_view_proj,
                 //cascade_split: casc.cascade_depth,
@@ -962,7 +962,7 @@ impl VulkanBackend {
     }
 
     pub fn update_cascades(&mut self) {
-        let lambda = 0.9;
+        let lambda = 0.7;
         let mut splits = [0.0; SHADOW_MAP_CASCADE_COUNT + 1];
 
         for i in 0..=SHADOW_MAP_CASCADE_COUNT {
@@ -975,6 +975,9 @@ impl VulkanBackend {
 
             splits[i] = log * lambda + uniform * (1.0 - lambda);
         }
+
+        let voxel_size = 20.0; // Size of a voxel in world space
+        let shadow_map_resolution = 2096.0; // Shadow map resolution
 
         for i in 0..SHADOW_MAP_CASCADE_COUNT {
             let split_start = splits[i];
@@ -1018,7 +1021,10 @@ impl VulkanBackend {
             let max_extents = vec3(radius, radius, radius);
             let min_extents = -max_extents;
 
-            //vec3(0.5, 1.0, 0.0)
+            let texel_size = (max_extents.x - min_extents.x) / shadow_map_resolution;
+            let snapped_min_extents = glm::floor(&(min_extents / texel_size)) * texel_size;
+            let snapped_max_extents = glm::ceil(&(max_extents / texel_size)) * texel_size;
+
 
 
             let camera_forward = glm::normalize(&(self.camera.get_view_matrix() * vec4(0.0, 0.0, 1.0, 0.0)).xyz());
@@ -1039,15 +1045,15 @@ impl VulkanBackend {
             );
 
             let mut light_projection = glm::ortho(
-                min_extents.x, max_extents.x,
-                min_extents.y, max_extents.y,
-                min_extents.z, max_extents.z - min_extents.z,
+                snapped_min_extents.x, snapped_max_extents.x,
+                snapped_min_extents.y, snapped_max_extents.y,
+                snapped_min_extents.z, snapped_max_extents.z - snapped_min_extents.z,
             );
 
             light_projection[(1, 1)] *= -1.0;
 
-            let normalized_start = split_start / self.camera.far_clip;
-            let normalized_end = split_end / self.camera.far_clip;
+            let normalized_start = split_start ;
+            let normalized_end = split_end ;
             let dist = normalized_end - normalized_start;
 
             self.cascades[i] = Cascade {

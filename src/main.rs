@@ -20,6 +20,10 @@ struct AppWindow {
     last_frame_time: Instant,
     scene: Rc<RefCell<SceneNode>>,
     terrain: Mesh,
+    frames: usize,
+}
+
+impl AppWindow {
 }
 
 impl Default for AppWindow {
@@ -43,6 +47,7 @@ impl Default for AppWindow {
             last_frame_time: Instant::now(),
             scene: scene_root,
             terrain: mesh,
+            frames: 0,
         }
     }
 }
@@ -78,11 +83,12 @@ impl ApplicationHandler for AppWindow {
                     let time_elapsed = self.last_frame_time.elapsed();
                     self.last_frame_time = Instant::now();
                     let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
-                    print!("\r{}", delta_time);
                     std::io::stdout().flush().unwrap();
                     app.camera.update(delta_time);
                     app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();
+                    window.set_title(&format!("{} - FPS: {}- FrameTime: {}", WINDOW_TITLE, 1f32 / delta_time, delta_time));
+
                     Window::request_redraw(window);
                 }
                 _ => panic!(""),

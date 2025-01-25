@@ -202,8 +202,6 @@ impl PipelineInfo {
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0_f32)
             .cull_mode(vk::CullModeFlags::BACK)
-            .front_face(vk::FrontFace::CLOCKWISE)
-            .cull_mode(vk::CullModeFlags::BACK)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
 
         let multisampling_create_info = vk::PipelineMultisampleStateCreateInfo {
@@ -446,7 +444,7 @@ impl PipelineInfo {
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0_f32)
-            .cull_mode(vk::CullModeFlags::FRONT)
+            .cull_mode(vk::CullModeFlags::BACK)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .push_next(&mut conservative_rasterization_create_info);
 

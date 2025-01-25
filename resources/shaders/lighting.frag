@@ -63,46 +63,53 @@ float textureProj(vec3 shadowCoord, vec2 offset, int cascadeIndex) {
 float calculateShadow(int cascadeIndex, vec3 worldPos, vec3 normal) {
     mat4 lightViewProj = cascade.cascadeViewProjMat[cascadeIndex];
 
+    // Light direction and bias
     vec3 lightDir = normalize(lighting.lightDirection.rgb);
-    float bias = max(0.01 * (1.0 - dot(normal, lightDir)), 0.0005);
-    //bias = 0;
+    float bias = max(0.02 * (1.0 - dot(normal, lightDir)), 0.0005);
     vec3 offsetWorldPos = worldPos + normal * bias;
 
+    // Convert to light space
     vec4 lightSpacePos = lightViewProj * vec4(offsetWorldPos, 1.0);
+    lightSpacePos /= lightSpacePos.w; // Perspective divide
 
-
-
-
-    lightSpacePos /= lightSpacePos.w;
+    // UV coordinates in shadow map
     vec2 uv = lightSpacePos.xy * 0.5 + 0.5;
 
-    float shadow = 0.0;
-
-    if(lightSpacePos.z > 1) {
-        return shadow;
+    if (lightSpacePos.z > 1.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        return 0.0; // Not in shadow
     }
 
-    float dynamicBias = max(0.005 * tan(acos(dot(normal, lightDir))), 0.001);
-    int sampleRadius = 1;
-    ivec2 texDim = ivec2(4096,4096);
-    vec2 pixelSize = 1.0 / texDim;
+    // Align shadow map texels to the voxel grid
+    float texelSize = 1.0 / 4096.0; // Shadow map texel size
+    uv = floor(uv / texelSize) * texelSize + texelSize * 0.5; // Snap to texel center
 
 
-    for(int y = -sampleRadius; y <= sampleRadius; y++)
-    {
-        for(int x = -sampleRadius; x <= sampleRadius; x++)
-        {
-            shadow += texture(shadowMapCascade1, vec3(uv + vec2(x, y) * pixelSize,lightSpacePos.z));
+    // Sample shadow map with PCF
+    float shadow = 0.0;
+    int sampleRadius = 2; // Increase for smoother shadows
+    vec2 pixelSize = vec2(texelSize);
+
+    for (int y = -sampleRadius; y <= sampleRadius; y++) {
+        for (int x = -sampleRadius; x <= sampleRadius; x++) {
+            vec2 offset = vec2(x, y) * pixelSize;
+            if(cascadeIndex == 0) {
+                shadow += texture(shadowMapCascade0, vec3(uv + offset, lightSpacePos.z - 0.002));
+            } else if (cascadeIndex == 1) {
+                shadow += texture(shadowMapCascade1, vec3(uv + offset, lightSpacePos.z - 0.002));
+            } else {
+                shadow += texture(shadowMapCascade2, vec3(uv + offset, lightSpacePos.z - 0.002));
+            }
         }
     }
 
-    shadow /= 9;//pow((sampleRadius * 2 + 1), 2);
-
-    return 1-shadow;
+    // Average PCF samples
+    shadow /= pow((sampleRadius * 2 + 1), 2);
+    return 1.0 - shadow; // Return light contribution
 }
 
+
 float relinearizeDepth(float depth, float zNear, float zFar) {
-    return zNear * zFar / (zFar - depth * (zFar - zNear));
+    return zNear * zFar / (zFar + depth * (zFar - zNear));
 }
 
 float sdBox(vec2 p, vec2 b )
@@ -121,8 +128,6 @@ void main() {
     float depth = texture(depthTexture, fragTexCoord).r;
     vec4 pos = texture(posTexture, fragTexCoord);
 
-    float zView = relinearizeDepth(depth, 0.1, 1000.0);
-    zView = clamp(zView, 0.0, 1.0);
 
 
     if(depth == 1)
@@ -136,10 +141,21 @@ void main() {
 
     vec3 worldPos = reconstructWorldPosition(fragTexCoord, depth);
 
+    vec3 viewPos =  (ubo.view * vec4(worldPos, 1.0)).xyz;
+    float viewDepth = viewPos.z;
+
+    float linearDepth = (2.0 * 0.1 * 1000.0) / (1000 + 0.1 - depth * (1000 - 0.1));
+
+    int cascadeIndex = 0;
+    for(int i = 0; i < 3 - 1; ++i) {
+        if(viewDepth < -lighting.cascadeDepths[i]) {
+            cascadeIndex = i + 1;
+        }
+    }
 
     // Determine cascade based on depth
 
-    float shadow = calculateShadow(1, worldPos, normal);
+    float shadow = calculateShadow(cascadeIndex, worldPos, normal);
 
     // Ambient lighting
     vec3 ambient = lighting.ambiantLight.rgb * lighting.ambiantLight.w;
@@ -148,8 +164,14 @@ void main() {
     vec3 lightDir = normalize(lighting.lightDirection.rgb);
     float diff = max(dot(normal, lightDir), 0.0); // Negative for correct direction
 
+    vec3 cascadeColor = vec3(cascadeIndex == 0 ? 1.0 : 0.0, cascadeIndex == 1 ? 1.0 : 0.0, cascadeIndex == 2 ? 1.0 : 0.0);
+    cascadeColor = vec3(1);
 
-    vec3 diffuse = diff * lighting.lightColor.xyz * lighting.lightColor.w;
+
+    vec3 lightColor = lighting.lightColor.xyz * cascadeColor;
+
+
+    vec3 diffuse = diff * lightColor * lighting.lightColor.w;
     diffuse = diffuse * (1.0 - shadow);
 
     // Combine ambient and diffuse lighting
@@ -162,7 +184,8 @@ void main() {
 
     fragColor = vec4(finalColor, 1.0);
 
-    //fragColor = vec4(zView,zView,zView, 1.0);
+
+    //fragColor = vec4(viewDepth,viewDepth,viewDepth, 1.0);
     // Output the final color
     //fragColor = vec4(worldPos, 1.0);
     //fragColor = vec4(uv, 0.0, 1.0);

@@ -228,7 +228,7 @@ impl DescriptorManager {
         let buffer_info = vk::DescriptorBufferInfo::default()
             .buffer(shadow_map_buffer.buffer)
             .offset(0)
-            .range(mem::size_of::<CascadeShadowUbo>() as u64 * (cascade.len() -1) as u64);
+            .range(mem::size_of::<CascadeShadowUbo>() as u64 * (cascade.len()) as u64);
 
         write_descriptor_sets.push(
             vk::WriteDescriptorSet::default()
