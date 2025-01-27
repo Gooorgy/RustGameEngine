@@ -1,4 +1,4 @@
-# A Vulkan game engine written in Rust. For learning purposes.
+# A Vulkan game engine written in Rust. 
 
 ## Currently Supported Features:
 - 3d Model loading
