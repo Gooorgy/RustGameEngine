@@ -1,20 +1,14 @@
-use crate::terrain::blocks;
 use crate::terrain::blocks::blocks::{BlockNameSpace, BlockType};
 use crate::vulkan_render::scene::ImageResource;
-
-pub struct TerrainMaterial {
-    block_shader: BlockShader,
-}
 
 pub enum BlockShader {
     None,
     Opaque,
     Transparent,
-    //Emissive,
     Custom(CustomShaderData),
 }
 
-pub struct OpaqueShaderData{
+pub struct OpaqueShaderData {
     pub texture: ImageResource,
     pub normal: Option<ImageResource>,
     pub specular: Option<ImageResource>,
@@ -26,18 +20,6 @@ pub struct TransparentShaderData {
 
 pub struct CustomShaderData {
     // TODO
-}
-
-struct OpaqueBlockShader {
-    block_textures: Vec<BlockTexture>,
-}
-
-struct TransparentBlockShader {}
-
-struct BlockTexture {
-    texture: ImageResource,
-    normal: Option<ImageResource>,
-    faces: Vec<BlockFace>,
 }
 
 pub enum BlockFace {
@@ -56,12 +38,6 @@ pub trait BlockData {
 
     fn render_type(&self) -> BlockShader;
 }
-
-pub struct ChunkData {
-    voxels: Voxels,
-}
-
-struct Voxels(Vec<Vec<Vec<BlockNameSpace>>>);
 
 #[derive(Copy, Clone)]
 pub struct VoxelData {

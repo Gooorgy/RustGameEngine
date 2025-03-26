@@ -5,7 +5,7 @@ use noise::{Fbm, MultiFractal, NoiseFn, Simplex};
 
 const BASE_HEIGHT: usize = 5;
 
-pub fn new_terrain(seed: u32, size: u32) -> [VoxelData; CHUNK_STORAGE_SIZE] {
+pub fn new_terrain(seed: u32) -> [VoxelData; CHUNK_STORAGE_SIZE] {
     let fbm_simplex = Fbm::<Simplex>::new(seed).set_octaves(5).set_frequency(0.01);
     let mut out = [VoxelData::default(); CHUNK_STORAGE_SIZE];
 

@@ -3,11 +3,12 @@ use glm::{Vec2, Vec3};
 
 pub const CHUNK_SIZE: usize = 16;
 pub const CHUNK_STORAGE_SIZE: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
-pub const EXTENDED_CHUNK_SIZE: usize = CHUNK_SIZE + 2;
 
 pub const VOXEL_SIZE: usize = 20;
+pub const VOXEL_SIZE_I32: i32 = VOXEL_SIZE as i32;
+//pub const VOXEL_SIZE_F32: f32 = VOXEL_SIZE as f32;
+
 pub const VOXEL_SIZE_HALF: usize = VOXEL_SIZE / 2;
-pub const VOXEL_SIZE_F32: f32 = VOXEL_SIZE as f32;
 pub const VOXEL_SIZE_HALF_F32: f32 = VOXEL_SIZE_HALF as f32;
 
 const NORMAL_TOP: Vec3 = Vec3::new(0.0, 1.0, 0.0);

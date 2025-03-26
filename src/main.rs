@@ -1,7 +1,10 @@
-use new::terrain::generator::{new_terrain};
+use new::terrain::blocks::block_definitions::{GRASS, NONE, STONE};
+use new::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockType};
+use new::terrain::terrain::Terrain;
 use new::vulkan_render::scene::{Mesh, SceneNode};
 use new::vulkan_render::vulkan_backend::VulkanBackend;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
@@ -9,13 +12,12 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
-use new::terrain::terrain::{TerrainChunk, TerrainMesh};
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 struct AppWindow {
-    window: Option<winit::window::Window>,
+    window: Option<Window>,
     vulkan_app: Option<VulkanBackend>,
     last_frame_time: Instant,
     scene: Rc<RefCell<SceneNode>>,
@@ -31,9 +33,17 @@ impl Default for AppWindow {
             ".\\resources\\textures\\texture.png",
         );
         //scene_root.borrow_mut().add_child("E:\\rust\\new\\src\\models\\test2.obj");
-        let terrain = new_terrain(123, 150);
-        let chunk = TerrainChunk::new(terrain);
-        let mesh = chunk.build_chunk_mesh();
+
+        let block_registry: HashMap<BlockNameSpace, BlockDefinition> = HashMap::from([
+            (BlockType::GRASS.as_namespace(), GRASS),
+            (BlockType::STONE.as_namespace(), STONE),
+            (BlockType::NONE.as_namespace(), NONE),
+        ]);
+
+        let mut terrain = Terrain::new(block_registry);
+        terrain.add_chunk();
+
+        let mesh = terrain.get_chuck(0).build_chunk_mesh();
         SceneNode::add_child(
             scene_root.clone(),
             ".\\resources\\models\\test2.obj",
