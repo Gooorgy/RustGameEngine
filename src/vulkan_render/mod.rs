@@ -10,5 +10,7 @@ pub mod scene;
 pub mod image_util;
 mod camera;
 mod descriptor;
-mod utils;
+pub mod utils;
 mod frame_manager;
+mod renderpass;
+pub mod renderable;

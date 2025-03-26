@@ -1389,12 +1389,14 @@ impl VulkanBackend {
                 color,
                 tex_coord: vec2(0.0, 0.0),
                 normal: vec3(0.0, 0.0, 0.0),
+                ..Vertex::default()
             });
             lines.push(Vertex {
                 pos: frustum_corners_world[end],
                 color,
                 tex_coord: vec2(0.0, 0.0),
                 normal: vec3(0.0, 0.0, 0.0),
+                ..Vertex::default()
             });
         }
 

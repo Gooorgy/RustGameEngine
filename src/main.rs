@@ -1,4 +1,4 @@
-use new::terrain::generator::{generate_mesh, new_terrain};
+use new::terrain::generator::{new_terrain};
 use new::vulkan_render::scene::{Mesh, SceneNode};
 use new::vulkan_render::vulkan_backend::VulkanBackend;
 use std::cell::RefCell;
@@ -9,6 +9,7 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
+use new::terrain::terrain::{TerrainChunk, TerrainMesh};
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -31,7 +32,8 @@ impl Default for AppWindow {
         );
         //scene_root.borrow_mut().add_child("E:\\rust\\new\\src\\models\\test2.obj");
         let terrain = new_terrain(123, 150);
-        let mesh = generate_mesh(terrain);
+        let chunk = TerrainChunk::new(terrain);
+        let mesh = chunk.build_chunk_mesh();
         SceneNode::add_child(
             scene_root.clone(),
             ".\\resources\\models\\test2.obj",

@@ -1,7 +1,9 @@
 use std::mem;
+use std::path::Path;
 use ash::{vk, Instance};
 use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
 use crate::vulkan_render::device::DeviceInfo;
+use crate::vulkan_render::scene::ImageResource;
 
 pub fn find_memory_type(
     type_filter: u32,
@@ -59,5 +61,27 @@ pub fn create_texture_sampler(device_info: &DeviceInfo, instance: &Instance, sha
             .logical_device
             .create_sampler(&sampler_info, None)
             .expect("failed to create sampler")
+    }
+}
+
+pub fn load_texture<P>(path: P) -> ImageResource
+where
+    P: AsRef<Path>,
+{
+    let dyn_image = image::open(path).unwrap();
+    let image_width = dyn_image.width();
+    let image_height = dyn_image.height();
+
+    let image_data = match &dyn_image {
+        image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => {
+            dyn_image.to_rgba8().into_raw()
+        }
+        _ => vec![],
+    };
+
+    ImageResource {
+        image_data,
+        width: image_width,
+        height: image_height,
     }
 }

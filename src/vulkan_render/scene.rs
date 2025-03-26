@@ -23,6 +23,7 @@ impl Default for Transform {
     }
 }
 
+#[derive(Default, Debug)]
 pub struct ImageResource {
     pub image_data: Vec<u8>,
     pub width: u32,
@@ -176,6 +177,7 @@ impl SceneNode {
                 color: Vector3::new(1.0, 1.0, 1.0),
                 tex_coord,
                 normal: Vector3::new(0.0, 0.0, 0.0),
+                ..Default::default()
             };
 
             vertices.push(vert);

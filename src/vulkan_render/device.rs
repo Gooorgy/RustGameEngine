@@ -43,19 +43,23 @@ impl DeviceInfo {
 
             queue_create_infos.push(queue_create_info);
         }
-        let conservatice =vk::PhysicalDeviceConservativeRasterizationPropertiesEXT::default();
 
         let physical_device_features =
             vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true).depth_clamp(true);
-
 
         let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
             .dynamic_rendering(true)
             .synchronization2(true);
 
+        let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::default()
+            .shader_sampled_image_array_non_uniform_indexing(true)
+            .descriptor_binding_partially_bound(true)
+            .runtime_descriptor_array(true);
+
         let binding = DEVICE_EXTENSIONS.map(|name| name.as_ptr());
         let create_info = vk::DeviceCreateInfo::default()
             .push_next(&mut vulkan_13_features)
+            .push_next(&mut vulkan_12_features)
             .queue_create_infos(queue_create_infos.as_slice())
             .enabled_features(&physical_device_features)
             .enabled_extension_names(binding.as_slice());
