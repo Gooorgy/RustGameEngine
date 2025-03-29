@@ -1,11 +1,12 @@
 use std::{ffi::CString, fs, io, mem, path::Path, ptr, slice};
 
-use super::structs::{CascadeShadowPushConsts, Vertex};
+use super::structs::{CascadeShadowPushConsts};
 use ash::vk::{
     ConservativeRasterizationModeEXT, DescriptorSetLayout, DynamicState,
     PipelineColorBlendStateCreateInfo, PipelineDynamicStateCreateInfo, PushConstantRange,
 };
 use ash::{vk, Device};
+use crate::vulkan_render::render_objects::draw_objects::Vertex;
 
 const SHADOW_SHADER: &str = "shadow";
 const FRAGMENT_SHADER: &str = "frag";

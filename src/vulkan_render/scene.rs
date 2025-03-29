@@ -1,5 +1,5 @@
-use crate::vulkan_render::structs::Vertex;
-use nalgebra::{Matrix4, Vector2, Vector3};
+use crate::vulkan_render::render_objects::draw_objects::Mesh;
+use nalgebra::{Matrix4, Vector3};
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::{Rc, Weak};
@@ -8,7 +8,6 @@ pub struct Transform {
     pub position: Vector3<f32>,
     pub rotation: Vector3<f32>,
     pub scale: Vector3<f32>,
-
     pub model: Matrix4<f32>,
 }
 
@@ -23,11 +22,45 @@ impl Default for Transform {
     }
 }
 
+impl Transform {
+    pub fn new(position: Vector3<f32>, rotation: Vector3<f32>, scale: Vector3<f32>) -> Transform {
+        Self {
+            position,
+            rotation,
+            scale,
+            model: Matrix4::identity(),
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct ImageResource {
     pub image_data: Vec<u8>,
     pub width: u32,
     pub height: u32,
+}
+
+impl ImageResource {
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> ImageResource {
+        let path = path.as_ref();
+
+        let dyn_image = image::open(path).unwrap();
+        let image_width = dyn_image.width();
+        let image_height = dyn_image.height();
+
+        let image_data = match &dyn_image {
+            image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => {
+                dyn_image.to_rgba8().into_raw()
+            }
+            _ => vec![],
+        };
+
+        ImageResource {
+            image_data,
+            width: image_width,
+            height: image_height,
+        }
+    }
 }
 
 pub struct SceneNode {
@@ -39,7 +72,7 @@ pub struct SceneNode {
     pub texture: ImageResource,
 }
 
-impl SceneNode {
+/*impl SceneNode {
     pub fn new<P>(model_path: P, texture_path: P) -> Rc<RefCell<Self>>
     where
         P: AsRef<Path>,
@@ -146,52 +179,4 @@ impl SceneNode {
             height: image_height,
         }
     }
-
-    fn load_model<P>(path: P) -> Mesh
-    where
-        P: AsRef<Path>,
-    {
-        let (models, _mat) = tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS)
-            .expect("failed to load model file");
-
-        let model = models.first().unwrap();
-        let mesh = &model.mesh;
-
-        let mut vertices = vec![];
-
-        let vert_count = mesh.positions.len() / 3;
-        for i in 0..vert_count {
-            let pos: Vector3<f32> = Vector3::new(
-                mesh.positions[i * 3],
-                mesh.positions[i * 3 + 1],
-                mesh.positions[i * 3 + 2],
-            );
-
-            let tex_coord: Vector2<f32> =
-                Vector2::new(mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]);
-
-            //let normal = mesh.normals[i * 3];
-
-            let vert = Vertex {
-                pos,
-                color: Vector3::new(1.0, 1.0, 1.0),
-                tex_coord,
-                normal: Vector3::new(0.0, 0.0, 0.0),
-                ..Default::default()
-            };
-
-            vertices.push(vert);
-        }
-
-        Mesh {
-            vertices,
-            indices: mesh.indices.clone(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Mesh {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
-}
+}*/

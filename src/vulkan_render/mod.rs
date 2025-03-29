@@ -14,3 +14,5 @@ pub mod utils;
 mod frame_manager;
 mod renderpass;
 pub mod renderable;
+pub mod render_objects;
+mod material;

@@ -132,6 +132,30 @@ impl DescriptorManager {
         }
     }
 
+    pub fn update_dynamic_buffer_descriptor_sets(&self, device_info: &DeviceInfo, dynamic_model_buffer: &AllocatedBuffer, descriptor_set: DescriptorSet, alignment: u64) {
+        let dynamic_buffer_info = vk::DescriptorBufferInfo::default()
+            .buffer(dynamic_model_buffer.buffer)
+            .offset(0)
+            .range(alignment);
+
+        let mut write_descriptor_sets = vec![];
+        write_descriptor_sets.push(
+            vk::WriteDescriptorSet::default()
+                .dst_set(descriptor_set)
+                .dst_binding(1)
+                .dst_array_element(0)
+                .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC)
+                .descriptor_count(1)
+                .buffer_info(slice::from_ref(&dynamic_buffer_info)),
+        );
+
+        unsafe {
+            device_info
+                .logical_device
+                .update_descriptor_sets(&write_descriptor_sets, &[]);
+        }
+    }
+
     pub fn create_shadow_map_descriptor_set(&self, device: &Device) -> DescriptorSet {
         let binding = [self.global_shadow_map_layout];
         let allocate_info = DescriptorSetAllocateInfo::default()

@@ -1,5 +1,5 @@
-use crate::vulkan_render::structs::{TerrainVertex, Vertex};
 use glm::{Vec2, Vec3};
+use crate::vulkan_render::render_objects::draw_objects::Vertex;
 
 pub const CHUNK_SIZE: usize = 16;
 pub const CHUNK_STORAGE_SIZE: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;

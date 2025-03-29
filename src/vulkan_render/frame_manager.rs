@@ -77,7 +77,7 @@ pub struct FrameManager {
     frames: Vec<FrameData>,
     current_frame: usize,
     frame_count: usize,
-    _descriptor_manager: DescriptorManager,
+    descriptor_manager: DescriptorManager,
     pub gbuffer_pipeline: PipelineInfo,
     pub lighting_pipeline: PipelineInfo,
     pub shadow_map_pipeline: PipelineInfo,
@@ -91,7 +91,6 @@ impl FrameManager {
         instance: &Instance,
         max_frames: usize,
         extent2d: Extent2D,
-        mesh_count: usize,
         texture_sampler: &Sampler,
         texture_image_view: &ImageView,
         cascade_count: usize,
@@ -132,7 +131,7 @@ impl FrameManager {
             let model_dynamic_buffer = Self::create_model_dynamic_uniform_buffer(
                 device_info,
                 instance,
-                mesh_count,
+                1,
                 model_ubo_alignment,
             );
             let lighting_buffer = Self::create_lighting_buffer(device_info, instance);
@@ -220,7 +219,7 @@ impl FrameManager {
         }
 
         Self {
-            _descriptor_manager: descriptor_manager,
+            descriptor_manager,
             frames: frame_data,
             current_frame: 0,
             frame_count: max_frames,
@@ -322,6 +321,15 @@ impl FrameManager {
         }]);
 
         buffer
+    }
+    
+    pub fn recreate_model_dynamic_buffer(&mut self, device_info: &DeviceInfo, instance: &Instance, mesh_count: usize) {
+        let buffer_alignment = get_buffer_alignment::<ModelDynamicUbo>(device_info);
+        for frame in self.frames.iter_mut() {
+            frame.model_dynamic_buffer = Self::create_model_dynamic_uniform_buffer(device_info, instance, mesh_count, buffer_alignment);
+            self.descriptor_manager.update_dynamic_buffer_descriptor_sets(device_info, &frame.model_dynamic_buffer,frame.descriptor_gbuffer_set, buffer_alignment);
+        }
+        
     }
 
     fn create_model_dynamic_uniform_buffer(

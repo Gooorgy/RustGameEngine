@@ -1,7 +1,7 @@
 use new::terrain::blocks::block_definitions::{GRASS, NONE, STONE};
 use new::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockType};
 use new::terrain::terrain::Terrain;
-use new::vulkan_render::scene::{Mesh, SceneNode};
+use new::vulkan_render::scene::{SceneNode, Transform};
 use new::vulkan_render::vulkan_backend::VulkanBackend;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -12,6 +12,10 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
+use new::engine_components::app::App;
+use new::engine_components::engine_components::StaticMeshComponent;
+use new::engine_components::scene::StaticMesh;
+use new::vulkan_render::render_objects::draw_objects::Mesh;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -20,18 +24,17 @@ struct AppWindow {
     window: Option<Window>,
     vulkan_app: Option<VulkanBackend>,
     last_frame_time: Instant,
-    scene: Rc<RefCell<SceneNode>>,
-    terrain: Mesh,
+    app: App,
 }
 
 impl AppWindow {}
 
 impl Default for AppWindow {
     fn default() -> Self {
-        let scene_root = SceneNode::new(
+/*        let scene_root = SceneNode::new(
             ".\\resources\\models\\test.obj",
             ".\\resources\\textures\\texture.png",
-        );
+        );*/
         //scene_root.borrow_mut().add_child("E:\\rust\\new\\src\\models\\test2.obj");
 
         let block_registry: HashMap<BlockNameSpace, BlockDefinition> = HashMap::from([
@@ -44,18 +47,16 @@ impl Default for AppWindow {
         terrain.add_chunk();
 
         let mesh = terrain.get_chuck(0).build_chunk_mesh();
-        SceneNode::add_child(
-            scene_root.clone(),
-            ".\\resources\\models\\test2.obj",
-            ".\\resources\\textures\\texture.png",
-        );
-        SceneNode::update(scene_root.clone());
+
+        let mut app = App::new();
+        let static_mesh = StaticMesh::new(String::from(".\\resources\\models\\test.obj"));
+        app.register_component(static_mesh);
+        
         Self {
             window: None,
             vulkan_app: None,
             last_frame_time: Instant::now(),
-            scene: scene_root,
-            terrain: mesh,
+            app
         }
     }
 }
@@ -67,14 +68,19 @@ impl ApplicationHandler for AppWindow {
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
 
+        let mut vulkan =             VulkanBackend::new(
+            self.window.as_ref().unwrap()
+        )
+            .expect("");
+
+        self.app.init();
+        vulkan.upload_meshes(self.app.get_static_meshes(), Transform::default().model);
+
+
         self.vulkan_app = Some(
-            VulkanBackend::new(
-                self.window.as_ref().unwrap(),
-                self.scene.clone(),
-                self.terrain.clone(),
-            )
-            .expect(""),
+            vulkan
         );
+        
     }
 
     // Handle window event

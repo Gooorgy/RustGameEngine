@@ -1,15 +1,13 @@
-use crate::terrain::blocks::block_definitions::{GRASS, NONE, STONE};
 use crate::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockRegistry, BlockType};
 use crate::terrain::constants::{Face, CHUNK_SIZE, CHUNK_STORAGE_SIZE, FACE_INDICES, FACE_VERTICES, VOXEL_SIZE_I32};
 use crate::terrain::terrain_material::VoxelData;
-use crate::vulkan_render::renderable::Render;
-use crate::vulkan_render::scene::Mesh;
-use crate::vulkan_render::structs::{TerrainVertex, Vertex};
+use crate::vulkan_render::structs::{TerrainVertex,};
 use ash::vk::CommandBuffer;
 use glm::{vec3, IVec3};
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::terrain::generator::new_terrain;
+use crate::vulkan_render::render_objects::draw_objects::{Mesh, Vertex};
 
 pub struct Terrain {
     block_registry: Rc<BlockRegistry>,
@@ -35,26 +33,12 @@ impl Terrain {
     }
 }
 
-impl Render for Terrain {
-    fn render(&self, command_buffer: CommandBuffer) {
-        for chunk in &self.chunks {
-            chunk.render(command_buffer);
-        }
-    }
-}
-
 pub struct TerrainChunk {
     pub chunk_coords: IVec3,
     pub voxel_data: [VoxelData; CHUNK_STORAGE_SIZE],
     pub opaque_mesh: Option<TerrainMesh>,
     //pub transparent_mesh: TerrainMesh,
     pub block_registry: Rc<BlockRegistry>,
-}
-
-impl Render for TerrainChunk {
-    fn render(&self, command_buffer: CommandBuffer) {
-        todo!()
-    }
 }
 
 impl TerrainChunk {

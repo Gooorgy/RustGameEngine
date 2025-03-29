@@ -1,18 +1,13 @@
 use super::{
-    buffer::BufferInfo,
-    device::DeviceInfo,
-    image_util,
-    structs::{CameraMvpUbo, Vertex},
-    surface::SurfaceInfo,
-    swapchain::SwapchainInfo,
-    utils,
+    buffer::BufferInfo, device::DeviceInfo, image_util, structs::CameraMvpUbo,
+    surface::SurfaceInfo, swapchain::SwapchainInfo, utils,
 };
 use crate::vulkan_render::buffer::AllocatedBuffer;
 use crate::vulkan_render::camera::Camera;
 use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::frame_manager::FrameManager;
 use crate::vulkan_render::image_util::AllocatedImage;
-use crate::vulkan_render::scene::{Mesh, SceneNode};
+use crate::vulkan_render::render_objects::draw_objects::{Mesh, Vertex};
 use crate::vulkan_render::structs::{
     Cascade, CascadeShadowPushConsts, CascadeShadowUbo, GPUMeshData, LightingUbo, ModelDynamicUbo,
 };
@@ -20,10 +15,10 @@ use ash::vk::{self, Extent2D, Extent3D, ImageView, PipelineBindPoint, Rect2D, Sh
 use ash::vk::{ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
 use glm::{vec2, vec3, vec3_to_vec4, vec4, Mat4, Vec3};
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::{error::Error, ffi::CString, mem, ptr};
+use std::rc::Rc;
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
+use crate::assets::asset_manager::{Asset, MeshAsset};
 
 const SHADOW_MAP_CASCADE_COUNT: usize = 3;
 
@@ -34,20 +29,15 @@ pub struct VulkanBackend {
     surface_info: SurfaceInfo,
     swapchain_info: SwapchainInfo,
     image_views: Vec<ImageView>,
-    gpu_mesh_data: Vec<GPUMeshData>,
     pub camera: Camera,
     frame_manager: FrameManager,
     cascades: Vec<Cascade>,
-    mesh: Mesh,
     cam_view_proj: Mat4,
+    gpu_mesh_data: Vec<GPUMeshData>,
 }
 
 impl VulkanBackend {
-    pub fn new(
-        window: &Window,
-        scene: Rc<RefCell<SceneNode>>,
-        terrain_mesh: Mesh,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(window: &Window) -> Result<Self, Box<dyn Error>> {
         let entry = unsafe { ash::Entry::load()? };
         let instance = Self::create_instance(&entry, window);
         let surface_info = SurfaceInfo::new(&entry, &instance, window);
@@ -60,14 +50,11 @@ impl VulkanBackend {
         let texture_image_view = Self::create_texture_image_view(&device_info, texture_image.0);
         let texture_sampler = utils::create_texture_sampler(&device_info, &instance, false);
 
-        let gpu_mesh_data = Self::upload_meshes(&instance, &device_info, scene, &terrain_mesh);
-
         let frame_manager = FrameManager::new(
             &device_info,
             &instance,
             MAX_FRAMES_IN_FLIGHT as usize,
             swapchain_info.swapchain_extent,
-            gpu_mesh_data.len(),
             &texture_sampler,
             &texture_image_view,
             SHADOW_MAP_CASCADE_COUNT,
@@ -87,38 +74,42 @@ impl VulkanBackend {
             surface_info,
             swapchain_info,
             image_views,
-            gpu_mesh_data,
             camera: Camera::new(),
             frame_manager,
             cascades,
-            mesh: terrain_mesh,
             cam_view_proj: Mat4::identity(),
+            gpu_mesh_data: Vec::new(),
         })
     }
 
-    fn upload_meshes(
-        instance: &Instance,
-        device_info: &DeviceInfo,
-        scene: Rc<RefCell<SceneNode>>,
-        mesh: &Mesh,
-    ) -> Vec<GPUMeshData> {
-        let node = scene.borrow();
-        let vertices = mesh.vertices.clone();
-        let indices = mesh.indices.clone();
-
-        let vertex_buffer = Self::create_vertex_buffer(instance, device_info, &vertices);
-        let index_buffer = Self::create_index_buffer(instance, device_info, &indices);
-
+    pub fn upload_meshes(
+        &mut self,
+        meshes: Vec<Rc<Asset<MeshAsset>>>,
+        // Find a better way to pass the model information ...
+        model: Mat4,
+    ) {
         let mut mesh_data = vec![];
+        let mesh_count = meshes.len();
+        for mesh in meshes {
+            let s = &mesh.data.mesh;
+            let vertices = &s.vertices;
+            let indices = &s.indices;
 
-        mesh_data.push(GPUMeshData {
-            vertex_buffer,
-            index_buffer,
-            index_count: indices.len() as u32,
-            world_model: node.transform.model,
-        });
+            let vertex_buffer = Self::create_vertex_buffer(&self.instance, &self.device_info, vertices);
+            let index_buffer = Self::create_index_buffer(&self.instance, &self.device_info, indices);
+            println!("Created vertex buffer: vert_count: {}", vertices.len());
 
-        mesh_data
+            mesh_data.push(GPUMeshData {
+                vertex_buffer,
+                index_buffer,
+                index_count: indices.len() as u32,
+                world_model: model,
+            });
+        }
+        
+        self.gpu_mesh_data = mesh_data;
+
+        self.frame_manager.recreate_model_dynamic_buffer(&self.device_info, &self.instance, mesh_count);
     }
 
     pub fn draw_frame(&mut self, _delta_time: f32) {
