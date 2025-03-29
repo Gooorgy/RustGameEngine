@@ -8,7 +8,7 @@ use crate::vulkan_render::camera::Camera;
 use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkan_render::frame_manager::FrameManager;
 use crate::vulkan_render::image_util::AllocatedImage;
-use crate::vulkan_render::render_objects::draw_objects::{Mesh, Vertex};
+use crate::vulkan_render::render_objects::draw_objects::{Vertex};
 use crate::vulkan_render::structs::{
     Cascade, CascadeShadowPushConsts, CascadeShadowUbo, GPUMeshData, LightingUbo, ModelDynamicUbo,
 };

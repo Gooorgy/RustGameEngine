@@ -1,7 +1,5 @@
 use crate::assets::asset_manager::{Asset, AssetManager, MeshAsset};
 use crate::engine_components::scene::{SceneComponent, StaticMesh};
-use crate::vulkan_render::render_objects::draw_objects::Mesh;
-use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -26,7 +24,7 @@ impl App {
     }
 
     pub fn init(&mut self) {
-        for mut component in self.components.iter_mut() {
+        for component in self.components.iter_mut() {
             component
                 .component
                 .borrow_mut()

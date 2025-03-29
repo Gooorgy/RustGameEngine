@@ -25,4 +25,3 @@ pub trait HasGameState {
 }
 
 pub trait InitReq: HasAssetManager {}
-pub trait UpdateReq: HasAssetManager + HasGameState {}

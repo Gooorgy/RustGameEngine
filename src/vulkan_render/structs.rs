@@ -1,4 +1,3 @@
-use std::mem::offset_of;
 
 use crate::vulkan_render::buffer::AllocatedBuffer;
 use crate::vulkan_render::device::DeviceInfo;

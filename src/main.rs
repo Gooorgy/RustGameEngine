@@ -1,16 +1,12 @@
 use new::engine_components::app::App;
-use new::engine_components::engine_components::StaticMeshComponent;
 use new::engine_components::scene::StaticMesh;
 use new::terrain::blocks::block_definitions::{GRASS, NONE, STONE};
 use new::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockType};
 use new::terrain::terrain::Terrain;
-use new::vulkan_render::render_objects::draw_objects::Mesh;
-use new::vulkan_render::scene::{SceneNode, Transform};
+use new::vulkan_render::scene::{Transform};
 use new::vulkan_render::vulkan_backend::VulkanBackend;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Write;
-use std::rc::Rc;
 use std::time::Instant;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -46,7 +42,7 @@ impl Default for AppWindow {
         let mut terrain = Terrain::new(block_registry);
         terrain.add_chunk();
 
-        let mesh = terrain.get_chuck(0).build_chunk_mesh();
+        //let mesh = terrain.get_chuck(0).build_chunk_mesh();
 
         let mut app = App::new();
         let static_mesh = StaticMesh::new(String::from(".\\resources\\models\\test.obj"));
