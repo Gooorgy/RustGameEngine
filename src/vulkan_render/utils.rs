@@ -1,9 +1,9 @@
-use std::mem;
-use std::path::Path;
-use ash::{vk, Instance};
-use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
 use crate::vulkan_render::device::DeviceInfo;
 use crate::vulkan_render::scene::ImageResource;
+use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
+use ash::{vk, Instance};
+use std::mem;
+use std::path::Path;
 
 pub fn find_memory_type(
     type_filter: u32,
@@ -19,25 +19,30 @@ pub fn find_memory_type(
     panic!()
 }
 
-pub fn get_buffer_alignment<T>(
-    device_info: &DeviceInfo,
-) -> u64 {
+pub fn get_buffer_alignment<T>(device_info: &DeviceInfo) -> u64 {
     let mut dynamic_alignment = mem::size_of::<T>() as u64;
     let min_ubo_alignment = device_info.min_ubo_alignment;
 
     if min_ubo_alignment > 0 {
-        dynamic_alignment =
-        (dynamic_alignment + min_ubo_alignment - 1) & !(min_ubo_alignment - 1);
+        dynamic_alignment = (dynamic_alignment + min_ubo_alignment - 1) & !(min_ubo_alignment - 1);
     }
 
     dynamic_alignment
 }
 
-pub fn create_texture_sampler(device_info: &DeviceInfo, instance: &Instance, shadow: bool) -> Sampler {
+pub fn create_texture_sampler(
+    device_info: &DeviceInfo,
+    instance: &Instance,
+    shadow: bool,
+) -> Sampler {
     let device_properties =
         unsafe { instance.get_physical_device_properties(device_info._physical_device) };
 
-    let compare_op = if shadow { CompareOp::LESS } else { CompareOp::ALWAYS };
+    let compare_op = if shadow {
+        CompareOp::LESS
+    } else {
+        CompareOp::ALWAYS
+    };
 
     let sampler_info = vk::SamplerCreateInfo::default()
         .mag_filter(vk::Filter::LINEAR)

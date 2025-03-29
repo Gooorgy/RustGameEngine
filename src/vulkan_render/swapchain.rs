@@ -1,7 +1,7 @@
 use std::ptr;
 
-use ash::{khr, vk};
 use super::{constants, device, surface::SurfaceInfo};
+use ash::{khr, vk};
 
 pub struct SwapchainInfo {
     pub swapchain_device: khr::swapchain::Device,

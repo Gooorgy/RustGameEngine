@@ -10,7 +10,7 @@ use ash::vk::{
     SamplerMipmapMode,
 };
 use ash::{vk, Instance};
-use glm::{Vec4};
+use glm::Vec4;
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use serde::Serialize;
 
@@ -182,5 +182,5 @@ pub struct CascadeShadowPushConsts {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct LineVertex {
-   pub pos: Vec4,
+    pub pos: Vec4,
 }

@@ -2,6 +2,7 @@ use super::{
     buffer::BufferInfo, device::DeviceInfo, image_util, structs::CameraMvpUbo,
     surface::SurfaceInfo, swapchain::SwapchainInfo, utils,
 };
+use crate::assets::asset_manager::{Asset, MeshAsset};
 use crate::vulkan_render::buffer::AllocatedBuffer;
 use crate::vulkan_render::camera::Camera;
 use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
@@ -15,10 +16,9 @@ use ash::vk::{self, Extent2D, Extent3D, ImageView, PipelineBindPoint, Rect2D, Sh
 use ash::vk::{ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
 use glm::{vec2, vec3, vec3_to_vec4, vec4, Mat4, Vec3};
-use std::{error::Error, ffi::CString, mem, ptr};
 use std::rc::Rc;
+use std::{error::Error, ffi::CString, mem, ptr};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
-use crate::assets::asset_manager::{Asset, MeshAsset};
 
 const SHADOW_MAP_CASCADE_COUNT: usize = 3;
 
@@ -95,8 +95,10 @@ impl VulkanBackend {
             let vertices = &s.vertices;
             let indices = &s.indices;
 
-            let vertex_buffer = Self::create_vertex_buffer(&self.instance, &self.device_info, vertices);
-            let index_buffer = Self::create_index_buffer(&self.instance, &self.device_info, indices);
+            let vertex_buffer =
+                Self::create_vertex_buffer(&self.instance, &self.device_info, vertices);
+            let index_buffer =
+                Self::create_index_buffer(&self.instance, &self.device_info, indices);
             println!("Created vertex buffer: vert_count: {}", vertices.len());
 
             mesh_data.push(GPUMeshData {
@@ -106,10 +108,14 @@ impl VulkanBackend {
                 world_model: model,
             });
         }
-        
+
         self.gpu_mesh_data = mesh_data;
 
-        self.frame_manager.recreate_model_dynamic_buffer(&self.device_info, &self.instance, mesh_count);
+        self.frame_manager.recreate_model_dynamic_buffer(
+            &self.device_info,
+            &self.instance,
+            mesh_count,
+        );
     }
 
     pub fn draw_frame(&mut self, _delta_time: f32) {

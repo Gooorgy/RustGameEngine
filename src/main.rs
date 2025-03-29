@@ -1,6 +1,10 @@
+use new::engine_components::app::App;
+use new::engine_components::engine_components::StaticMeshComponent;
+use new::engine_components::scene::StaticMesh;
 use new::terrain::blocks::block_definitions::{GRASS, NONE, STONE};
 use new::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockType};
 use new::terrain::terrain::Terrain;
+use new::vulkan_render::render_objects::draw_objects::Mesh;
 use new::vulkan_render::scene::{SceneNode, Transform};
 use new::vulkan_render::vulkan_backend::VulkanBackend;
 use std::cell::RefCell;
@@ -12,10 +16,6 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
-use new::engine_components::app::App;
-use new::engine_components::engine_components::StaticMeshComponent;
-use new::engine_components::scene::StaticMesh;
-use new::vulkan_render::render_objects::draw_objects::Mesh;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -31,7 +31,7 @@ impl AppWindow {}
 
 impl Default for AppWindow {
     fn default() -> Self {
-/*        let scene_root = SceneNode::new(
+        /*        let scene_root = SceneNode::new(
             ".\\resources\\models\\test.obj",
             ".\\resources\\textures\\texture.png",
         );*/
@@ -51,12 +51,14 @@ impl Default for AppWindow {
         let mut app = App::new();
         let static_mesh = StaticMesh::new(String::from(".\\resources\\models\\test.obj"));
         app.register_component(static_mesh);
-        
+        let mesh2 = StaticMesh::new(String::from(".\\resources\\models\\test2.obj"));
+        app.register_component(mesh2);
+
         Self {
             window: None,
             vulkan_app: None,
             last_frame_time: Instant::now(),
-            app
+            app,
         }
     }
 }
@@ -68,19 +70,12 @@ impl ApplicationHandler for AppWindow {
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
 
-        let mut vulkan =             VulkanBackend::new(
-            self.window.as_ref().unwrap()
-        )
-            .expect("");
+        let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
 
         self.app.init();
         vulkan.upload_meshes(self.app.get_static_meshes(), Transform::default().model);
 
-
-        self.vulkan_app = Some(
-            vulkan
-        );
-        
+        self.vulkan_app = Some(vulkan);
     }
 
     // Handle window event

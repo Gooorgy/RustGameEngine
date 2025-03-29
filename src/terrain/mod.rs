@@ -1,6 +1,6 @@
-pub mod generator;
-pub mod terrain_material;
-pub mod terrain;
 pub mod blocks;
-mod octree;
 mod constants;
+pub mod generator;
+mod octree;
+pub mod terrain;
+pub mod terrain_material;

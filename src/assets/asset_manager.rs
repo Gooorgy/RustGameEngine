@@ -71,7 +71,7 @@ where
             mesh.positions[i * 3 + 1],
             mesh.positions[i * 3 + 2],
         );
-        
+
         let normal = Vector3::new(
             mesh.normals[i * 3],
             mesh.normals[i * 3 + 1],

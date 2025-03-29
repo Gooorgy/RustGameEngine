@@ -132,7 +132,13 @@ impl DescriptorManager {
         }
     }
 
-    pub fn update_dynamic_buffer_descriptor_sets(&self, device_info: &DeviceInfo, dynamic_model_buffer: &AllocatedBuffer, descriptor_set: DescriptorSet, alignment: u64) {
+    pub fn update_dynamic_buffer_descriptor_sets(
+        &self,
+        device_info: &DeviceInfo,
+        dynamic_model_buffer: &AllocatedBuffer,
+        descriptor_set: DescriptorSet,
+        alignment: u64,
+    ) {
         let dynamic_buffer_info = vk::DescriptorBufferInfo::default()
             .buffer(dynamic_model_buffer.buffer)
             .offset(0)

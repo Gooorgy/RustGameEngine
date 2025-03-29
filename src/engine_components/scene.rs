@@ -1,9 +1,9 @@
-use std::any::{Any, TypeId};
-use std::rc::Rc;
 use crate::assets::asset_manager::{Asset, AssetManager, MeshAsset};
 use crate::engine_components::app::ComponentRegistration;
 use crate::vulkan_render::render_objects::draw_objects::Mesh;
 use crate::vulkan_render::scene::Transform;
+use std::any::{Any, TypeId};
+use std::rc::Rc;
 
 pub trait SceneComponent: Any {
     fn setup(&self, registration: &mut ComponentRegistration);
@@ -25,8 +25,8 @@ impl SceneComponent for StaticMesh {
     fn setup(&self, registration: &mut ComponentRegistration) {}
     fn init_assets(&mut self, asset_manager: &mut AssetManager) {
         self.mesh_asset = match asset_manager.get_mesh(&self.mesh_path) {
-         Some(mesh) => Some(mesh),
-            _ => panic!()
+            Some(mesh) => Some(mesh),
+            _ => panic!(),
         };
     }
 
@@ -34,8 +34,6 @@ impl SceneComponent for StaticMesh {
         self
     }
 }
-
-
 
 impl StaticMesh {
     pub fn new(mesh_path: String) -> Self {
@@ -49,7 +47,7 @@ impl StaticMesh {
     pub fn get_mesh(&self) -> Rc<Asset<MeshAsset>> {
         let x = match &self.mesh_asset {
             Some(mesh) => mesh,
-            _ => panic!("Todo?")
+            _ => panic!("Todo?"),
         };
 
         x.clone()

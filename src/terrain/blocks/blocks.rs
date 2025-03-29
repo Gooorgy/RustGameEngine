@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::terrain::terrain_material::{BlockData, BlockShader};
+use std::collections::HashMap;
 
 pub type BlockNameSpace = &'static str;
 

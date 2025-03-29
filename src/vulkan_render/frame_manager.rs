@@ -322,14 +322,29 @@ impl FrameManager {
 
         buffer
     }
-    
-    pub fn recreate_model_dynamic_buffer(&mut self, device_info: &DeviceInfo, instance: &Instance, mesh_count: usize) {
+
+    pub fn recreate_model_dynamic_buffer(
+        &mut self,
+        device_info: &DeviceInfo,
+        instance: &Instance,
+        mesh_count: usize,
+    ) {
         let buffer_alignment = get_buffer_alignment::<ModelDynamicUbo>(device_info);
         for frame in self.frames.iter_mut() {
-            frame.model_dynamic_buffer = Self::create_model_dynamic_uniform_buffer(device_info, instance, mesh_count, buffer_alignment);
-            self.descriptor_manager.update_dynamic_buffer_descriptor_sets(device_info, &frame.model_dynamic_buffer,frame.descriptor_gbuffer_set, buffer_alignment);
+            frame.model_dynamic_buffer = Self::create_model_dynamic_uniform_buffer(
+                device_info,
+                instance,
+                mesh_count,
+                buffer_alignment,
+            );
+            self.descriptor_manager
+                .update_dynamic_buffer_descriptor_sets(
+                    device_info,
+                    &frame.model_dynamic_buffer,
+                    frame.descriptor_gbuffer_set,
+                    buffer_alignment,
+                );
         }
-        
     }
 
     fn create_model_dynamic_uniform_buffer(

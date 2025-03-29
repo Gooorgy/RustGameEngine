@@ -1,10 +1,9 @@
-use std::mem::offset_of;
+use crate::vulkan_render::device::DeviceInfo;
+use crate::vulkan_render::render_objects::render_batch::Draw;
 use ash::vk;
 use ash::vk::Format;
 use nalgebra::{Vector2, Vector3};
-use crate::vulkan_render::device::DeviceInfo;
-use crate::vulkan_render::render_objects::render_batch::Draw;
-
+use std::mem::offset_of;
 
 pub enum Drawable {
     Mesh(Mesh),
@@ -43,7 +42,7 @@ impl Default for Vertex {
             normal: Vector3::new(0.0, 0.0, 0.0),
             tex_coord: Vector2::new(0.0, 0.0),
             color: Vector3::new(0.0, 0.0, 0.0),
-            texture_index: 0
+            texture_index: 0,
         }
     }
 }

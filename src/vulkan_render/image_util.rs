@@ -1,6 +1,9 @@
 use crate::vulkan_render::device::DeviceInfo;
 use crate::vulkan_render::utils;
-use ash::vk::{DeviceMemory, Extent3D, Format, Image, ImageAspectFlags, ImageCreateInfo, ImageSubresourceLayers, ImageTiling, ImageUsageFlags, ImageView, MemoryPropertyFlags};
+use ash::vk::{
+    DeviceMemory, Extent3D, Format, Image, ImageAspectFlags, ImageCreateInfo,
+    ImageSubresourceLayers, ImageTiling, ImageUsageFlags, ImageView, MemoryPropertyFlags,
+};
 use ash::{vk, Device, Instance};
 
 pub struct AllocatedImage {
@@ -47,7 +50,7 @@ impl AllocatedImage {
         format: Format,
         tiling: ImageTiling,
         usage: ImageUsageFlags,
-        extent: Extent3D
+        extent: Extent3D,
     ) -> Image {
         let image_create_info = ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
@@ -73,10 +76,13 @@ impl AllocatedImage {
         device_info: &DeviceInfo,
         instance: &Instance,
         image: &Image,
-        mem_properties: MemoryPropertyFlags
+        mem_properties: MemoryPropertyFlags,
     ) -> DeviceMemory {
-        let mem_requirements =
-            unsafe { device_info.logical_device.get_image_memory_requirements(*image) };
+        let mem_requirements = unsafe {
+            device_info
+                .logical_device
+                .get_image_memory_requirements(*image)
+        };
 
         let memory_properties =
             unsafe { instance.get_physical_device_memory_properties(device_info._physical_device) };

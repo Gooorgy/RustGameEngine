@@ -1,13 +1,13 @@
-use crate::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockRegistry, BlockType};
-use crate::terrain::constants::{Face, CHUNK_SIZE, CHUNK_STORAGE_SIZE, FACE_INDICES, FACE_VERTICES, VOXEL_SIZE_I32};
-use crate::terrain::terrain_material::VoxelData;
-use crate::vulkan_render::structs::{TerrainVertex,};
-use ash::vk::CommandBuffer;
-use glm::{vec3, IVec3};
-use std::collections::HashMap;
-use std::rc::Rc;
+use crate::terrain::blocks::blocks::BlockRegistry;
+use crate::terrain::constants::{
+    Face, CHUNK_SIZE, CHUNK_STORAGE_SIZE, FACE_INDICES, FACE_VERTICES, VOXEL_SIZE_I32,
+};
 use crate::terrain::generator::new_terrain;
+use crate::terrain::terrain_material::VoxelData;
 use crate::vulkan_render::render_objects::draw_objects::{Mesh, Vertex};
+use crate::vulkan_render::structs::TerrainVertex;
+use glm::{vec3, IVec3};
+use std::rc::Rc;
 
 pub struct Terrain {
     block_registry: Rc<BlockRegistry>,
@@ -25,7 +25,10 @@ impl Terrain {
     pub fn add_chunk(&mut self) {
         let voxel_data = new_terrain(123);
 
-        self.chunks.push(TerrainChunk::new(voxel_data, Rc::clone(&self.block_registry)))
+        self.chunks.push(TerrainChunk::new(
+            voxel_data,
+            Rc::clone(&self.block_registry),
+        ))
     }
 
     pub fn get_chuck(&self, index: usize) -> &TerrainChunk {
@@ -42,12 +45,15 @@ pub struct TerrainChunk {
 }
 
 impl TerrainChunk {
-    pub fn new(voxel_data: [VoxelData; CHUNK_STORAGE_SIZE], block_registry: Rc<BlockRegistry>) -> Self {
+    pub fn new(
+        voxel_data: [VoxelData; CHUNK_STORAGE_SIZE],
+        block_registry: Rc<BlockRegistry>,
+    ) -> Self {
         Self {
             chunk_coords: IVec3::new(0, 0, 0),
             voxel_data,
             opaque_mesh: None,
-            block_registry
+            block_registry,
         }
     }
 
@@ -91,7 +97,6 @@ impl TerrainChunk {
         let mut axis_columns = [[[0u16; CHUNK_SIZE]; CHUNK_SIZE]; 3];
         let mut face_mask = [[[0u16; CHUNK_SIZE]; CHUNK_SIZE]; 6];
 
-
         // Each axis_column represents:
         // [0] = Y-axis columns (for top/bottom faces) - bits represent X-Z plane
         // [1] = X-axis columns (for left/right faces) - bits represent Y-Z plane
@@ -104,7 +109,8 @@ impl TerrainChunk {
                     let index = (x) + (y) * CHUNK_SIZE + (z) * CHUNK_SIZE * CHUNK_SIZE;
 
                     let voxel_data = &self.voxel_data[index];
-                    let is_solid = self.block_registry
+                    let is_solid = self
+                        .block_registry
                         .get(voxel_data.block)
                         .expect("TODO")
                         .is_solid;

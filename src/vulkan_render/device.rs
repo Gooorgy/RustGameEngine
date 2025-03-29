@@ -44,8 +44,9 @@ impl DeviceInfo {
             queue_create_infos.push(queue_create_info);
         }
 
-        let physical_device_features =
-            vk::PhysicalDeviceFeatures::default().sampler_anisotropy(true).depth_clamp(true);
+        let physical_device_features = vk::PhysicalDeviceFeatures::default()
+            .sampler_anisotropy(true)
+            .depth_clamp(true);
 
         let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
             .dynamic_rendering(true)
