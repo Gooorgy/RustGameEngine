@@ -1,5 +1,5 @@
-use crate::terrain::blocks::blocks::{BlockDefinition};
-use crate::terrain::terrain_material::{BlockShader};
+use crate::terrain::blocks::blocks::BlockDefinition;
+use crate::terrain::terrain_material::BlockShader;
 
 /*macro_rules! block_defs {
     ($($block:expr => $def:expr),* $(,)?) => {{

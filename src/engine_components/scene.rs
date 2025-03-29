@@ -1,7 +1,7 @@
 use crate::assets::asset_manager::{Asset, AssetManager, MeshAsset};
 use crate::engine_components::app::ComponentRegistration;
 use crate::vulkan_render::scene::Transform;
-use std::any::{Any};
+use std::any::Any;
 use std::rc::Rc;
 
 pub trait SceneComponent: Any {
