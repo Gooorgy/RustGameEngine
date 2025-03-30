@@ -77,6 +77,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "assets",
+ "scene",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,6 +146,16 @@ dependencies = [
  "ash",
  "raw-window-handle",
  "raw-window-metal",
+]
+
+[[package]]
+name = "assets"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "nalgebra-glm",
+ "tobj",
+ "vulkan_backend",
 ]
 
 [[package]]
@@ -947,12 +965,14 @@ dependencies = [
 name = "new"
 version = "0.1.0"
 dependencies = [
+ "app",
+ "assets",
  "image",
  "nalgebra",
  "nalgebra-glm",
  "noise",
+ "scene",
  "serde",
- "tobj",
  "typed-arena",
  "vulkan_backend",
  "walkdir",
@@ -1673,6 +1693,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "scene"
+version = "0.1.0"
+dependencies = [
+ "assets",
+ "vulkan_backend",
+]
+
+[[package]]
 name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1897,9 +1925,9 @@ dependencies = [
 
 [[package]]
 name = "tobj"
-version = "4.0.2"
+version = "4.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3bd4ba05f29e4c65b6c0c11a58b6465ffa820bac890d76ad407b4e81d8372e8"
+checksum = "04aca6092e5978e708ee784e8ab9b5cf3cdb598b28f99a2f257446e7081a7025"
 dependencies = [
  "ahash",
 ]

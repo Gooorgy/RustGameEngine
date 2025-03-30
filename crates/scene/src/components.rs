@@ -1,8 +1,27 @@
-use crate::assets::asset_manager::{Asset, AssetManager, MeshAsset};
-use crate::engine_components::app::ComponentRegistration;
+use assets::{Asset, AssetManager, MeshAsset};
 use std::any::Any;
+use std::cell::RefCell;
 use std::rc::Rc;
 use vulkan_backend::scene::Transform;
+
+pub struct ComponentRegistration {
+    pub component: Rc<RefCell<dyn SceneComponent>>,
+    hooks: Vec<u32>,
+}
+
+impl ComponentRegistration {
+    pub fn new(component: impl SceneComponent + 'static) -> Self {
+        Self {
+            component: Rc::new(RefCell::new(component)),
+            hooks: Vec::new(),
+        }
+    }
+
+    pub fn register_hook(&mut self, hook: String) {
+        // Finalize the concept of added lifecycle hooks
+        todo!()
+    }
+}
 
 pub trait SceneComponent: Any {
     fn setup(&self, registration: &mut ComponentRegistration);

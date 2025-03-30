@@ -1,0 +1,10 @@
+[package]
+name = "assets"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tobj = "4.0.2"
+vulkan_backend = { path = "../vulkan_backend" }
+nalgebra = { workspace = true }
+nalgebra-glm = { workspace = true }

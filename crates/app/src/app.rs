@@ -1,6 +1,5 @@
-use crate::assets::asset_manager::{Asset, AssetManager, MeshAsset};
-use crate::engine_components::scene::{SceneComponent, StaticMesh};
-use std::cell::RefCell;
+use assets::{Asset, AssetManager, MeshAsset};
+use scene::{ComponentRegistration, SceneComponent, StaticMesh};
 use std::rc::Rc;
 
 pub struct App {
@@ -50,24 +49,5 @@ impl App {
         }
 
         meshes
-    }
-}
-
-pub struct ComponentRegistration {
-    component: Rc<RefCell<dyn SceneComponent>>,
-    hooks: Vec<Box<dyn Fn(&mut App)>>,
-}
-
-impl ComponentRegistration {
-    pub fn new(component: impl SceneComponent + 'static) -> Self {
-        Self {
-            component: Rc::new(RefCell::new(component)),
-            hooks: Vec::new(),
-        }
-    }
-
-    pub fn register_hook(&mut self, hook: String) {
-        // Finalize the concept of added lifecycle hooks
-        todo!()
     }
 }

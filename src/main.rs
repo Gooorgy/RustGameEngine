@@ -1,17 +1,17 @@
-use new::engine_components::app::App;
-use new::engine_components::scene::StaticMesh;
+use app::App;
 use new::terrain::blocks::block_definitions::{GRASS, NONE, STONE};
 use new::terrain::blocks::blocks::{BlockDefinition, BlockNameSpace, BlockType};
 use new::terrain::terrain::Terrain;
+use scene::StaticMesh;
 use std::collections::HashMap;
 use std::io::Write;
 use std::time::Instant;
+use vulkan_backend::scene::Transform;
+use vulkan_backend::vulkan_backend::VulkanBackend;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 use winit::{application::ApplicationHandler, dpi::LogicalSize};
-use vulkan_backend::scene::Transform;
-use vulkan_backend::vulkan_backend::VulkanBackend;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
@@ -69,7 +69,12 @@ impl ApplicationHandler for AppWindow {
         let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
 
         self.app.init();
-        let mesh_assets = self.app.get_static_meshes().iter().map(|asse| asse.data.mesh.clone()).collect::<Vec<_>>();
+        let mesh_assets = self
+            .app
+            .get_static_meshes()
+            .iter()
+            .map(|asse| asse.data.mesh.clone())
+            .collect::<Vec<_>>();
         vulkan.upload_meshes(mesh_assets, Transform::default().model);
 
         self.vulkan_app = Some(vulkan);

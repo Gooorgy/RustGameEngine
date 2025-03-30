@@ -17,7 +17,9 @@ impl AssetManager {
             None => {
                 let mesh = load_model(path_sting);
                 let mesh_asset = Rc::new(Asset {
-                    data: MeshAsset { mesh: Rc::new(mesh) },
+                    data: MeshAsset {
+                        mesh: Rc::new(mesh),
+                    },
                 });
 
                 self.mesh_assets

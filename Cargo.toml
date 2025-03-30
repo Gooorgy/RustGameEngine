@@ -4,24 +4,26 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tobj = "4.0.2"
 winit = "0.30.3"
 serde = { version = "1.0.204", features = ["derive"] }
 typed-arena = "2.0.2"
 image = { workspace = true }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
-vulkan_backend = { path = "./vulkan_backend" }
+vulkan_backend = { path = "crates/vulkan_backend" }
+app = { path = "crates/app" }
+scene = { path = "crates/scene" }
+assets = { path = "crates/assets" }
+
 noise = "0.9.0"
-
-
 
 [build-dependencies]
 walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "vulkan_backend",
+    "crates/app", "crates/assets", "crates/scene",
+    "crates/vulkan_backend",
 ]
 
 [workspace.dependencies]

@@ -1,0 +1,8 @@
+[package]
+name = "scene"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+assets = { path = "../assets" }
+vulkan_backend = { path = "../vulkan_backend" }

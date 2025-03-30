@@ -1,5 +1,6 @@
 use crate::buffer::AllocatedBuffer;
 use crate::device::DeviceInfo;
+use crate::image_util;
 use crate::image_util::AllocatedImage;
 use ash::vk::{
     Extent3D, Format, ImageAspectFlags, ImageSubresourceRange, ImageTiling, ImageUsageFlags,
@@ -10,7 +11,6 @@ use ash::{vk, Instance};
 use glm::Vec4;
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use serde::Serialize;
-use crate::image_util;
 
 pub struct GPUMeshData {
     pub vertex_buffer: AllocatedBuffer,

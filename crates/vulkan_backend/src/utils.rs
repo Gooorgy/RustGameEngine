@@ -1,9 +1,9 @@
+use crate::device::DeviceInfo;
+use crate::scene::ImageResource;
 use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
 use ash::{vk, Instance};
 use std::mem;
 use std::path::Path;
-use crate::device::DeviceInfo;
-use crate::scene::ImageResource;
 
 pub fn find_memory_type(
     type_filter: u32,
