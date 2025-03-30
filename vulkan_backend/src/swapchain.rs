@@ -1,5 +1,4 @@
 use std::ptr;
-
 use super::{constants, device, surface::SurfaceInfo};
 use ash::{khr, vk};
 

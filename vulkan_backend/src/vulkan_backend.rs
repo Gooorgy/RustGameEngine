@@ -2,16 +2,16 @@ use super::{
     buffer::BufferInfo, device::DeviceInfo, image_util, structs::CameraMvpUbo,
     surface::SurfaceInfo, swapchain::SwapchainInfo, utils,
 };
-use crate::assets::asset_manager::{Asset, MeshAsset};
-use crate::vulkan_render::buffer::AllocatedBuffer;
-use crate::vulkan_render::camera::Camera;
-use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
-use crate::vulkan_render::frame_manager::FrameManager;
-use crate::vulkan_render::image_util::AllocatedImage;
-use crate::vulkan_render::render_objects::draw_objects::Vertex;
-use crate::vulkan_render::structs::{
+use crate::camera::Camera;
+use crate::constants::MAX_FRAMES_IN_FLIGHT;
+use crate::frame_manager::FrameManager;
+use crate::structs::{
     Cascade, CascadeShadowPushConsts, CascadeShadowUbo, GPUMeshData, LightingUbo, ModelDynamicUbo,
 };
+
+use crate::buffer::AllocatedBuffer;
+use crate::image_util::AllocatedImage;
+use crate::render_objects::draw_objects::{Mesh, Vertex};
 use ash::vk::{self, Extent2D, Extent3D, ImageView, PipelineBindPoint, Rect2D, ShaderStageFlags};
 use ash::vk::{ImageAspectFlags, MemoryPropertyFlags};
 use ash::Instance;
@@ -84,16 +84,15 @@ impl VulkanBackend {
 
     pub fn upload_meshes(
         &mut self,
-        meshes: Vec<Rc<Asset<MeshAsset>>>,
+        meshes: Vec<Rc<Mesh>>,
         // Find a better way to pass the model information ...
         model: Mat4,
     ) {
         let mut mesh_data = vec![];
         let mesh_count = meshes.len();
         for mesh in meshes {
-            let s = &mesh.data.mesh;
-            let vertices = &s.vertices;
-            let indices = &s.indices;
+            let vertices = &mesh.vertices;
+            let indices = &mesh.indices;
 
             let vertex_buffer =
                 Self::create_vertex_buffer(&self.instance, &self.device_info, vertices);

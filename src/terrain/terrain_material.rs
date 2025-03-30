@@ -1,5 +1,5 @@
+use vulkan_backend::scene::ImageResource;
 use crate::terrain::blocks::blocks::{BlockNameSpace, BlockType};
-use crate::vulkan_render::scene::ImageResource;
 
 pub enum BlockShader {
     None,

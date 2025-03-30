@@ -1,6 +1,6 @@
-use crate::vulkan_render::scene::ImageResource;
 use glm::Vec3;
 use std::path::Path;
+use vulkan_backend::scene::ImageResource;
 
 #[derive(Debug, Default)]
 pub struct OpaqueMaterial {

@@ -1,5 +1,5 @@
 use super::{device, utils};
-use crate::vulkan_render::device::DeviceInfo;
+use crate::device::DeviceInfo;
 use ash::vk::{BufferUsageFlags, DeviceMemory, DeviceSize, MappedMemoryRange, MemoryPropertyFlags};
 use ash::{vk, Instance};
 use core::panic;

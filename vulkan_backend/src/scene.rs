@@ -1,4 +1,4 @@
-use crate::vulkan_render::render_objects::draw_objects::Mesh;
+use crate::render_objects::draw_objects::Mesh;
 use nalgebra::{Matrix4, Vector3};
 use std::cell::RefCell;
 use std::path::Path;

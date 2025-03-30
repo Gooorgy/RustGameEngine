@@ -1,5 +1,5 @@
-use crate::vulkan_render::device::DeviceInfo;
-use crate::vulkan_render::utils;
+use crate::device::DeviceInfo;
+use crate::utils;
 use ash::vk::{
     DeviceMemory, Extent3D, Format, Image, ImageAspectFlags, ImageCreateInfo,
     ImageSubresourceLayers, ImageTiling, ImageUsageFlags, ImageView, MemoryPropertyFlags,

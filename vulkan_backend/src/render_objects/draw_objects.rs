@@ -1,9 +1,9 @@
-use crate::vulkan_render::device::DeviceInfo;
-use crate::vulkan_render::render_objects::render_batch::Draw;
 use ash::vk;
 use ash::vk::Format;
 use nalgebra::{Vector2, Vector3};
 use std::mem::offset_of;
+use crate::device::DeviceInfo;
+use crate::render_objects::render_batch::Draw;
 
 pub enum Drawable {
     Mesh(Mesh),

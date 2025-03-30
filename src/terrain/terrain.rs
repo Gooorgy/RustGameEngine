@@ -4,10 +4,10 @@ use crate::terrain::constants::{
 };
 use crate::terrain::generator::new_terrain;
 use crate::terrain::terrain_material::VoxelData;
-use crate::vulkan_render::render_objects::draw_objects::{Mesh, Vertex};
-use crate::vulkan_render::structs::TerrainVertex;
 use glm::{vec3, IVec3};
 use std::rc::Rc;
+use vulkan_backend::render_objects::draw_objects::{Mesh, Vertex};
+use vulkan_backend::structs::TerrainVertex;
 
 pub struct Terrain {
     block_registry: Rc<BlockRegistry>,

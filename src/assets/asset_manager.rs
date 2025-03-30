@@ -1,8 +1,8 @@
-use crate::vulkan_render::render_objects::draw_objects::{Mesh, Vertex};
 use nalgebra::{Vector2, Vector3};
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use vulkan_backend::render_objects::draw_objects::{Mesh, Vertex};
 
 pub struct AssetManager {
     image_assets: HashMap<String, Rc<Asset<ImageAsset>>>,
@@ -17,7 +17,7 @@ impl AssetManager {
             None => {
                 let mesh = load_model(path_sting);
                 let mesh_asset = Rc::new(Asset {
-                    data: MeshAsset { mesh },
+                    data: MeshAsset { mesh: Rc::new(mesh) },
                 });
 
                 self.mesh_assets
@@ -49,7 +49,7 @@ pub struct ImageAsset {
 }
 
 pub struct MeshAsset {
-    pub mesh: Mesh,
+    pub mesh: Rc<Mesh>,
 }
 
 fn load_model<P>(path: P) -> Mesh
@@ -80,8 +80,6 @@ where
 
         let tex_coord: Vector2<f32> =
             Vector2::new(mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]);
-
-        //let normal = mesh.normals[i * 3];
 
         let vert = Vertex {
             pos,

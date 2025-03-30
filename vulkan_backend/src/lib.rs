@@ -1,3 +1,5 @@
+extern crate nalgebra_glm as glm;
+
 pub mod buffer;
 mod camera;
 mod constants;

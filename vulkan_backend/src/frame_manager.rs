@@ -1,12 +1,12 @@
-use crate::vulkan_render::buffer::AllocatedBuffer;
-use crate::vulkan_render::constants::MAX_FRAMES_IN_FLIGHT;
-use crate::vulkan_render::descriptor::DescriptorManager;
-use crate::vulkan_render::device::DeviceInfo;
-use crate::vulkan_render::graphics_pipeline::PipelineInfo;
-use crate::vulkan_render::image_util::AllocatedImage;
-use crate::vulkan_render::structs::{CameraMvpUbo, CascadeShadowUbo, LightingUbo, ModelDynamicUbo};
-use crate::vulkan_render::utils;
-use crate::vulkan_render::utils::get_buffer_alignment;
+use crate::buffer::AllocatedBuffer;
+use crate::constants::MAX_FRAMES_IN_FLIGHT;
+use crate::descriptor::DescriptorManager;
+use crate::device::DeviceInfo;
+use crate::graphics_pipeline::PipelineInfo;
+use crate::image_util::AllocatedImage;
+use crate::structs::{CameraMvpUbo, CascadeShadowUbo, LightingUbo, ModelDynamicUbo};
+use crate::utils;
+use crate::utils::get_buffer_alignment;
 use ash::vk::{
     BufferUsageFlags, DescriptorSet, Extent2D, Format, ImageAspectFlags, ImageView,
     MemoryPropertyFlags, Sampler,
