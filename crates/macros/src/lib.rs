@@ -11,9 +11,9 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         syn::Fields::Named(FieldsNamed { named, .. }) => named,
         _ => panic!("Expected a struct with named fields"),
     };
-    
+
     let expanded_struct = quote! {
-        struct #struct_name {
+        pub struct #struct_name {
             transform: Transform,
             #original_fields
          }
