@@ -833,6 +833,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1697,6 +1705,7 @@ name = "scene"
 version = "0.1.0"
 dependencies = [
  "assets",
+ "macros",
  "vulkan_backend",
 ]
 

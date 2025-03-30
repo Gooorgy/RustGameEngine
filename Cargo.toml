@@ -22,7 +22,7 @@ walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "crates/app", "crates/assets", "crates/scene",
+    "crates/app", "crates/assets", "crates/macros", "crates/scene",
     "crates/vulkan_backend",
 ]
 

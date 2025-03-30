@@ -1,4 +1,5 @@
 use assets::{Asset, AssetManager, MeshAsset};
+use macros::component;
 use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -23,20 +24,20 @@ impl ComponentRegistration {
     }
 }
 
-pub trait SceneComponent: Any {
+pub trait SceneComponent: Any + Component {
     fn setup(&self, registration: &mut ComponentRegistration);
 
-    fn init_assets(&mut self, asset_manager: &mut AssetManager) {
+    fn init_assets(&mut self, _asset_manager: &mut AssetManager) {
         // optional
     }
 
     fn as_any(&self) -> &dyn Any;
 }
 
+#[component]
 pub struct StaticMesh {
     mesh_path: String,
     mesh_asset: Option<Rc<Asset<MeshAsset>>>,
-    transform: Transform,
 }
 
 impl SceneComponent for StaticMesh {
@@ -69,5 +70,11 @@ impl StaticMesh {
         };
 
         x.clone()
+    }
+}
+
+pub trait Component {
+    fn get_transform(&self) -> &Transform {
+        todo!()
     }
 }
