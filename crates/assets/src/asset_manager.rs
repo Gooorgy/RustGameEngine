@@ -2,6 +2,7 @@ use nalgebra::{Vector2, Vector3};
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use tobj::LoadError;
 use vulkan_backend::render_objects::draw_objects::{Mesh, Vertex};
 
 pub struct AssetManager {
@@ -11,21 +12,42 @@ pub struct AssetManager {
 
 impl AssetManager {
     pub fn get_mesh<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<MeshAsset>>> {
-        let path_sting = path.as_ref().to_str().unwrap();
-        match self.mesh_assets.get(path_sting) {
-            Some(mesh_asset) => Some(Rc::clone(mesh_asset)),
-            None => {
-                let mesh = load_model(path_sting);
-                let mesh_asset = Rc::new(Asset {
-                    data: MeshAsset {
-                        mesh: Rc::new(mesh),
-                    },
-                });
+        let path_str = path.as_ref().to_str()?.to_string();
 
-                self.mesh_assets
-                    .insert(path_sting.parse().unwrap(), mesh_asset);
+        if let Some(mesh_asset) = self.mesh_assets.get(&path_str) {
+            return Some(Rc::clone(mesh_asset));
+        }
 
-                self.get_mesh(path)
+        match load_model(path) {
+            Ok(mesh_asset) => {
+                let mesh_asset_rc = Rc::new(Asset { data: mesh_asset });
+                self.mesh_assets.insert(path_str, Rc::clone(&mesh_asset_rc));
+                Some(mesh_asset_rc)
+            }
+            Err(e) => {
+                eprintln!("AssetManager: Failed to load image {}", e);
+                None
+            }
+        }
+    }
+
+    pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<ImageAsset>>> {
+        let path_str = path.as_ref().to_str()?.to_string();
+
+        if let Some(image_asset) = self.image_assets.get(&path_str) {
+            return Some(Rc::clone(image_asset));
+        }
+
+        match load_image(path) {
+            Ok(image_asset) => {
+                let image_asset_rc = Rc::new(Asset { data: image_asset });
+                self.image_assets
+                    .insert(path_str, Rc::clone(&image_asset_rc));
+                Some(image_asset_rc)
+            }
+            Err(e) => {
+                eprintln!("AssetManager: Failed to load image {}", e);
+                None
             }
         }
     }
@@ -45,7 +67,7 @@ pub struct Asset<T> {
 }
 
 pub struct ImageAsset {
-    pub image_data: Vec<u8>,
+    pub image_data: Rc<Vec<u8>>,
     pub width: u32,
     pub height: u32,
 }
@@ -54,12 +76,11 @@ pub struct MeshAsset {
     pub mesh: Rc<Mesh>,
 }
 
-fn load_model<P>(path: P) -> Mesh
+fn load_model<P>(path: P) -> Result<MeshAsset, LoadError>
 where
     P: AsRef<Path>,
 {
-    let (models, _mat) =
-        tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS).expect("failed to load model file");
+    let (models, _mat) = tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS)?;
 
     let model = models.first().unwrap();
     let mesh = &model.mesh;
@@ -94,8 +115,27 @@ where
         vertices.push(vert);
     }
 
-    Mesh {
-        vertices,
-        indices: mesh.indices.clone(),
-    }
+    Ok(MeshAsset {
+        mesh: Rc::new(Mesh {
+            vertices,
+            indices: mesh.indices.clone(),
+        }),
+    })
+}
+
+pub fn load_image<P>(path: P) -> Result<ImageAsset, image::ImageError>
+where
+    P: AsRef<Path>,
+{
+    let dyn_image = image::open(path)?;
+    let image_width = dyn_image.width();
+    let image_height = dyn_image.height();
+
+    let image_data = dyn_image.to_rgba8().into_raw();
+
+    Ok(ImageAsset {
+        image_data: Rc::new(image_data),
+        width: image_width,
+        height: image_height,
+    })
 }

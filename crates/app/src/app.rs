@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 pub struct App {
     components: Vec<ComponentRegistration>,
-    asset_manager: AssetManager,
+    pub asset_manager: AssetManager,
 }
 
 impl App {

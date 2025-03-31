@@ -8,3 +8,4 @@ tobj = "4.0.2"
 vulkan_backend = { path = "../vulkan_backend" }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
+image = { workspace = true }

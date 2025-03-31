@@ -152,6 +152,7 @@ dependencies = [
 name = "assets"
 version = "0.1.0"
 dependencies = [
+ "image",
  "nalgebra",
  "nalgebra-glm",
  "tobj",
@@ -850,6 +851,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "material"
+version = "0.1.0"
+dependencies = [
+ "assets",
+]
+
+[[package]]
 name = "matrixmultiply"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -976,6 +984,7 @@ dependencies = [
  "app",
  "assets",
  "image",
+ "material",
  "nalgebra",
  "nalgebra-glm",
  "noise",

@@ -14,6 +14,7 @@ vulkan_backend = { path = "crates/vulkan_backend" }
 app = { path = "crates/app" }
 scene = { path = "crates/scene" }
 assets = { path = "crates/assets" }
+material = { path = "crates/material" }
 
 noise = "0.9.0"
 
@@ -22,7 +23,7 @@ walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "crates/app", "crates/assets", "crates/macros", "crates/scene",
+    "crates/app", "crates/assets", "crates/macros", "crates/material", "crates/scene",
     "crates/vulkan_backend",
 ]
 
