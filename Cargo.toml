@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-winit = "0.30.3"
+winit = "0.30.9"
 serde = { version = "1.0.204", features = ["derive"] }
 typed-arena = "2.0.2"
 image = { workspace = true }
@@ -15,6 +15,7 @@ app = { path = "crates/app" }
 scene = { path = "crates/scene" }
 assets = { path = "crates/assets" }
 material = { path = "crates/material" }
+core = { path = "crates/core" }
 
 noise = "0.9.0"
 
@@ -23,7 +24,7 @@ walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "crates/app", "crates/assets", "crates/macros", "crates/material", "crates/scene",
+    "crates/app", "crates/assets", "crates/core", "crates/macros", "crates/material", "crates/scene",
     "crates/vulkan_backend",
 ]
 

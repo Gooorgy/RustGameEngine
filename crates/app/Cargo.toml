@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 assets = { path = "../assets" }
 scene = { path = "../scene" }
+core = { path = "../core" }
+vulkan_backend = { path = "../vulkan_backend" }
+
+winit = "0.30.9"

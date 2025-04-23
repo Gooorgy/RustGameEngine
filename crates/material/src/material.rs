@@ -71,11 +71,47 @@ impl Default for PbrMaterialInstance {
     }
 }
 
+impl PbrMaterialInstance {
+    pub fn with_albedo_texture(mut self, albedo_texture: &str) -> Self {
+        self.albedo_texture = Some(albedo_texture.to_string());
+        self
+    }
+
+    pub fn with_normal_texture(mut self, normal_texture: &str) -> Self {
+        self.albedo_texture = Some(normal_texture.to_string());
+        self
+    }
+
+    pub fn with_metallic_texture(mut self, metallic_texture: &str) -> Self {
+        self.metallic_texture = Some(metallic_texture.to_string());
+        self
+    }
+
+    pub fn with_emissive_texture(mut self, emissive_texture: &str) -> Self {
+        self.emissive_texture = Some(emissive_texture.to_string());
+        self
+    }
+
+    pub fn with_roughness_texture(mut self, roughness_texture: &str) -> Self {
+        self.roughness_texture = Some(roughness_texture.to_string());
+        self
+    }
+}
+
 impl Default for Material {
     fn default() -> Self {
         Material {
             material_type: MaterialType::Pbr(PbrMaterialInstance::default()),
             name: String::from("material"),
+        }
+    }
+}
+
+impl Material {
+    pub fn pbr(name: &str, material_instance: PbrMaterialInstance) -> Self {
+        Material {
+            material_type: MaterialType::Pbr(material_instance),
+            name: String::from(name),
         }
     }
 }

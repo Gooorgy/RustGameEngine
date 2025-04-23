@@ -80,7 +80,7 @@ fn load_model<P>(path: P) -> Result<MeshAsset, LoadError>
 where
     P: AsRef<Path>,
 {
-    let (models, _mat) = tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS)?;
+    let (models, mat) = tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS)?;
 
     let model = models.first().unwrap();
     let mesh = &model.mesh;

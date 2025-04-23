@@ -1,53 +1,31 @@
-use assets::{Asset, AssetManager, MeshAsset};
-use scene::{ComponentRegistration, SceneComponent, StaticMesh};
-use std::rc::Rc;
+use crate::AppHandler::AppHandler;
+use core::EngineContext;
+use winit::event_loop::EventLoop;
 
 pub struct App {
-    components: Vec<ComponentRegistration>,
-    pub asset_manager: AssetManager,
+    event_loop: EventLoop<()>,
+    app_handler: AppHandler,
 }
 
 impl App {
-    pub fn new() -> App {
+    pub fn new(engine_context: EngineContext) -> App {
+        let event_loop = EventLoop::new().expect("Failed to create event loop");
+
+        let app_handler = AppHandler::new(engine_context);
+
         Self {
-            components: Vec::new(),
-            asset_manager: AssetManager::default(),
-        }
-    }
-    pub fn register_component(
-        &mut self,
-        component: impl SceneComponent + 'static,
-    ) -> &ComponentRegistration {
-        let registration = ComponentRegistration::new(component);
-        self.add_registration(registration)
-    }
-
-    pub fn init(&mut self) {
-        for component in self.components.iter_mut() {
-            component
-                .component
-                .borrow_mut()
-                .init_assets(&mut self.asset_manager);
+            event_loop,
+            app_handler,
         }
     }
 
-    fn add_registration(&mut self, registration: ComponentRegistration) -> &ComponentRegistration {
-        self.components.push(registration);
-        &self.components[self.components.len() - 1]
+    pub fn run(mut self) {        
+        self.event_loop
+            .run_app(&mut self.app_handler)
+            .expect("Failed to run event loop");
     }
 
-    pub fn get_static_meshes(&self) -> Vec<Rc<Asset<MeshAsset>>> {
-        let mut meshes = vec![];
-        for component in &self.components {
-            let borrow = component.component.borrow();
-            let static_mesh = match borrow.as_any().downcast_ref::<StaticMesh>() {
-                Some(s) => s.get_mesh(),
-                None => continue,
-            };
-
-            meshes.push(static_mesh);
-        }
-
-        meshes
+    pub fn get_from_context<T: 'static>(&mut self) -> Option<&mut T> {
+        self.app_handler.get_from_context::<T>()
     }
 }
