@@ -6,6 +6,7 @@ use material::Material;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::rc::Rc;
 use vulkan_backend::scene::Transform;
 
@@ -37,10 +38,7 @@ impl ComponentRegistration {
 }
 
 pub trait SceneComponent: Any + Component {
-    fn setup(
-        &mut self,
-        engine_context: &mut EngineContext,
-    );
+    fn setup(&mut self, engine_context: &EngineContext);
 
     fn as_any(&self) -> &dyn Any;
 }
@@ -53,12 +51,12 @@ pub struct StaticMesh {
 }
 
 impl SceneComponent for StaticMesh {
-    fn setup(
-        &mut self,
-        engine_context: &mut EngineContext,
-    ) {
-        let asset_manager = engine_context.get::<AssetManager>().unwrap();
+    fn setup(&mut self, engine_context: &EngineContext) {
+        let mut binding = engine_context.get_mut::<AssetManager>().unwrap();
+        let asset_manager = binding.deref_mut();
         self.init_assets(asset_manager);
+        
+        println!("Initializing assets...");
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -72,11 +70,7 @@ impl StaticMesh {
             Some(mesh) => Some(mesh),
             _ => panic!(),
         };
-
-        if let Some(material) = self.material.as_ref() {}
-
-        let am = AssetManager::default();
-        let x = Rc::new(RefCell::new(am));
+        println!("Setup Mesh")
     }
 }
 

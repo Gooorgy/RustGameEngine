@@ -1,15 +1,16 @@
 use core::EngineContext;
 use scene::SceneManager;
+use std::cell::RefMut;
 use std::io::Write;
 use std::time::Instant;
-use vulkan_backend::scene::Transform;
 use vulkan_backend::vulkan_backend::VulkanBackend;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::error::OsError;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
+use vulkan_backend::scene::Transform;
 
 // Replace this with env lookup?
 const WINDOW_TITLE: &str = "Vulkan Test";
@@ -41,8 +42,8 @@ impl AppHandler {
         event_loop.create_window(window_attributes)
     }
 
-    pub fn get_from_context<T: 'static>(&mut self) -> Option<&mut T> {
-        self.engine_context.get::<T>()
+    pub fn get_from_context<T: 'static>(&mut self) -> Option<RefMut<T>> {
+        self.engine_context.get_mut::<T>()
     }
 }
 
@@ -57,8 +58,10 @@ impl ApplicationHandler for AppHandler {
             let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
 
             // TODO: This is bad. but works for now...
-            let scene_manager = self.engine_context.get::<SceneManager>().unwrap();
-            let mesh_assets = scene_manager
+            let mut scene_manager = self.engine_context.get_mut::<SceneManager>().unwrap();
+            scene_manager.init_scene(&self.engine_context);
+
+                      let mesh_assets = scene_manager
                 .get_static_meshes()
                 .iter()
                 .map(|asse| asse.data.mesh.clone())
@@ -97,6 +100,24 @@ impl ApplicationHandler for AppHandler {
                 }
                 _ => panic!("Vulkan backend not initialized"),
             },
+            _ => {}
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        let vulkan_app = self.vulkan_backend.as_mut().unwrap();
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                vulkan_app
+                    .camera
+                    .process_cursor_moved(delta.0 as f32, delta.1 as f32);
+            }
+            DeviceEvent::Key(input) => vulkan_app.camera.process_keyboard_event(input),
             _ => {}
         }
     }

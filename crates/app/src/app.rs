@@ -1,5 +1,6 @@
-use crate::AppHandler::AppHandler;
+use crate::app_handler::AppHandler;
 use core::EngineContext;
+use std::cell::RefMut;
 use winit::event_loop::EventLoop;
 
 pub struct App {
@@ -19,13 +20,13 @@ impl App {
         }
     }
 
-    pub fn run(mut self) {        
+    pub fn run(mut self) {
         self.event_loop
             .run_app(&mut self.app_handler)
             .expect("Failed to run event loop");
     }
 
-    pub fn get_from_context<T: 'static>(&mut self) -> Option<&mut T> {
+    pub fn get_from_context<T: 'static>(&mut self) -> Option<RefMut<T>> {
         self.app_handler.get_from_context::<T>()
     }
 }
