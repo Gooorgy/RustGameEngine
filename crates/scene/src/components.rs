@@ -52,10 +52,10 @@ pub struct StaticMesh {
 
 impl SceneComponent for StaticMesh {
     fn setup(&mut self, engine_context: &EngineContext) {
-        let mut binding = engine_context.get_mut::<AssetManager>().unwrap();
+        let mut binding = engine_context.expect_system_mut::<AssetManager>();
         let asset_manager = binding.deref_mut();
         self.init_assets(asset_manager);
-        
+
         println!("Initializing assets...");
     }
 

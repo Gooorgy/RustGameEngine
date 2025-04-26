@@ -3,6 +3,7 @@ use scene::SceneManager;
 use std::cell::RefMut;
 use std::io::Write;
 use std::time::Instant;
+use vulkan_backend::scene::Transform;
 use vulkan_backend::vulkan_backend::VulkanBackend;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -10,7 +11,6 @@ use winit::error::OsError;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
-use vulkan_backend::scene::Transform;
 
 // Replace this with env lookup?
 const WINDOW_TITLE: &str = "Vulkan Test";
@@ -34,16 +34,16 @@ impl AppHandler {
         }
     }
 
-    pub fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Window, OsError> {
+    fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<Window, OsError> {
         let window_attributes = Window::default_attributes()
             .with_title(WINDOW_TITLE)
             .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
 
         event_loop.create_window(window_attributes)
     }
-
-    pub fn get_from_context<T: 'static>(&mut self) -> Option<RefMut<T>> {
-        self.engine_context.get_mut::<T>()
+    
+    pub fn get_from_context<T: 'static>(&self) -> RefMut<T> {
+        self.engine_context.expect_system_mut::<T>()
     }
 }
 
@@ -58,10 +58,10 @@ impl ApplicationHandler for AppHandler {
             let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
 
             // TODO: This is bad. but works for now...
-            let mut scene_manager = self.engine_context.get_mut::<SceneManager>().unwrap();
+            let mut scene_manager = self.engine_context.expect_system_mut::<SceneManager>();
             scene_manager.init_scene(&self.engine_context);
 
-                      let mesh_assets = scene_manager
+            let mesh_assets = scene_manager
                 .get_static_meshes()
                 .iter()
                 .map(|asse| asse.data.mesh.clone())
@@ -75,7 +75,7 @@ impl ApplicationHandler for AppHandler {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
         match event {

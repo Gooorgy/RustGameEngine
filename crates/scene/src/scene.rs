@@ -1,16 +1,7 @@
 use crate::{ComponentRegistration, SceneComponent, StaticMesh};
-use assets::{Asset, AssetManager, MeshAsset};
+use assets::{Asset, MeshAsset};
 use core::EngineContext;
 use std::rc::Rc;
-
-pub trait Setup {
-    fn setup(&mut self, context: &mut SetupContext);
-}
-
-pub struct SetupContext<'a> {
-    pub asset_manager: &'a mut AssetManager,
-    pub component_registration: &'a mut ComponentRegistration,
-}
 
 pub struct SceneManager {
     pub scene_components: Vec<ComponentRegistration>,
@@ -39,8 +30,6 @@ impl SceneManager {
     }
 
     pub fn init_scene(&mut self, engine_context: &EngineContext) {
-        println!("Initializing scene... {0}", self.scene_components.len());
-
         for component in &self.scene_components {
             component.component.borrow_mut().setup(engine_context);
         }
