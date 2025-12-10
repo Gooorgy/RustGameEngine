@@ -7,6 +7,8 @@ edition = "2021"
 assets = { path = "../assets" }
 scene = { path = "../scene" }
 core = { path = "../core" }
-vulkan_backend = { path = "../vulkan_backend" }
+rendering_backend = { path = "../rendering_backend" }
+render_utils = { path = "../renderers/render_utils" }
+
 
 winit = "0.30.9"

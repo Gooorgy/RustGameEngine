@@ -14,10 +14,10 @@ layout(location = 3) in vec3 inNormal;
 layout(location = 2) in vec3 inPos;
 
 
-layout(binding = 2) uniform sampler2D texSampler;
+layout(binding = 1) uniform sampler2D texSampler;
 
 void main() {
-    outColor = texture(texSampler, fragTexCoord);
+    outColor = vec4(1.0, 0.0, 0.0, 1.0);//texture(texSampler, fragTexCoord);
     outNormal = vec4(normalize(inNormal), 1.0);
     outPos = vec4(inPos, 1.0);
     //outColor = vec4(fragColor, 1.0);

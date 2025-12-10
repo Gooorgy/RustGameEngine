@@ -11,11 +11,13 @@ image = { workspace = true }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
 vulkan_backend = { path = "crates/vulkan_backend" }
+rendering_backend = { path = "crates/rendering_backend" }
 app = { path = "crates/app" }
 scene = { path = "crates/scene" }
 assets = { path = "crates/assets" }
 material = { path = "crates/material" }
 core = { path = "crates/core" }
+
 
 noise = "0.9.0"
 
@@ -24,7 +26,7 @@ walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "crates/app", "crates/assets", "crates/core", "crates/macros", "crates/material", "crates/scene",
+    "crates/app", "crates/assets", "crates/common", "crates/core", "crates/imgui", "crates/macros", "crates/material", "crates/renderers/render_utils", "crates/rendering_backend", "crates/scene",
     "crates/vulkan_backend",
 ]
 

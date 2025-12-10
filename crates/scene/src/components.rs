@@ -1,14 +1,11 @@
-use assets::{Asset, AssetManager, MeshAsset};
+use assets::{AssetManager, MaterialHandle, MeshHandle, Resolve};
 
 use core::EngineContext;
 use macros::component;
-use material::Material;
+use rendering_backend::transform::Transform;
 use std::any::Any;
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ops::DerefMut;
 use std::rc::Rc;
-use vulkan_backend::scene::Transform;
 
 // TODO: Define
 #[derive(Eq, Hash, PartialEq)]
@@ -16,24 +13,29 @@ pub enum LifeCycleHook {
     Init,
     Update,
 }
+type Hook = fn(&mut EngineContext);
+
+pub struct ResolvedComponent<T: Resolve> {
+    pub data: T,             // original unresolved
+    pub handles: T::Handles, // resolved asset handles
+}
+
+impl<T: Resolve + Clone> ResolvedComponent<T> {
+    pub fn new(data: T, assets: &mut AssetManager) -> Self {
+        let handles = data.resolve(assets);
+        Self { data, handles }
+    }
+}
 
 pub struct ComponentRegistration {
     pub component: Rc<RefCell<dyn SceneComponent>>,
-    pub hooks: HashMap<LifeCycleHook, Hook>,
 }
-
-type Hook = fn(&mut EngineContext);
 
 impl ComponentRegistration {
     pub fn new(component: impl SceneComponent + 'static) -> Self {
         Self {
             component: Rc::new(RefCell::new(component)),
-            hooks: HashMap::new(),
         }
-    }
-
-    pub fn register_hook(&mut self, life_cycle: LifeCycleHook, hook_fn: Hook) {
-        self.hooks.insert(life_cycle, hook_fn);
     }
 }
 
@@ -43,34 +45,39 @@ pub trait SceneComponent: Any + Component {
     fn as_any(&self) -> &dyn Any;
 }
 
+pub struct StaticMeshHandles {
+    pub mesh: MeshHandle,
+    pub material: Option<MaterialHandle>,
+}
+
 #[component]
+#[derive(Clone)]
 pub struct StaticMesh {
     mesh_path: String,
-    mesh_asset: Option<Rc<Asset<MeshAsset>>>,
-    material: Option<Rc<Material>>,
+    material_path: Option<String>,
 }
 
 impl SceneComponent for StaticMesh {
-    fn setup(&mut self, engine_context: &EngineContext) {
-        let mut binding = engine_context.expect_system_mut::<AssetManager>();
-        let asset_manager = binding.deref_mut();
-        self.init_assets(asset_manager);
-
-        println!("Initializing assets...");
-    }
+    fn setup(&mut self, engine_context: &EngineContext) {}
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 }
 
-impl StaticMesh {
-    pub fn init_assets(&mut self, asset_manager: &mut AssetManager) {
-        self.mesh_asset = match asset_manager.get_mesh(&self.mesh_path) {
-            Some(mesh) => Some(mesh),
-            _ => panic!(),
-        };
-        println!("Setup Mesh")
+impl Resolve for StaticMesh {
+    type Handles = StaticMeshHandles;
+
+    fn resolve(&self, asset_manager: &mut AssetManager) -> Self::Handles {
+        let mesh_handle = asset_manager
+            .get_mesh(&self.mesh_path)
+            .expect("Mesh not found")
+            .id;
+        let material_handle = None;
+        StaticMeshHandles {
+            mesh: mesh_handle,
+            material: material_handle,
+        }
     }
 }
 
@@ -78,28 +85,23 @@ impl StaticMesh {
     pub fn new(mesh_path: String) -> Self {
         Self {
             mesh_path,
-            mesh_asset: None,
             transform: Transform::default(),
-            material: None,
+            material_path: None,
         }
     }
-
-    pub fn with_material(&mut self, material: Material) {
-        self.material = Some(Rc::new(material));
+    
+    pub fn with_transform(mut self, transform: Transform) -> Self {
+        self.transform = transform;
+        self
     }
 
-    pub fn get_mesh(&self) -> Rc<Asset<MeshAsset>> {
-        let x = match &self.mesh_asset {
-            Some(mesh) => mesh,
-            _ => panic!("Todo?"),
-        };
-
-        x.clone()
+    pub fn with_material(&mut self, material_path: String) {
+        self.material_path = Some(material_path);
     }
 }
 
 pub trait Component {
-    fn get_transform(&self) -> &Transform {
+    fn get_transform(&self) -> Transform {
         todo!()
     }
 }

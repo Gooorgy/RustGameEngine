@@ -6,9 +6,15 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 proj;
 } ubo;
 
-layout(binding = 1) uniform UboInstance {
-    mat4 model;
-} uboInstance;
+
+
+layout(std430, binding = 1) readonly buffer Transforms {
+    mat4 model[];
+};
+
+layout(push_constant) uniform Push {
+    uint object_index;
+} push;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
@@ -25,12 +31,14 @@ out gl_PerVertex {
 };
 
 void main() {
-    mat3 normalMatrix = transpose(mat3(inverse(uboInstance.model)));
+    mat4 modelMat = model[push.object_index];
+
+    mat3 normalMatrix = transpose(mat3(inverse(modelMat)));
     fragNormal = normalize(normalMatrix * inNormal);
 
-    vec4 worldPosition = uboInstance.model * vec4(inPosition, 1.0);
+    vec4 worldPosition = modelMat * vec4(inPosition, 1.0);
     worldPos = worldPosition.xyz;
-    gl_Position = ubo.proj * ubo.view * vec4(inPosition, 1.0);
+    gl_Position = ubo.proj * ubo.view * modelMat * vec4(inPosition, 1.0);
     fragColor = inColor;
     fragTexCoord = inTexCoord;
 }

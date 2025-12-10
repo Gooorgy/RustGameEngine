@@ -1,0 +1,16 @@
+[package]
+name = "rendering_backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "2.10.0"
+ash = "0.38.0"
+ash-window = "0.13.0"
+winit = "0.30.3"
+serde = { version = "1.0.217", features = ["derive"] }
+nalgebra = { workspace = true }
+nalgebra-glm = { workspace = true }
+bincode = { workspace = true }
+image = { workspace = true }
+num = { workspace = true }

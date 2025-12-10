@@ -12,6 +12,11 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => panic!("Expected a struct with named fields"),
     };
 
+    let field_idents: Vec<_> = original_fields
+        .iter()
+        .filter_map(|f| f.ident.as_ref()) // skip unnamed fields (tuple structs)
+        .collect();
+
     let expanded_struct = quote! {
         pub struct #struct_name {
             transform: Transform,
@@ -21,8 +26,21 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let expanded_impl = quote! {
         impl Component for #struct_name {
-            fn get_transform(&self) -> &Transform {
-                &self.transform
+            fn get_transform(&self) -> Transform {
+                self.transform
+            }
+        }
+    };
+
+    let clone_impl = quote! {
+        impl Clone for #struct_name {
+            fn clone(&self) -> Self {
+                Self {
+                    #(
+                        #field_idents: self.#field_idents.clone(),
+                    )*
+                    transform: self.transform.clone(),
+                }
             }
         }
     };
@@ -30,7 +48,6 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(quote! {
         #expanded_struct
         #expanded_impl
+        #clone_impl
     })
 }
-
-

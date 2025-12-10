@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 tobj = "4.0.2"
-vulkan_backend = { path = "../vulkan_backend" }
+common = { path = "../common" }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
 image = { workspace = true }
+rendering_backend = { path = "../rendering_backend" }

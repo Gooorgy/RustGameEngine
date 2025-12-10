@@ -1,9 +1,8 @@
-use crate::device::DeviceInfo;
-use crate::scene::ImageResource;
 use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
 use ash::{vk, Instance};
 use std::mem;
 use std::path::Path;
+use crate::backend_impl::device::DeviceInfo;
 
 pub fn find_memory_type(
     type_filter: u32,
@@ -69,24 +68,24 @@ pub fn create_texture_sampler(
     }
 }
 
-pub fn load_texture<P>(path: P) -> ImageResource
-where
-    P: AsRef<Path>,
-{
-    let dyn_image = image::open(path).unwrap();
-    let image_width = dyn_image.width();
-    let image_height = dyn_image.height();
-
-    let image_data = match &dyn_image {
-        image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => {
-            dyn_image.to_rgba8().into_raw()
-        }
-        _ => vec![],
-    };
-
-    ImageResource {
-        image_data,
-        width: image_width,
-        height: image_height,
-    }
-}
+// pub fn load_texture<P>(path: P) -> ImageResource
+// where
+//     P: AsRef<Path>,
+// {
+//     let dyn_image = image::open(path).unwrap();
+//     let image_width = dyn_image.width();
+//     let image_height = dyn_image.height();
+// 
+//     let image_data = match &dyn_image {
+//         image::DynamicImage::ImageLuma8(_) | image::DynamicImage::ImageRgb8(_) => {
+//             dyn_image.to_rgba8().into_raw()
+//         }
+//         _ => vec![],
+//     };
+// 
+//     ImageResource {
+//         image_data,
+//         width: image_width,
+//         height: image_height,
+//     }
+// }

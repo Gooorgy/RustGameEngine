@@ -1,0 +1,8 @@
+[package]
+name = "render_utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rendering_backend = { path = "../../rendering_backend" }
+nalgebra-glm = { workspace = true }

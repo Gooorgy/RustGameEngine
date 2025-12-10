@@ -101,14 +101,14 @@ impl FrameManager {
         let descriptor_manager = DescriptorManager::new(&device_info.logical_device, max_frames);
 
         let mut frame_data = vec![];
-        let pipeline = PipelineInfo::new_gbuffer_pipeline(
+        let pipeline = PipelineInfo::new_gbuffer_pipeline_old(
             &device_info.logical_device,
             &descriptor_manager.global_gbuffer_layout,
         );
-        let lighting_pipeline = PipelineInfo::new_lighing_pipeline(
-            &device_info.logical_device,
-            &descriptor_manager.global_lighting_layout,
-        );
+        // let lighting_pipeline = PipelineInfo::new_lighing_pipeline(
+        //     &device_info.logical_device,
+        //     &descriptor_manager.global_lighting_layout,
+        // );
 
         let shadow_map_pipeline = PipelineInfo::create_shadow_map_pipeline(
             &device_info.logical_device,
@@ -223,8 +223,8 @@ impl FrameManager {
             frames: frame_data,
             current_frame: 0,
             frame_count: max_frames,
-            gbuffer_pipeline: pipeline,
-            lighting_pipeline,
+            gbuffer_pipeline: pipeline.clone(),
+            lighting_pipeline: pipeline,
             shadow_map_pipeline,
             line_pipeline,
             model_ubo_alignment,

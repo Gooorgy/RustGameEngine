@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 assets = { path = "../assets" }
-vulkan_backend = { path = "../vulkan_backend" }
+rendering_backend = { path = "../rendering_backend" }
 macros = { path = "../macros" }
 material = { path = "../material" }
 core = { path = "../core" }

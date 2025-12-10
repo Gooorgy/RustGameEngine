@@ -1,71 +1,14 @@
+use common::AssetId;
 use nalgebra::{Vector2, Vector3};
+use rendering_backend::backend_impl::resource_manager::Mesh;
+use rendering_backend::vertex::Vertex;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 use tobj::LoadError;
-use vulkan_backend::render_objects::draw_objects::{Mesh, Vertex};
 
-pub struct AssetManager {
-    image_assets: HashMap<String, Rc<Asset<ImageAsset>>>,
-    mesh_assets: HashMap<String, Rc<Asset<MeshAsset>>>,
-}
-
-impl AssetManager {
-    pub fn get_mesh<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<MeshAsset>>> {
-        let path_str = path.as_ref().to_str()?.to_string();
-
-        if let Some(mesh_asset) = self.mesh_assets.get(&path_str) {
-            return Some(Rc::clone(mesh_asset));
-        }
-
-        match load_model(path) {
-            Ok(mesh_asset) => {
-                let mesh_asset_rc = Rc::new(Asset { data: mesh_asset });
-                self.mesh_assets.insert(path_str, Rc::clone(&mesh_asset_rc));
-                Some(mesh_asset_rc)
-            }
-            Err(e) => {
-                eprintln!("AssetManager: Failed to load image {}", e);
-                None
-            }
-        }
-    }
-
-    pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<ImageAsset>>> {
-        let path_str = path.as_ref().to_str()?.to_string();
-
-        if let Some(image_asset) = self.image_assets.get(&path_str) {
-            return Some(Rc::clone(image_asset));
-        }
-
-        match load_image(path) {
-            Ok(image_asset) => {
-                let image_asset_rc = Rc::new(Asset { data: image_asset });
-                self.image_assets
-                    .insert(path_str, Rc::clone(&image_asset_rc));
-                Some(image_asset_rc)
-            }
-            Err(e) => {
-                eprintln!("AssetManager: Failed to load image {}", e);
-                None
-            }
-        }
-    }
-}
-
-impl Default for AssetManager {
-    fn default() -> Self {
-        Self {
-            mesh_assets: HashMap::new(),
-            image_assets: HashMap::new(),
-        }
-    }
-}
-
-pub struct Asset<T> {
-    pub data: T,
-}
-
+// Marker types
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ImageAsset {
     pub image_data: Rc<Vec<u8>>,
     pub width: u32,
@@ -76,13 +19,119 @@ pub struct MeshAsset {
     pub mesh: Rc<Mesh>,
 }
 
+pub struct MaterialAsset;
+
+// Convenient aliases
+
+pub type MeshHandle = AssetId<MeshAsset>;
+pub type MaterialHandle = AssetId<MaterialAsset>;
+pub type ImageHandle = AssetId<ImageAsset>;
+
+pub struct AssetManager {
+    path_to_mesh_id: HashMap<String, MeshHandle>,
+    path_to_image_id: HashMap<String, ImageHandle>,
+
+    id_to_image: HashMap<ImageHandle, Rc<Asset<ImageAsset>>>,
+    id_to_mesh: HashMap<MeshHandle, Rc<Asset<MeshAsset>>>,
+    next_id: u64,
+}
+
+impl AssetManager {
+    pub fn get_mesh<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<MeshAsset>>> {
+        let path_str = path.as_ref().to_string_lossy().into_owned(); // Always safe & owned
+
+        if let Some(mesh_asset) = self.path_to_mesh_id.get(&path_str) {
+            return self.id_to_mesh.get(mesh_asset).map(|x| Rc::clone(x));
+        }
+
+        match load_model(path) {
+            Ok(mesh_asset) => {
+                let asset_id = AssetId::new(self.next_id);
+                let mesh_asset_rc = Rc::new(Asset {
+                    data: mesh_asset,
+                    id: asset_id,
+                });
+                self.path_to_mesh_id.insert(path_str, asset_id);
+                self.id_to_mesh.insert(asset_id, Rc::clone(&mesh_asset_rc));
+                self.next_id += 1;
+
+                Some(mesh_asset_rc)
+            }
+            Err(e) => {
+                eprintln!("AssetManager: Failed to load image {}", e);
+                None
+            }
+        }
+    }
+
+    pub fn get_mesh_by_handle(&self, mesh_handle: &MeshHandle) -> Option<Rc<Asset<MeshAsset>>> {
+        self.id_to_mesh.get(mesh_handle).map(|x| Rc::clone(x))
+    }
+
+    pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<ImageAsset>>> {
+        let path_str = path.as_ref().to_str()?.to_string();
+
+        if let Some(asset_id) = self.path_to_image_id.get(&path_str) {
+            return self.id_to_image.get(asset_id).map(|x| Rc::clone(x));
+        }
+
+        match load_image(path) {
+            Ok(image_asset) => {
+                let asset_id = ImageHandle::new(self.next_id);
+                let image_asset_rc = Rc::new(Asset {
+                    data: image_asset,
+                    id: asset_id,
+                });
+                self.path_to_image_id.insert(path_str, asset_id);
+                self.id_to_image
+                    .insert(asset_id, Rc::clone(&image_asset_rc));
+                self.next_id += 1;
+                Some(image_asset_rc)
+            }
+            Err(e) => {
+                eprintln!("AssetManager: Failed to load image {}", e);
+                None
+            }
+        }
+    }
+
+    pub fn get_meshes(&self) -> HashMap<u64, Rc<Mesh>> {
+        self
+            .id_to_mesh
+            .iter()
+            .map(|(id, mesh)| (id.id, mesh.data.mesh.clone()))
+            .collect()
+    }
+}
+
+impl Default for AssetManager {
+    fn default() -> Self {
+        Self {
+            path_to_mesh_id: HashMap::new(),
+            path_to_image_id: HashMap::new(),
+            id_to_image: HashMap::new(),
+            id_to_mesh: HashMap::new(),
+            next_id: 0,
+        }
+    }
+}
+
+pub struct Asset<T> {
+    pub data: T,
+    pub id: AssetId<T>,
+}
+
 fn load_model<P>(path: P) -> Result<MeshAsset, LoadError>
 where
     P: AsRef<Path>,
 {
-    let (models, mat) = tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS)?;
+    println!("Loading Model");
 
-    let model = models.first().unwrap();
+    let (models, mat) =
+        tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS).expect("Failed to load model");
+
+    println!("Finished loading Model");
+    let model = models.first().expect("No model found");
     let mesh = &model.mesh;
 
     let mut vertices = vec![];
@@ -108,12 +157,13 @@ where
             pos,
             color: Vector3::new(1.0, 1.0, 1.0),
             tex_coord,
-            normal: normal,
+            normal,
             ..Default::default()
         };
 
         vertices.push(vert);
     }
+    println!("Returning");
 
     Ok(MeshAsset {
         mesh: Rc::new(Mesh {

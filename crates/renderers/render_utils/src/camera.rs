@@ -1,13 +1,11 @@
 use glm::{vec3, Mat4, Vec3, Vec4};
-use winit::event::{ElementState, RawKeyEvent};
-use winit::keyboard::KeyCode;
 
 pub struct Camera {
-    position: Vec3,
-    velocity: Vec3,
+    pub position: Vec3,
+    pub velocity: Vec3,
 
-    pitch: f32,
-    yaw: f32,
+    pub pitch: f32,
+    pub yaw: f32,
 
     pub near_clip: f32,
     pub far_clip: f32,
@@ -38,36 +36,36 @@ impl Camera {
         self.position += x;
     }
 
-    pub fn process_keyboard_event(&mut self, key_event: RawKeyEvent) {
-        if key_event.state == ElementState::Pressed {
-            if key_event.physical_key == KeyCode::KeyW {
-                self.velocity.z = -1.0
-            }
-            if key_event.physical_key == KeyCode::KeyS {
-                self.velocity.z = 1.0
-            }
-            if key_event.physical_key == KeyCode::KeyA {
-                self.velocity.x = -1.0
-            }
-            if key_event.physical_key == KeyCode::KeyD {
-                self.velocity.x = 1.0
-            }
-        }
-        if key_event.state == ElementState::Released {
-            if key_event.physical_key == KeyCode::KeyW {
-                self.velocity.z = 0.0
-            }
-            if key_event.physical_key == KeyCode::KeyS {
-                self.velocity.z = 0.0
-            }
-            if key_event.physical_key == KeyCode::KeyA {
-                self.velocity.x = 0.0
-            }
-            if key_event.physical_key == KeyCode::KeyD {
-                self.velocity.x = 0.0
-            }
-        }
-    }
+    // pub fn process_keyboard_event(&mut self, key_event: RawKeyEvent) {
+    //     if key_event.state == ElementState::Pressed {
+    //         if key_event.physical_key == KeyCode::KeyW {
+    //             self.velocity.z = -1.0
+    //         }
+    //         if key_event.physical_key == KeyCode::KeyS {
+    //             self.velocity.z = 1.0
+    //         }
+    //         if key_event.physical_key == KeyCode::KeyA {
+    //             self.velocity.x = -1.0
+    //         }
+    //         if key_event.physical_key == KeyCode::KeyD {
+    //             self.velocity.x = 1.0
+    //         }
+    //     }
+    //     if key_event.state == ElementState::Released {
+    //         if key_event.physical_key == KeyCode::KeyW {
+    //             self.velocity.z = 0.0
+    //         }
+    //         if key_event.physical_key == KeyCode::KeyS {
+    //             self.velocity.z = 0.0
+    //         }
+    //         if key_event.physical_key == KeyCode::KeyA {
+    //             self.velocity.x = 0.0
+    //         }
+    //         if key_event.physical_key == KeyCode::KeyD {
+    //             self.velocity.x = 0.0
+    //         }
+    //     }
+    // }
 
     pub fn process_cursor_moved(&mut self, mouse_x: f32, mouse_y: f32) {
         self.yaw += mouse_x / 200.0;

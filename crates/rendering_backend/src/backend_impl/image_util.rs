@@ -1,38 +1,46 @@
-use crate::device::DeviceInfo;
-use crate::utils;
-use ash::vk::{
-    DeviceMemory, Extent3D, Format, Image, ImageAspectFlags, ImageCreateInfo,
-    ImageSubresourceLayers, ImageTiling, ImageUsageFlags, ImageView, MemoryPropertyFlags,
-};
+use crate::image::{ImageAspect, ImageDesc, ImageUsageFlags, TextureFormat};
 use ash::{vk, Device, Instance};
+use crate::backend_impl::device::DeviceInfo;
+use crate::backend_impl::utils;
 
 pub struct AllocatedImage {
-    pub image: Image,
-    pub image_view: ImageView,
-    pub image_memory: DeviceMemory,
-    pub image_extent: Extent3D,
-    pub image_format: Format,
+    pub image: vk::Image,
+    pub image_view: vk::ImageView,
+    pub image_memory: vk::DeviceMemory,
+    pub image_extent: vk::Extent3D,
+    pub image_format: vk::Format,
+    pub image_layout: vk::ImageLayout,
+}
+
+pub enum AllocatedImageType {
+    Color,
+    Depth,
 }
 
 impl AllocatedImage {
     pub fn new(
+        image_desc: ImageDesc,
         device_info: &DeviceInfo,
         instance: &Instance,
-        width: u32,
-        height: u32,
-        format: Format,
-        aspect_flags: ImageAspectFlags,
-        tiling: ImageTiling,
-        usage: ImageUsageFlags,
-        mem_properties: MemoryPropertyFlags,
+        mem_properties: vk::MemoryPropertyFlags,
     ) -> Self {
-        let extent = Extent3D {
-            width,
-            height,
-            depth: 1,
+        let extent = vk::Extent3D {
+            width: image_desc.width,
+            height: image_desc.height,
+            depth: image_desc.depth,
         };
 
-        let image = Self::create_image(&device_info.logical_device, format, tiling, usage, extent);
+        let format = map_texture_format(image_desc.format);
+        let aspect_flags = map_aspect(image_desc.aspect);
+        let usage_flags = map_usage_flags(image_desc.usage);
+
+        let image = Self::create_image(
+            &device_info.logical_device,
+            format,
+            vk::ImageTiling::OPTIMAL,
+            usage_flags,
+            extent,
+        );
         let image_memory = Self::allocate_image(device_info, instance, &image, mem_properties);
         let image_view = Self::create_image_view(device_info, &image, format, aspect_flags);
 
@@ -42,17 +50,18 @@ impl AllocatedImage {
             image_memory,
             image_format: format,
             image_extent: extent,
+            image_layout: vk::ImageLayout::UNDEFINED,
         }
     }
 
     pub fn create_image(
         device: &Device,
-        format: Format,
-        tiling: ImageTiling,
-        usage: ImageUsageFlags,
-        extent: Extent3D,
-    ) -> Image {
-        let image_create_info = ImageCreateInfo::default()
+        format: vk::Format,
+        tiling: vk::ImageTiling,
+        usage: vk::ImageUsageFlags,
+        extent: vk::Extent3D,
+    ) -> vk::Image {
+        let image_create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(extent)
             .mip_levels(1)
@@ -75,9 +84,9 @@ impl AllocatedImage {
     fn allocate_image(
         device_info: &DeviceInfo,
         instance: &Instance,
-        image: &Image,
-        mem_properties: MemoryPropertyFlags,
-    ) -> DeviceMemory {
+        image: &vk::Image,
+        mem_properties: vk::MemoryPropertyFlags,
+    ) -> vk::DeviceMemory {
         let mem_requirements = unsafe {
             device_info
                 .logical_device
@@ -114,10 +123,10 @@ impl AllocatedImage {
 
     pub fn create_image_view(
         device_info: &DeviceInfo,
-        image: &Image,
-        format: Format,
-        image_aspect_flags: ImageAspectFlags,
-    ) -> ImageView {
+        image: &vk::Image,
+        format: vk::Format,
+        image_aspect_flags: vk::ImageAspectFlags,
+    ) -> vk::ImageView {
         let view_info = vk::ImageViewCreateInfo::default()
             .image(*image)
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -143,20 +152,20 @@ impl AllocatedImage {
 pub fn copy_image_to_image(
     device: &Device,
     command_buffer: &vk::CommandBuffer,
-    src_image: Image,
-    dst_image: Image,
+    src_image: vk::Image,
+    dst_image: vk::Image,
     src_size: vk::Extent2D,
     dst_size: vk::Extent2D,
 ) {
     let mut blit_region = vk::ImageBlit2::default()
-        .src_subresource(ImageSubresourceLayers {
-            aspect_mask: ImageAspectFlags::COLOR,
+        .src_subresource(vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
             layer_count: 1,
             base_array_layer: 0,
             mip_level: 0,
         })
-        .dst_subresource(ImageSubresourceLayers {
-            aspect_mask: ImageAspectFlags::COLOR,
+        .dst_subresource(vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
             layer_count: 1,
             base_array_layer: 0,
             mip_level: 0,
@@ -186,14 +195,14 @@ pub fn copy_image_to_image(
 pub fn transition_image_layout(
     device_info: &DeviceInfo,
     command_buffer: &vk::CommandBuffer,
-    image: Image,
+    image: vk::Image,
     old_layout: vk::ImageLayout,
     new_layout: vk::ImageLayout,
     depth: bool,
 ) {
-    let mut aspect_mask = ImageAspectFlags::COLOR;
+    let mut aspect_mask = vk::ImageAspectFlags::COLOR;
     if depth {
-        aspect_mask = ImageAspectFlags::DEPTH;
+        aspect_mask = vk::ImageAspectFlags::DEPTH;
     }
 
     let src_access_mask;
@@ -242,14 +251,14 @@ pub fn create_image(
     instance: &Instance,
     width: u32,
     height: u32,
-    format: Format,
-    tiling: ImageTiling,
-    usage: ImageUsageFlags,
-    mem_properties: MemoryPropertyFlags,
-) -> (Image, DeviceMemory) {
-    let image_info = ImageCreateInfo::default()
+    format: vk::Format,
+    tiling: vk::ImageTiling,
+    usage: vk::ImageUsageFlags,
+    mem_properties: vk::MemoryPropertyFlags,
+) -> (vk::Image, vk::DeviceMemory) {
+    let image_info = vk::ImageCreateInfo::default()
         .image_type(vk::ImageType::TYPE_2D)
-        .extent(Extent3D {
+        .extent(vk::Extent3D {
             height,
             width,
             depth: 1,
@@ -299,4 +308,49 @@ pub fn create_image(
     }
 
     return (x, allocated_memory);
+}
+
+fn map_texture_format(texture_format: TextureFormat) -> vk::Format {
+    match texture_format {
+        TextureFormat::R8g8b8a8Unorm => vk::Format::R8G8B8A8_UNORM,
+        TextureFormat::D32Float => vk::Format::D32_SFLOAT,
+        TextureFormat::R16g16b16a16Float => vk::Format::R16G16B16A16_SFLOAT,
+    }
+}
+
+fn map_aspect(aspect: ImageAspect) -> vk::ImageAspectFlags {
+    match aspect {
+        ImageAspect::Color => vk::ImageAspectFlags::COLOR,
+        ImageAspect::Depth => vk::ImageAspectFlags::DEPTH,
+        ImageAspect::Stencil => vk::ImageAspectFlags::STENCIL,
+        ImageAspect::DepthStencil => {
+            let mut flags = vk::ImageAspectFlags::empty();
+            flags |= vk::ImageAspectFlags::DEPTH;
+            flags |= vk::ImageAspectFlags::STENCIL;
+            flags
+        }
+    }
+}
+
+fn map_usage_flags(usage: ImageUsageFlags) -> vk::ImageUsageFlags {
+    let mut flags = vk::ImageUsageFlags::empty();
+    if usage.contains(ImageUsageFlags::COLOR_ATTACHMENT) {
+        flags |= vk::ImageUsageFlags::COLOR_ATTACHMENT;
+    }
+    if usage.contains(ImageUsageFlags::DEPTH_ATTACHMENT) {
+        flags |= vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
+    }
+    if usage.contains(ImageUsageFlags::SAMPLED) {
+        flags |= vk::ImageUsageFlags::SAMPLED;
+    }
+    if usage.contains(ImageUsageFlags::STORAGE) {
+        flags |= vk::ImageUsageFlags::STORAGE;
+    }
+    if usage.contains(ImageUsageFlags::TRANSFER_SRC) {
+        flags |= vk::ImageUsageFlags::TRANSFER_SRC;
+    }
+    if usage.contains(ImageUsageFlags::TRANSFER_DST) {
+        flags |= vk::ImageUsageFlags::TRANSFER_DST;
+    }
+    flags
 }
