@@ -1,13 +1,11 @@
 [package]
-name = "scene"
+name = "game_object"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-assets = { path = "../assets" }
 rendering_backend = { path = "../rendering_backend" }
 macros = { path = "../macros" }
-material = { path = "../material" }
-core = { path = "../core" }
 nalgebra-glm = { workspace = true }
-game_object = { path = "../game_object" }
+core = { path = "../core" }
+assets = { path = "../assets" }

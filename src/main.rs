@@ -1,10 +1,11 @@
 use app::App;
 use assets::AssetManager;
 use core::EngineContext;
+use game_object::primitives::static_mesh::StaticMesh;
+use game_object::traits::GameObjectDefaults;
 use nalgebra_glm::vec3;
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
-use rendering_backend::transform::Transform;
-use scene::{SceneManager, StaticMesh};
+use scene::scene::SceneManager;
 
 fn main() {
     let mut engine_context = EngineContext::new();
@@ -17,20 +18,18 @@ fn main() {
     engine_context.register_system(asset_manager);
 
     let app = App::new(engine_context);
-
-    let static_mesh = StaticMesh::new(String::from(".\\resources\\models\\test.obj"))
-        .with_transform(Transform {
-            position: vec3(1.0, 1.0, 1.0),
-            ..Transform::default()
-        });
-
-    let static_mesh2 = StaticMesh::new(String::from(".\\resources\\models\\test.obj"));
+    let mesh_handle = app
+        .get_from_context::<AssetManager>()
+        .get_mesh(".\\resources\\models\\test.obj");
+    let static_mesh = StaticMesh::new(mesh_handle.unwrap());
 
     app.get_from_context::<SceneManager>()
-        .register_component(static_mesh);
+        .register_game_object(static_mesh);
+
+    let static_mesh2 = StaticMesh::new(mesh_handle.unwrap()).with_location(vec3(5.0, 1.0, 5.0));
 
     app.get_from_context::<SceneManager>()
-        .register_component(static_mesh2);
+        .register_game_object(static_mesh2);
 
     app.run();
 }

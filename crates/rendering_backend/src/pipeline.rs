@@ -6,7 +6,7 @@ pub struct PipelineHandle(pub usize);
 
 pub struct PipelineDesc {
     pub vertex_shader: String,
-    pub fragment_shader: String,
+    pub fragment_shader: Option<String>,
     pub layout: DescriptorLayoutHandle,
     pub vertex_input: VertexInputDesc,
     pub rasterization: RasterizationStateDesc,

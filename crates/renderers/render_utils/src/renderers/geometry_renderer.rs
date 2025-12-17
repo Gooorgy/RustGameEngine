@@ -81,7 +81,7 @@ impl GeometryRenderer {
 
         let pipeline_desc = PipelineDesc {
             vertex_shader: "vert".into(),
-            fragment_shader: "frag".into(),
+            fragment_shader: Some("frag".into()),
             color_attachments: vec![albedo_image],
             depth_attachment: Some(depth_image),
             layout: descriptor_layout,
@@ -181,7 +181,11 @@ impl GeometryRenderer {
         vulkan_backend.bind_descriptor_set(self.descriptor_set, self.pipeline);
 
         for (index, mesh) in scene_data.iter().enumerate() {
-            vulkan_backend.update_push_constants(self.pipeline, ShaderStage::VERTEX, &[index as u32]);
+            vulkan_backend.update_push_constants(
+                self.pipeline,
+                ShaderStage::VERTEX,
+                &[index as u32],
+            );
             vulkan_backend.bind_vertex_buffer(mesh.vertex_buffer);
             vulkan_backend.bind_index_buffer(mesh.index_buffer);
 

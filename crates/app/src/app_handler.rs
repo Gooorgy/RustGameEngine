@@ -5,7 +5,6 @@ use render_utils::render_structs::{Renderer, Resolution, ResolutionSettings};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
-use scene::SceneManager;
 use std::cell::RefMut;
 use std::io::Write;
 use std::time::Instant;
@@ -16,6 +15,7 @@ use winit::event::{DeviceEvent, DeviceId, ElementState, RawKeyEvent, WindowEvent
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::{Window, WindowId};
+use scene::scene::SceneManager;
 
 // Replace this with env lookup?
 const WINDOW_TITLE: &str = "Vulkan Test";
@@ -99,7 +99,6 @@ impl ApplicationHandler for AppHandler {
 
             // TODO: This is bad. but works for now...
             let mut scene_manager = self.engine_context.expect_system_mut::<SceneManager>();
-            scene_manager.init_scene(&self.engine_context);
             let asset_manager = self.engine_context.expect_system_mut::<AssetManager>();
             let mesh_assets = scene_manager.get_static_meshes();
 

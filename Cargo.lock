@@ -617,6 +617,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
+name = "game_object"
+version = "0.1.0"
+dependencies = [
+ "assets",
+ "core",
+ "macros",
+ "nalgebra-glm",
+ "rendering_backend",
+]
+
+[[package]]
 name = "gethostname"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1054,6 +1065,7 @@ dependencies = [
  "app",
  "assets",
  "core",
+ "game_object",
  "image",
  "material",
  "nalgebra",
@@ -1834,8 +1846,10 @@ version = "0.1.0"
 dependencies = [
  "assets",
  "core",
+ "game_object",
  "macros",
  "material",
+ "nalgebra-glm",
  "rendering_backend",
 ]
 

@@ -32,13 +32,9 @@ impl PipelineInfo {
     ) -> Self {
         let vert_shader_code =
             Self::read_shader_file(&desc.vertex_shader).expect("Unable to read vertex file");
-        let frag_shader_code =
-            Self::read_shader_file(&desc.fragment_shader).expect("Unable to read fragment shader");
 
         let vert_shader_module =
             Self::create_shader_module(&vert_shader_code, &device.logical_device);
-        let frag_shader_module =
-            Self::create_shader_module(&frag_shader_code, &device.logical_device);
 
         let shader_name = CString::new("main").unwrap();
 
@@ -47,12 +43,22 @@ impl PipelineInfo {
             .module(vert_shader_module)
             .name(&shader_name);
 
-        let frag_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::default()
-            .stage(vk::ShaderStageFlags::FRAGMENT)
-            .module(frag_shader_module)
-            .name(&shader_name);
+        let mut shader_stages = vec![vert_shader_stage_create_info];
 
-        let shader_stages = [vert_shader_stage_create_info, frag_shader_stage_create_info];
+        if let Some(fragment_shader) = desc.fragment_shader {
+            let frag_shader_code =
+                Self::read_shader_file(&fragment_shader).expect("Unable to read fragment shader");
+
+            let frag_shader_module =
+                Self::create_shader_module(&frag_shader_code, &device.logical_device);
+
+            let frag_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::default()
+                .stage(vk::ShaderStageFlags::FRAGMENT)
+                .module(frag_shader_module)
+                .name(&shader_name);
+
+            shader_stages.push(frag_shader_stage_create_info);
+        }
 
         let dynamic_states = vec![DynamicState::VIEWPORT, DynamicState::SCISSOR];
 
@@ -118,21 +124,25 @@ impl PipelineInfo {
 
         let layout_info = &resource_registry.descriptor_layouts[desc.layout.0];
         let set_layouts = [layout_info.layout];
-        
+
         let mut pipeline_layout_create_info =
             vk::PipelineLayoutCreateInfo::default().set_layouts(&set_layouts);
-        
-        let push_constant_ranges = desc.push_constant_ranges.iter().map(|range_desc| {
-            vk::PushConstantRange::default()
-                .stage_flags(range_desc.stages.into())
-                .offset(range_desc.offset)
-                .size(range_desc.size as u32)
-        }).collect::<Vec<_>>();
-        
-        if(push_constant_ranges.len() > 0) {
-            pipeline_layout_create_info = pipeline_layout_create_info.push_constant_ranges(&push_constant_ranges);
-        }
 
+        let push_constant_ranges = desc
+            .push_constant_ranges
+            .iter()
+            .map(|range_desc| {
+                vk::PushConstantRange::default()
+                    .stage_flags(range_desc.stages.into())
+                    .offset(range_desc.offset)
+                    .size(range_desc.size as u32)
+            })
+            .collect::<Vec<_>>();
+
+        if (push_constant_ranges.len() > 0) {
+            pipeline_layout_create_info =
+                pipeline_layout_create_info.push_constant_ranges(&push_constant_ranges);
+        }
 
         let pipeline_layout = unsafe {
             device
@@ -182,11 +192,11 @@ impl PipelineInfo {
             device
                 .logical_device
                 .destroy_shader_module(vert_shader_module, None);
-            device
-                .logical_device
-                .destroy_shader_module(frag_shader_module, None);
+            // device
+            //     .logical_device
+            //     .destroy_shader_module(frag_shader_module, None);
         };
-        
+
         Self {
             pipelines: graphics_pipelines,
             pipeline_layout,

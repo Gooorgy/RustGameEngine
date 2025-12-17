@@ -1,6 +1,3 @@
-mod components;
-mod resolved_handle;
-mod scene;
+pub mod registration;
 
-pub use components::*;
-pub use scene::*;
+pub mod scene;

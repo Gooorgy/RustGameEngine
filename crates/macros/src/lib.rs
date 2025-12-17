@@ -3,7 +3,7 @@ use quote::quote;
 use syn::{parse_macro_input, FieldsNamed, ItemStruct};
 
 #[proc_macro_attribute]
-pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn primitive_game_object(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
     let struct_name = &input.ident;
 
@@ -19,15 +19,35 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let expanded_struct = quote! {
         pub struct #struct_name {
-            transform: Transform,
+            transform: rendering_backend::transform::Transform,
             #original_fields
          }
     };
 
     let expanded_impl = quote! {
-        impl Component for #struct_name {
-            fn get_transform(&self) -> Transform {
+        impl game_object::traits::GameObjectDefaults for #struct_name {
+            fn get_transform(&self) -> rendering_backend::transform::Transform {
                 self.transform
+            }
+
+            fn with_transform(mut self, transform: rendering_backend::transform::Transform) -> Self {
+                self.transform = transform;
+                self
+            }
+
+            fn with_location(mut self, location: nalgebra_glm::Vec3) -> Self {
+                self.transform.location = location;
+                self
+            }
+
+            fn with_rotation(mut self, rotation: nalgebra_glm::Vec3) -> Self {
+                self.transform.rotation = rotation;
+                self
+            }
+
+            fn with_scale(mut self, scale: nalgebra_glm::Vec3) -> Self {
+                self.transform.scale = scale;
+                self
             }
         }
     };

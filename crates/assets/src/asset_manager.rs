@@ -37,11 +37,11 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn get_mesh<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<MeshAsset>>> {
+    pub fn get_mesh<P: AsRef<Path>>(&mut self, path: P) -> Option<MeshHandle> {
         let path_str = path.as_ref().to_string_lossy().into_owned(); // Always safe & owned
 
         if let Some(mesh_asset) = self.path_to_mesh_id.get(&path_str) {
-            return self.id_to_mesh.get(mesh_asset).map(|x| Rc::clone(x));
+            return Some(*mesh_asset)
         }
 
         match load_model(path) {
@@ -55,7 +55,7 @@ impl AssetManager {
                 self.id_to_mesh.insert(asset_id, Rc::clone(&mesh_asset_rc));
                 self.next_id += 1;
 
-                Some(mesh_asset_rc)
+                Some(asset_id)
             }
             Err(e) => {
                 eprintln!("AssetManager: Failed to load image {}", e);
@@ -96,8 +96,7 @@ impl AssetManager {
     }
 
     pub fn get_meshes(&self) -> HashMap<u64, Rc<Mesh>> {
-        self
-            .id_to_mesh
+        self.id_to_mesh
             .iter()
             .map(|(id, mesh)| (id.id, mesh.data.mesh.clone()))
             .collect()

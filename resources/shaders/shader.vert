@@ -6,8 +6,6 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 proj;
 } ubo;
 
-
-
 layout(std430, binding = 1) readonly buffer Transforms {
     mat4 model[];
 };

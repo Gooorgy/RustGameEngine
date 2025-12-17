@@ -2,7 +2,7 @@ use nalgebra_glm::{identity, rotate_x, rotate_y, rotate_z, scaling, translate, v
 
 #[derive(Clone, Debug, Copy)]
 pub struct Transform {
-    pub position: Vec3,
+    pub location: Vec3,
     pub rotation: Vec3,
     pub scale: Vec3,
 }
@@ -10,7 +10,7 @@ pub struct Transform {
 impl Default for Transform {
     fn default() -> Transform {
         Transform {
-            position: vec3(0.0, 0.0, 0.0),
+            location: vec3(0.0, 0.0, 0.0),
             rotation: vec3(0.0, 0.0, 0.0),
             scale: vec3(1.0, 1.0, 1.0),
         }
@@ -20,14 +20,14 @@ impl Default for Transform {
 impl Transform {
     pub fn new(position: Vec3, rotation: Vec3, scale: Vec3) -> Transform {
         Self {
-            position,
+            location: position,
             rotation,
             scale,
         }
     }
 
     pub fn get_model_matrix(&self) -> Mat4 {
-        let translation = translate(&identity(), &self.position);
+        let translation = translate(&identity(), &self.location);
 
         let rot_x = rotate_x(&identity(), self.rotation.x);
         let rot_y = rotate_y(&identity(), self.rotation.y);
