@@ -10,7 +10,6 @@ typed-arena = "2.0.2"
 image = { workspace = true }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
-vulkan_backend = { path = "crates/vulkan_backend" }
 rendering_backend = { path = "crates/rendering_backend" }
 app = { path = "crates/app" }
 scene = { path = "crates/scene" }
@@ -29,13 +28,11 @@ walkdir = "2.5.0"
 [workspace]
 members = [
     "crates/app", "crates/assets", "crates/common", "crates/core", "crates/game_object", "crates/imgui", "crates/macros", "crates/material", "crates/renderers/render_utils", "crates/rendering_backend", "crates/scene",
-    "crates/vulkan_backend",
 ]
 
 [workspace.dependencies]
-nalgebra = "0.33.2"
-nalgebra-glm = "0.19.0"
-bincode = "1.3.3"
+nalgebra = "0.34.1"
+nalgebra-glm = "0.20.0"
 image = "0.25.5"
 num = "0.4.3"
 
