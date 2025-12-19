@@ -1,7 +1,7 @@
 use assets::MeshHandle;
 use core::EngineContext;
+use core::types::transform::Transform;
 use macros::primitive_game_object;
-use rendering_backend::transform::Transform;
 use crate::primitives::types::EnginePrimitiveType;
 use crate::traits::{GameObject, GameObjectType, HasGameObjectType};
  

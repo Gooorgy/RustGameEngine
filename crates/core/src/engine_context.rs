@@ -22,7 +22,7 @@ impl EngineContext {
     /// # Example
     ///
     /// ```
-    /// use core::EngineContext;
+    /// use core::engine_context::EngineContext;
     ///
     /// struct MySystem;
     /// let mut context = EngineContext::new();

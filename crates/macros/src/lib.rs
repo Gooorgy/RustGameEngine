@@ -19,18 +19,18 @@ pub fn primitive_game_object(_attr: TokenStream, item: TokenStream) -> TokenStre
 
     let expanded_struct = quote! {
         pub struct #struct_name {
-            transform: rendering_backend::transform::Transform,
+            transform: core::types::transform::Transform,
             #original_fields
          }
     };
 
     let expanded_impl = quote! {
         impl game_object::traits::GameObjectDefaults for #struct_name {
-            fn get_transform(&self) -> rendering_backend::transform::Transform {
+            fn get_transform(&self) -> core::types::transform::Transform {
                 self.transform
             }
 
-            fn with_transform(mut self, transform: rendering_backend::transform::Transform) -> Self {
+            fn with_transform(mut self, transform: core::types::transform::Transform) -> Self {
                 self.transform = transform;
                 self
             }

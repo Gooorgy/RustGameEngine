@@ -27,6 +27,11 @@ pub type MeshHandle = AssetId<MeshAsset>;
 pub type MaterialHandle = AssetId<MaterialAsset>;
 pub type ImageHandle = AssetId<ImageAsset>;
 
+pub union Param {
+    constant: u32,
+    handle: MeshHandle,
+}
+
 pub struct AssetManager {
     path_to_mesh_id: HashMap<String, MeshHandle>,
     path_to_image_id: HashMap<String, ImageHandle>,
@@ -41,7 +46,7 @@ impl AssetManager {
         let path_str = path.as_ref().to_string_lossy().into_owned(); // Always safe & owned
 
         if let Some(mesh_asset) = self.path_to_mesh_id.get(&path_str) {
-            return Some(*mesh_asset)
+            return Some(*mesh_asset);
         }
 
         match load_model(path) {

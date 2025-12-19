@@ -1,121 +1,196 @@
-use crate::assign_texture;
-use assets::{Asset, AssetManager, ImageAsset};
-use std::rc::Rc;
+use assets::ImageHandle;
+use bitflags::Bits;
+use nalgebra_glm::{vec4, DVec1, Scalar, Vec4};
+use serde::Serialize;
 
-pub struct Material {
-    pub name: String,
-    pub material_type: MaterialType,
+pub trait Material {
+    fn get_bindings(&self) -> Vec<MaterialParameterBinding>;
+    fn get_push_constants(&self) -> PbrPushConstants;
+
+    fn get_permutation_feature(&self) -> u32;
 }
 
-pub enum MaterialType {
-    Pbr(PbrMaterialInstance),
+pub struct PbrMaterial {
+    base_color: MaterialColorParameter,
+    normal: MaterialColorParameter,
+    ambient_occlusion: MaterialParameter,
+    metallic: MaterialParameter,
+    roughness: MaterialParameter,
+    specular: MaterialParameter,
+    test: Vec4,
 }
 
-pub struct PbrMaterialInstance {
-    albedo_texture: Option<String>,
-    albedo_texture_asset: Option<Rc<Asset<ImageAsset>>>,
-    normal_texture: Option<String>,
-    normal_texture_asset: Option<Rc<Asset<ImageAsset>>>,
-    metallic_texture: Option<String>,
-    metallic_texture_asset: Option<Rc<Asset<ImageAsset>>>,
-    roughness_texture: Option<String>,
-    roughness_texture_asset: Option<Rc<Asset<ImageAsset>>>,
-    emissive_texture: Option<String>,
-    emissive_texture_asset: Option<Rc<Asset<ImageAsset>>>,
-}
+impl Material for PbrMaterial {
+    fn get_bindings(&self) -> Vec<MaterialParameterBinding> {
+        let base_color_binding = match self.base_color {
+            MaterialColorParameter::Handle(handle) => {
+                Some(MaterialParameterBinding::texture(0, handle))
+            }
+            _ => None,
+        };
 
-impl MaterialInstance for PbrMaterialInstance {
-    fn init(&mut self, asset_manager: &mut AssetManager) {
-        assign_texture!(
-            &self.albedo_texture,
-            asset_manager,
-            self.albedo_texture_asset
-        );
-        assign_texture!(
-            &self.normal_texture,
-            asset_manager,
-            self.normal_texture_asset
-        );
-        assign_texture!(
-            &self.metallic_texture,
-            asset_manager,
-            self.metallic_texture_asset
-        );
-        assign_texture!(
-            &self.roughness_texture,
-            asset_manager,
-            self.roughness_texture_asset
-        );
-        assign_texture!(
-            &self.emissive_texture,
-            asset_manager,
-            self.emissive_texture_asset
-        );
+        let normal_binding = match self.normal {
+            MaterialColorParameter::Handle(handle) => {
+                Some(MaterialParameterBinding::texture(1, handle))
+            }
+            _ => None,
+        };
+
+        let packed_texture = if self.metallic.as_handle().is_some()
+            || self.roughness.as_handle().is_some()
+            || self.ambient_occlusion.as_handle().is_some()
+            || self.specular.as_handle().is_some()
+        {
+            let packed = PackedTextureData {
+                channel_r: self.ambient_occlusion.as_handle(),
+                channel_g: self.metallic.as_handle(),
+                channel_b: self.roughness.as_handle(),
+                channel_a: self.specular.as_handle(),
+            };
+
+            Some(MaterialParameterBinding::packed_texture(3, packed))
+        } else {
+            None
+        };
+
+        [base_color_binding, normal_binding, packed_texture]
+            .into_iter()
+            .filter_map(|parameter| parameter)
+            .collect::<Vec<_>>()
+    }
+
+    fn get_push_constants(&self) -> PbrPushConstants {
+        PbrPushConstants {
+            base_color: self.base_color.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
+            normal: self.normal.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
+            roughness: self.roughness.as_constant(1.0),
+            specular: self.roughness.as_constant(0.0),
+            metallic: self.metallic.as_constant(0.0),
+            ambient_occlusion: self.ambient_occlusion.as_constant(0.0),
+        }
+    }
+
+    fn get_permutation_feature(&self) -> u32 {
+        let mut pbr_features = PbrFeatures::NONE;
+
+        if self.base_color.as_handle().is_some() {
+            pbr_features |= PbrFeatures::HAS_COLOR_TEXTURE
+        };
+
+        if self.normal.as_handle().is_some() {
+            pbr_features |= PbrFeatures::HAS_NORMAL_TEXTURE
+        };
+
+        if self.ambient_occlusion.as_handle().is_some() {
+            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
+        };
+
+        if self.metallic.as_handle().is_some() {
+            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
+        };
+
+        if self.roughness.as_handle().is_some() {
+            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
+        };
+
+        if self.specular.as_handle().is_some() {
+            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
+        };
+
+        pbr_features.bits()
     }
 }
 
-impl Default for PbrMaterialInstance {
-    fn default() -> Self {
-        PbrMaterialInstance {
-            albedo_texture: None,
-            albedo_texture_asset: None,
-            normal_texture: None,
-            normal_texture_asset: None,
-            metallic_texture: None,
-            metallic_texture_asset: None,
-            roughness_texture: None,
-            roughness_texture_asset: None,
-            emissive_texture: None,
-            emissive_texture_asset: None,
+pub struct PbrPushConstants {
+    base_color: Vec4,
+    normal: Vec4,
+    ambient_occlusion: f32,
+    metallic: f32,
+    roughness: f32,
+    specular: f32,
+}
+
+pub enum MaterialParameter {
+    Handle(ImageHandle),
+    Constant(f32),
+}
+
+impl MaterialParameter {
+    fn as_handle(&self) -> Option<ImageHandle> {
+        match self {
+            MaterialParameter::Handle(handle) => Some(*handle),
+            _ => None,
+        }
+    }
+
+    fn as_constant(&self, default: f32) -> f32 {
+        match self {
+            MaterialParameter::Constant(constant) => *constant,
+            _ => default,
         }
     }
 }
 
-impl PbrMaterialInstance {
-    pub fn with_albedo_texture(mut self, albedo_texture: &str) -> Self {
-        self.albedo_texture = Some(albedo_texture.to_string());
-        self
-    }
-
-    pub fn with_normal_texture(mut self, normal_texture: &str) -> Self {
-        self.albedo_texture = Some(normal_texture.to_string());
-        self
-    }
-
-    pub fn with_metallic_texture(mut self, metallic_texture: &str) -> Self {
-        self.metallic_texture = Some(metallic_texture.to_string());
-        self
-    }
-
-    pub fn with_emissive_texture(mut self, emissive_texture: &str) -> Self {
-        self.emissive_texture = Some(emissive_texture.to_string());
-        self
-    }
-
-    pub fn with_roughness_texture(mut self, roughness_texture: &str) -> Self {
-        self.roughness_texture = Some(roughness_texture.to_string());
-        self
-    }
+pub enum MaterialColorParameter {
+    Handle(ImageHandle),
+    Constant(Vec4),
 }
 
-impl Default for Material {
-    fn default() -> Self {
-        Material {
-            material_type: MaterialType::Pbr(PbrMaterialInstance::default()),
-            name: String::from("material"),
+impl MaterialColorParameter {
+    fn as_handle(&self) -> Option<ImageHandle> {
+        match self {
+            MaterialColorParameter::Handle(handle) => Some(*handle),
+            _ => None,
+        }
+    }
+
+    fn as_constant(&self, default: Vec4) -> Vec4 {
+        match self {
+            MaterialColorParameter::Constant(constant) => *constant,
+            _ => default,
         }
     }
 }
 
-impl Material {
-    pub fn pbr(name: &str, material_instance: PbrMaterialInstance) -> Self {
-        Material {
-            material_type: MaterialType::Pbr(material_instance),
-            name: String::from(name),
-        }
+pub enum MaterialParameterBinding {
+    Texture(MaterialParameterBindingData<ImageHandle>),
+    PackedTexture(MaterialParameterBindingData<PackedTextureData>),
+}
+
+impl MaterialParameterBinding {
+    fn texture(index: u32, image_handle: ImageHandle) -> Self {
+        MaterialParameterBinding::Texture(MaterialParameterBindingData {
+            binding_index: index,
+            binding_data: image_handle,
+        })
+    }
+
+    fn packed_texture(index: u32, data: PackedTextureData) -> Self {
+        MaterialParameterBinding::PackedTexture(MaterialParameterBindingData {
+            binding_index: index,
+            binding_data: data,
+        })
     }
 }
 
-pub trait MaterialInstance {
-    fn init(&mut self, asset_manager: &mut AssetManager);
+pub struct MaterialParameterBindingData<T> {
+    binding_index: u32,
+    binding_data: T,
+}
+
+pub struct PackedTextureData {
+    channel_r: Option<ImageHandle>,
+    channel_g: Option<ImageHandle>,
+    channel_b: Option<ImageHandle>,
+    channel_a: Option<ImageHandle>,
+}
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug)]
+    pub struct PbrFeatures: u32 {
+        const NONE = 0;
+        const HAS_COLOR_TEXTURE = 1 << 0;
+        const HAS_NORMAL_TEXTURE = 1 << 1;
+        const HAS_ORM_TEXTURE = 1 << 2;
+    }
 }

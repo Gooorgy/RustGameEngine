@@ -28,8 +28,12 @@ fn main() {
 
     let static_mesh2 = StaticMesh::new(mesh_handle.unwrap()).with_location(vec3(5.0, 1.0, 5.0));
 
+    let static_mesh3 = StaticMesh::new(mesh_handle.unwrap()).with_location(vec3(5.0, 10.0, 5.0)).with_scale(vec3(0.3, 0.3, 0.3));
+    
     app.get_from_context::<SceneManager>()
         .register_game_object(static_mesh2);
+    
+    app.get_from_context::<SceneManager>().register_game_object(static_mesh3);
 
     app.run();
 }

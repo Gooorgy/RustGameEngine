@@ -6,15 +6,17 @@ use crate::backend_impl::descriptor_info::{
 };
 use crate::backend_impl::image_util::AllocatedImage;
 use crate::buffer::{BufferDesc, BufferHandle};
-use crate::descriptor::{DescriptorLayoutDesc, DescriptorLayoutHandle, DescriptorSetHandle, DescriptorValue, ShaderStage};
+use crate::descriptor::{
+    DescriptorLayoutDesc, DescriptorLayoutHandle, DescriptorSetHandle, DescriptorValue, ShaderStage,
+};
 use crate::image::{ImageDesc, ImageHandle};
 
 use crate::backend_impl::pipeline_info::PipelineInfo;
 use crate::backend_impl::resource_registry::ResourceRegistry;
 use crate::pipeline::{PipelineDesc, PipelineHandle};
 use crate::sampler::{SamplerDesc, SamplerHandle};
-use ash::vk::{self};
 use ash::vk::MemoryPropertyFlags;
+use ash::vk::{self};
 use ash::Instance;
 use std::{error::Error, ffi::CString, mem, ptr, slice};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
@@ -589,7 +591,12 @@ impl VulkanBackend {
         }
     }
 
-    pub fn update_push_constants<T>(&mut self, pipeline_handle: PipelineHandle, stage: ShaderStage, data: &[T]) {
+    pub fn update_push_constants<T>(
+        &mut self,
+        pipeline_handle: PipelineHandle,
+        stage: ShaderStage,
+        data: &[T],
+    ) {
         let pipeline_layout = self.resource_registry.pipelines[pipeline_handle.0].pipeline_layout;
         unsafe {
             self.device_info.logical_device.cmd_push_constants(
@@ -597,10 +604,28 @@ impl VulkanBackend {
                 pipeline_layout,
                 stage.into(),
                 0,
-                std::slice::from_raw_parts(
-                    (data.as_ptr()) as *const u8,
-                    mem::size_of::<T>(),
-                ),
+                std::slice::from_raw_parts((data.as_ptr()) as *const u8, mem::size_of::<T>()),
+            )
+        }
+    }
+
+    pub fn update_push_constants_raw<T>(
+        &mut self,
+        pipeline_handle: PipelineHandle,
+        stage: ShaderStage,
+        data: &[T],
+    ) {
+        let pipeline_layout = self.resource_registry.pipelines[pipeline_handle.0].pipeline_layout;
+
+        let fff = data.as_ptr() as *const u8;
+
+        unsafe {
+            self.device_info.logical_device.cmd_push_constants(
+                self.command_buffer,
+                pipeline_layout,
+                stage.into(),
+                0,
+                std::slice::from_raw_parts((data.as_ptr()) as *const u8, mem::size_of::<T>()),
             )
         }
     }

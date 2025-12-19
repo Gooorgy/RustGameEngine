@@ -15,6 +15,8 @@ layout(location = 2) in vec3 inPos;
 
 
 layout(binding = 1) uniform sampler2D texSampler;
+layout(binding = 2) uniform sampler2D normalSampler;
+layout(binding = 3) uniform sampler2D funnySampler;
 
 void main() {
     outColor = vec4(1.0, 0.0, 0.0, 1.0);//texture(texSampler, fragTexCoord);

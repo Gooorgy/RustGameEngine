@@ -14,13 +14,20 @@ use rendering_backend::pipeline::{
     RasterizationStateDesc, VertexInputDesc,
 };
 use rendering_backend::sampler::{Filter, SamplerAddressMode, SamplerDesc, SamplerHandle};
+use std::collections::HashMap;
 use std::mem::size_of;
 
 pub struct GeometryRenderer {
     pipeline: PipelineHandle,
+    pso: HashMap<u32, PSO>,
     descriptor_set: DescriptorSetHandle,
     texture: ImageHandle,
     sampler: SamplerHandle,
+}
+
+pub struct PSO {
+    pipeline: PipelineHandle,
+    descriptor_set: DescriptorSetHandle,
 }
 
 impl GeometryRenderer {
@@ -165,6 +172,7 @@ impl GeometryRenderer {
             pipeline,
             sampler,
             descriptor_set,
+            pso: HashMap::new()
         }
     }
 

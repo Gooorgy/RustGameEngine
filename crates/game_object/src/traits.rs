@@ -1,7 +1,7 @@
+use crate::primitives::types::EnginePrimitiveType;
 use core::EngineContext;
 use nalgebra_glm::Vec3;
-use rendering_backend::transform::Transform;
-use crate::primitives::types::EnginePrimitiveType;
+use core::types::transform::Transform;
 
 pub trait GameObject: GameObjectDefaults + HasGameObjectType {
     fn setup(&mut self, engine_context: &EngineContext);

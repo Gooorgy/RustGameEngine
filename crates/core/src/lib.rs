@@ -1,4 +1,4 @@
 mod engine_context;
-mod types;
+pub mod types;
 
 pub use engine_context::*;

@@ -418,6 +418,7 @@ name = "core"
 version = "0.1.0"
 dependencies = [
  "macros",
+ "nalgebra-glm",
 ]
 
 [[package]]
@@ -624,7 +625,6 @@ dependencies = [
  "core",
  "macros",
  "nalgebra-glm",
- "rendering_backend",
 ]
 
 [[package]]
@@ -930,6 +930,9 @@ name = "material"
 version = "0.1.0"
 dependencies = [
  "assets",
+ "bitflags 2.10.0",
+ "nalgebra-glm",
+ "serde",
 ]
 
 [[package]]

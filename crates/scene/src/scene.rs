@@ -2,7 +2,7 @@ use crate::registration::GameObjectRegistration;
 use assets::MeshHandle;
 use game_object::primitives::types::EnginePrimitiveType;
 use game_object::traits::{GameObject, GameObjectType};
-use rendering_backend::transform::Transform;
+use core::types::transform::Transform;
 
 pub struct SceneManager {
     pub game_objects: Vec<GameObjectRegistration>,

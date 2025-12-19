@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rendering_backend = { path = "../rendering_backend" }
 macros = { path = "../macros" }
 nalgebra-glm = { workspace = true }
 core = { path = "../core" }

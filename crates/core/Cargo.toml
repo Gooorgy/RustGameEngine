@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 macros = { path = "../macros" }
+nalgebra-glm = { workspace = true }
