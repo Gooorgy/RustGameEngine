@@ -26,7 +26,7 @@ impl App {
             .expect("Failed to run event loop");
     }
 
-    pub fn get_from_context<T: 'static>(&self) -> RefMut<T> {
+    pub fn get_from_context<T: 'static>(&'_ self) -> RefMut<'_, T> {
         self.app_handler.get_from_context::<T>()
     }
 }

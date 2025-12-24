@@ -1,6 +1,6 @@
-use std::mem::offset_of;
-use ash::vk;
 use crate::vertex::Vertex;
+use ash::vk;
+use std::mem::offset_of;
 
 pub struct VulkanVertexInfo;
 
@@ -13,7 +13,7 @@ impl VulkanVertexInfo {
         }
     }
 
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 5] {
+    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
         [
             vk::VertexInputAttributeDescription {
                 location: 0,
@@ -38,12 +38,6 @@ impl VulkanVertexInfo {
                 binding: 0,
                 format: vk::Format::R32G32B32_SFLOAT,
                 offset: offset_of!(Vertex, normal) as u32,
-            },
-            vk::VertexInputAttributeDescription {
-                location: 4,
-                binding: 0,
-                format: vk::Format::R32_UINT,
-                offset: offset_of!(Vertex, texture_index) as u32,
             },
         ]
     }

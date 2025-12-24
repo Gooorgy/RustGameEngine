@@ -1,14 +1,15 @@
-use ash::vk;
-use ash::vk::DescriptorPool;
 use crate::backend_impl::allocated_buffer::AllocatedBuffer;
-use crate::backend_impl::descriptor_info::{AllocatedDescriptorSet, DescriptorLayoutInfo, DescriptorPoolChunk};
+use crate::backend_impl::descriptor_info::{
+    AllocatedDescriptorSet, DescriptorLayoutInfo, DescriptorPoolChunk,
+};
 use crate::backend_impl::image_util::AllocatedImage;
 use crate::backend_impl::pipeline_info::PipelineInfo;
 use crate::buffer::BufferHandle;
 use crate::descriptor::{DescriptorLayoutHandle, DescriptorSetHandle};
-use crate::image::ImageHandle;
+use crate::image::GpuImageHandle;
 use crate::pipeline::PipelineHandle;
 use crate::sampler::SamplerHandle;
+use ash::vk;
 
 pub struct ResourceRegistry {
     pub images: Vec<AllocatedImage>,
@@ -33,10 +34,10 @@ impl ResourceRegistry {
         }
     }
 
-    pub fn register_image(&mut self, image: AllocatedImage) -> ImageHandle {
+    pub fn register_image(&mut self, image: AllocatedImage) -> GpuImageHandle {
         let id = self.images.len(); // unique ID
         self.images.push(image);
-        ImageHandle(id)
+        GpuImageHandle(id)
     }
 
     pub fn register_buffer(&mut self, buffer: AllocatedBuffer) -> BufferHandle {

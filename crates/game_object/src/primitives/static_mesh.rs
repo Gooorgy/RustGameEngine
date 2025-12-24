@@ -2,20 +2,38 @@ use assets::MeshHandle;
 use core::EngineContext;
 use core::types::transform::Transform;
 use macros::primitive_game_object;
-use crate::primitives::types::EnginePrimitiveType;
+use material::material_manager::MaterialHandle;
+use crate::primitives::types::{EnginePrimitiveType, StaticMeshData};
 use crate::traits::{GameObject, GameObjectType, HasGameObjectType};
  
 #[primitive_game_object]
 pub struct StaticMesh {
     object_type: GameObjectType,
+    mesh_handle: MeshHandle,
+    material_handle: Option<MaterialHandle>,
 }
 
 impl StaticMesh {
     pub fn new(mesh_handle: MeshHandle) -> Self {
         Self {
-            object_type: GameObjectType::EnginePrimitive(EnginePrimitiveType::StaticMesh(mesh_handle)),
+            object_type: GameObjectType::EnginePrimitive(EnginePrimitiveType::StaticMesh(StaticMeshData {
+                mesh_handle,
+                material_handle: None,
+            })),
             transform: Transform::default(),
+            mesh_handle,
+            material_handle: None,
         }
+    }
+    
+    pub fn with_material(mut self, material: MaterialHandle) -> Self {
+        self.material_handle = Some(material);
+        self.object_type = GameObjectType::EnginePrimitive(EnginePrimitiveType::StaticMesh(StaticMeshData {
+            material_handle: self.material_handle,
+            mesh_handle: self.mesh_handle,
+        }));
+        
+        self
     }
 }
 

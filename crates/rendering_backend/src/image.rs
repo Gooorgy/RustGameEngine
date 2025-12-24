@@ -1,5 +1,5 @@
 #[derive(Copy, Clone, Debug)]
-pub struct ImageHandle(pub usize);
+pub struct GpuImageHandle(pub usize);
 
 #[derive(Clone, Debug)]
 pub struct ImageDesc {

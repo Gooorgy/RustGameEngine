@@ -121,12 +121,11 @@ impl PipelineInfo {
             .depth_write_enable(desc.depth_stencil.depth_write_enable)
             .depth_compare_op(desc.depth_stencil.depth_compare_op.into())
             .stencil_test_enable(desc.depth_stencil.stencil_test_enable);
-
-        let layout_info = &resource_registry.descriptor_layouts[desc.layout.0];
-        let set_layouts = [layout_info.layout];
+        
+        let set_layouts = desc.layout.iter().map(|layout_handle| resource_registry.descriptor_layouts[layout_handle.0].layout).collect::<Vec<_>>();
 
         let mut pipeline_layout_create_info =
-            vk::PipelineLayoutCreateInfo::default().set_layouts(&set_layouts);
+            vk::PipelineLayoutCreateInfo::default().set_layouts(set_layouts.as_slice());
 
         let push_constant_ranges = desc
             .push_constant_ranges

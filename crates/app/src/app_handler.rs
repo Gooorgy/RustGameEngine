@@ -1,10 +1,13 @@
 use assets::AssetManager;
 use core::EngineContext;
-use render_utils::camera::Camera;
-use render_utils::render_structs::{Renderer, Resolution, ResolutionSettings};
+use game_object::primitives::camera::Camera;
+use material::material_manager::MaterialManager;
+use renderer::frame_data::{Resolution, ResolutionSettings};
+use renderer::renderer::Renderer;
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
+use scene::scene::SceneManager;
 use std::cell::RefMut;
 use std::io::Write;
 use std::time::Instant;
@@ -15,7 +18,6 @@ use winit::event::{DeviceEvent, DeviceId, ElementState, RawKeyEvent, WindowEvent
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::{Window, WindowId};
-use scene::scene::SceneManager;
 
 // Replace this with env lookup?
 const WINDOW_TITLE: &str = "Vulkan Test";
@@ -98,20 +100,7 @@ impl ApplicationHandler for AppHandler {
             let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
 
             // TODO: This is bad. but works for now...
-            let mut scene_manager = self.engine_context.expect_system_mut::<SceneManager>();
-            let asset_manager = self.engine_context.expect_system_mut::<AssetManager>();
-            let mesh_assets = scene_manager.get_static_meshes();
 
-            let fy = asset_manager.get_meshes();
-            let mut x = vec![];
-            for (handle, transform) in mesh_assets.iter() {
-                if let Some(mesh) = asset_manager.get_mesh_by_handle(handle) {
-                    x.push((mesh.id.raw(), mesh.data.mesh.clone()));
-                }
-            }
-
-            let mut resource_manager = self.engine_context.expect_system_mut::<ResourceManager>();
-            resource_manager.upload_meshes(&mut vulkan, fy);
             let mut renderer = Renderer::new(
                 &mut vulkan,
                 ResolutionSettings {
@@ -121,14 +110,7 @@ impl ApplicationHandler for AppHandler {
                     },
                 },
             );
-            
-            let fas = scene_manager.get_static_meshes().iter().map(|(mesh_handle, transform)| {
-                let data = resource_manager.get_by_handle(mesh_handle.id);
-                (transform.get_model_matrix(), *data)
-            }).collect::<Vec<_>>();
-            
-            
-            renderer.update_scene(&mut vulkan, fas.as_slice());
+
             self.renderer = Some(renderer);
             self.vulkan_backend = Some(vulkan);
         }
@@ -150,15 +132,28 @@ impl ApplicationHandler for AppHandler {
                     std::io::stdout().flush().unwrap();
                     self.camera.update(delta_time);
 
-                    let renderer = &self.renderer.as_ref().unwrap();
-                    renderer.update_camera(
+                    let mut scene_manager = self.engine_context.expect_system_mut::<SceneManager>();
+                    let mut asset_manager = self.engine_context.expect_system_mut::<AssetManager>();
+                    let mut material_manager =
+                        self.engine_context.expect_system_mut::<MaterialManager>();
+                    let mut resource_manager =
+                        self.engine_context.expect_system_mut::<ResourceManager>();
+
+                    let renderer = self.renderer.as_mut().unwrap();
+
+                    let camera_ubo = CameraMvpUbo {
+                        proj: self.camera.get_projection_matrix(),
+                        view: self.camera.get_view_matrix(),
+                    };
+
+                    renderer.draw_frame(
                         app,
-                        CameraMvpUbo {
-                            proj: self.camera.get_projection_matrix(),
-                            view: self.camera.get_view_matrix(),
-                        },
+                        &mut scene_manager,
+                        &mut material_manager,
+                        &mut asset_manager,
+                        &mut resource_manager,
+                        camera_ubo,
                     );
-                    renderer.draw_frame(app);
 
                     //app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();

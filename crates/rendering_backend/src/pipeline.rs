@@ -1,5 +1,5 @@
 use crate::descriptor::{DescriptorLayoutHandle, ShaderStage};
-use crate::image::ImageHandle;
+use crate::image::GpuImageHandle;
 
 #[derive(Copy, Clone, Debug)]
 pub struct PipelineHandle(pub usize);
@@ -7,13 +7,13 @@ pub struct PipelineHandle(pub usize);
 pub struct PipelineDesc {
     pub vertex_shader: String,
     pub fragment_shader: Option<String>,
-    pub layout: DescriptorLayoutHandle,
+    pub layout: Vec<DescriptorLayoutHandle>,
     pub vertex_input: VertexInputDesc,
     pub rasterization: RasterizationStateDesc,
     pub blend: BlendStateDesc,
     pub depth_stencil: DepthStencilDesc,
-    pub color_attachments: Vec<ImageHandle>,
-    pub depth_attachment: Option<ImageHandle>,
+    pub color_attachments: Vec<GpuImageHandle>,
+    pub depth_attachment: Option<GpuImageHandle>,
     pub push_constant_ranges: Vec<PushConstantDesc>,
 }
 

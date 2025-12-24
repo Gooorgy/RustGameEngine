@@ -1,37 +1,43 @@
 use assets::ImageHandle;
-use bitflags::Bits;
-use nalgebra_glm::{vec4, DVec1, Scalar, Vec4};
+use nalgebra_glm::{vec4, Vec4};
 use serde::Serialize;
 
 pub trait Material {
     fn get_bindings(&self) -> Vec<MaterialParameterBinding>;
-    fn get_push_constants(&self) -> PbrPushConstants;
-
+    fn get_push_constants(&self) -> &[u8];
     fn get_permutation_feature(&self) -> u32;
+    fn get_shader_path(&self) -> String;
 }
 
 pub struct PbrMaterial {
-    base_color: MaterialColorParameter,
-    normal: MaterialColorParameter,
-    ambient_occlusion: MaterialParameter,
-    metallic: MaterialParameter,
-    roughness: MaterialParameter,
-    specular: MaterialParameter,
-    test: Vec4,
+    pub base_color: MaterialColorParameter,
+    pub normal: MaterialColorParameter,
+    pub ambient_occlusion: MaterialParameter,
+    pub metallic: MaterialParameter,
+    pub roughness: MaterialParameter,
+    pub specular: MaterialParameter,
 }
 
 impl Material for PbrMaterial {
     fn get_bindings(&self) -> Vec<MaterialParameterBinding> {
         let base_color_binding = match self.base_color {
             MaterialColorParameter::Handle(handle) => {
-                Some(MaterialParameterBinding::texture(0, handle))
+                let material_parameter_binding = MaterialParameterBinding {
+                    index: 0,
+                    data: MaterialParameterBindingData::Texture(handle),
+                };
+                Some(material_parameter_binding)
             }
             _ => None,
         };
 
         let normal_binding = match self.normal {
             MaterialColorParameter::Handle(handle) => {
-                Some(MaterialParameterBinding::texture(1, handle))
+                let material_parameter_binding = MaterialParameterBinding {
+                    index: 1,
+                    data: MaterialParameterBindingData::Texture(handle),
+                };
+                Some(material_parameter_binding)
             }
             _ => None,
         };
@@ -48,7 +54,12 @@ impl Material for PbrMaterial {
                 channel_a: self.specular.as_handle(),
             };
 
-            Some(MaterialParameterBinding::packed_texture(3, packed))
+            let material_parameter_binding = MaterialParameterBinding {
+                index: 2,
+                data: MaterialParameterBindingData::PackedTexture(packed),
+            };
+
+            Some(material_parameter_binding)
         } else {
             None
         };
@@ -59,15 +70,24 @@ impl Material for PbrMaterial {
             .collect::<Vec<_>>()
     }
 
-    fn get_push_constants(&self) -> PbrPushConstants {
-        PbrPushConstants {
+    fn get_push_constants(&self) -> &[u8] {
+        let data = PbrPushConstants {
             base_color: self.base_color.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
             normal: self.normal.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
             roughness: self.roughness.as_constant(1.0),
             specular: self.roughness.as_constant(0.0),
             metallic: self.metallic.as_constant(0.0),
             ambient_occlusion: self.ambient_occlusion.as_constant(0.0),
-        }
+        };
+
+        let bytes = unsafe {
+            ::core::slice::from_raw_parts(
+                (&data as *const PbrPushConstants) as *const u8,
+                ::core::mem::size_of::<PbrPushConstants>(),
+            )
+        };
+
+        bytes
     }
 
     fn get_permutation_feature(&self) -> u32 {
@@ -99,8 +119,37 @@ impl Material for PbrMaterial {
 
         pbr_features.bits()
     }
+
+    fn get_shader_path(&self) -> String {
+        let base_name = "pbr.frag";
+        let mut feature_name = vec![];
+        let features = PbrFeatures::from_bits(self.get_permutation_feature())
+            .expect("Failed to get permutation feature");
+
+        if features.contains(PbrFeatures::HAS_ORM_TEXTURE) {
+            feature_name.push("orm");
+        }
+
+        if (features.contains(PbrFeatures::HAS_NORMAL_TEXTURE)) {
+            feature_name.push("normal");
+        }
+
+        if features.contains(PbrFeatures::HAS_COLOR_TEXTURE) {
+            feature_name.push("color");
+        }
+
+        if (feature_name.is_empty()) {
+            return format!("{}.{}", base_name, "base",);
+        }
+
+        let combined_feature_name = feature_name.join(".");
+
+        format!("{}.{}", base_name, combined_feature_name)
+    }
 }
 
+#[repr(C)]
+#[derive(Serialize)]
 pub struct PbrPushConstants {
     base_color: Vec4,
     normal: Vec4,
@@ -152,30 +201,14 @@ impl MaterialColorParameter {
     }
 }
 
-pub enum MaterialParameterBinding {
-    Texture(MaterialParameterBindingData<ImageHandle>),
-    PackedTexture(MaterialParameterBindingData<PackedTextureData>),
+pub struct MaterialParameterBinding {
+    pub index: usize,
+    pub data: MaterialParameterBindingData,
 }
 
-impl MaterialParameterBinding {
-    fn texture(index: u32, image_handle: ImageHandle) -> Self {
-        MaterialParameterBinding::Texture(MaterialParameterBindingData {
-            binding_index: index,
-            binding_data: image_handle,
-        })
-    }
-
-    fn packed_texture(index: u32, data: PackedTextureData) -> Self {
-        MaterialParameterBinding::PackedTexture(MaterialParameterBindingData {
-            binding_index: index,
-            binding_data: data,
-        })
-    }
-}
-
-pub struct MaterialParameterBindingData<T> {
-    binding_index: u32,
-    binding_data: T,
+pub enum MaterialParameterBindingData {
+    Texture(ImageHandle),
+    PackedTexture(PackedTextureData),
 }
 
 pub struct PackedTextureData {

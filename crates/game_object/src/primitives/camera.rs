@@ -1,4 +1,4 @@
-use glm::{vec3, Mat4, Vec3, Vec4};
+use nalgebra_glm::{vec3, Mat4, Vec3, Vec4};
 
 pub struct Camera {
     pub position: Vec3,
@@ -29,8 +29,8 @@ impl Camera {
 
         let ff = camera_rotation
             * (Vec4::new(self.velocity.x, self.velocity.y, self.velocity.z, 0.0)
-                * 50.0
-                * delta_time);
+            * 50.0
+            * delta_time);
 
         let x = vec3(ff.x, ff.y, ff.z);
         self.position += x;
@@ -80,27 +80,27 @@ impl Camera {
     }
 
     pub fn get_view_matrix(&self) -> Mat4 {
-        glm::inverse(&self.get_transform())
+        nalgebra_glm::inverse(&self.get_transform())
     }
 
     pub fn get_transform(&self) -> Mat4 {
-        let camera_translation = glm::translate(&Mat4::identity(), &self.position);
+        let camera_translation = nalgebra_glm::translate(&Mat4::identity(), &self.position);
         let camera_rotation = self.get_rotation_matrix();
 
         camera_translation * camera_rotation
     }
 
     pub fn get_rotation_matrix(&self) -> Mat4 {
-        let pitch_rotation = glm::quat_angle_axis(self.pitch, &Vec3::new(1.0, 0.0, 0.0));
-        let yaw_rotation = glm::quat_angle_axis(self.yaw, &Vec3::new(0.0, -1.0, 0.0));
+        let pitch_rotation = nalgebra_glm::quat_angle_axis(self.pitch, &Vec3::new(1.0, 0.0, 0.0));
+        let yaw_rotation = nalgebra_glm::quat_angle_axis(self.yaw, &Vec3::new(0.0, -1.0, 0.0));
 
-        glm::quat_to_mat4(&yaw_rotation) * glm::quat_to_mat4(&pitch_rotation)
+        nalgebra_glm::quat_to_mat4(&yaw_rotation) * nalgebra_glm::quat_to_mat4(&pitch_rotation)
     }
 
     pub fn get_projection_matrix(&self) -> Mat4 {
         let aspect_ratio = 800.0 / 600.0;
 
-        let mut projection = glm::perspective(
+        let mut projection = nalgebra_glm::perspective(
             aspect_ratio,
             70_f32.to_radians(),
             self.near_clip,
@@ -115,7 +115,7 @@ impl Camera {
         let aspect_ratio = 800.0 / 600.0;
 
         let mut projection =
-            glm::perspective(aspect_ratio, 70_f32.to_radians(), near_clip, far_clip);
+            nalgebra_glm::perspective(aspect_ratio, 70_f32.to_radians(), near_clip, far_clip);
         projection[(1, 1)] *= -1.0;
 
         projection

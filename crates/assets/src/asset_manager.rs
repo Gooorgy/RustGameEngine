@@ -73,6 +73,10 @@ impl AssetManager {
         self.id_to_mesh.get(mesh_handle).map(|x| Rc::clone(x))
     }
 
+    pub fn get_image_by_handle(&self, image_handle: &ImageHandle) -> Option<Rc<Asset<ImageAsset>>> {
+        self.id_to_image.get(image_handle).map(|x| Rc::clone(x))
+    }
+
     pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<ImageAsset>>> {
         let path_str = path.as_ref().to_str()?.to_string();
 

@@ -3,7 +3,9 @@ use assets::AssetManager;
 use core::EngineContext;
 use game_object::primitives::static_mesh::StaticMesh;
 use game_object::traits::GameObjectDefaults;
-use nalgebra_glm::vec3;
+use material::material_manager::MaterialManager;
+use material::{MaterialColorParameter, MaterialParameter, PbrMaterial};
+use nalgebra_glm::{vec3, vec4};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use scene::scene::SceneManager;
 
@@ -12,28 +14,57 @@ fn main() {
     let scene_manager = SceneManager::new();
     let asset_manager = AssetManager::default();
     let resource_manager = ResourceManager::new();
+    let material_manager = MaterialManager::new();
 
     engine_context.register_system(resource_manager);
     engine_context.register_system(scene_manager);
     engine_context.register_system(asset_manager);
+    engine_context.register_system(material_manager);
 
     let app = App::new(engine_context);
     let mesh_handle = app
         .get_from_context::<AssetManager>()
         .get_mesh(".\\resources\\models\\test.obj");
-    let static_mesh = StaticMesh::new(mesh_handle.unwrap());
 
-    app.get_from_context::<SceneManager>()
-        .register_game_object(static_mesh);
+    let material = PbrMaterial {
+        base_color: MaterialColorParameter::Constant(vec4(255.0, 0.0, 0.0, 0.0)),
+        normal: MaterialColorParameter::Constant(vec4(0.0, 0.0, 0.0, 0.0)),
+        ambient_occlusion: MaterialParameter::Constant(0.0),
+        roughness: MaterialParameter::Constant(0.0),
+        specular: MaterialParameter::Constant(0.0),
+        metallic: MaterialParameter::Constant(0.0),
+    };
 
-    let static_mesh2 = StaticMesh::new(mesh_handle.unwrap()).with_location(vec3(5.0, 1.0, 5.0));
+    let material = app
+        .get_from_context::<MaterialManager>()
+        .add_material_instance(material);
 
-    let static_mesh3 = StaticMesh::new(mesh_handle.unwrap()).with_location(vec3(5.0, 10.0, 5.0)).with_scale(vec3(0.3, 0.3, 0.3));
-    
+    let material2 = PbrMaterial {
+        base_color: MaterialColorParameter::Constant(vec4(0.0, 255.0, 0.0, 0.0)),
+        normal: MaterialColorParameter::Constant(vec4(0.0, 0.0, 0.0, 0.0)),
+        ambient_occlusion: MaterialParameter::Constant(0.0),
+        roughness: MaterialParameter::Constant(0.0),
+        specular: MaterialParameter::Constant(0.0),
+        metallic: MaterialParameter::Constant(0.0),
+    };
+
+    let material2 = app
+        .get_from_context::<MaterialManager>()
+        .add_material_instance(material2);
+
+    let static_mesh2 = StaticMesh::new(mesh_handle.unwrap())
+        .with_location(vec3(5.0, 1.0, 5.0))
+        .with_material(material);
+    let static_mesh3 = StaticMesh::new(mesh_handle.unwrap())
+        .with_location(vec3(5.0, 10.0, 5.0))
+        .with_scale(vec3(0.3, 0.3, 0.3))
+        .with_material(material2);
+
     app.get_from_context::<SceneManager>()
         .register_game_object(static_mesh2);
-    
-    app.get_from_context::<SceneManager>().register_game_object(static_mesh3);
+
+    app.get_from_context::<SceneManager>()
+        .register_game_object(static_mesh3);
 
     app.run();
 }

@@ -8,3 +8,4 @@ macros = { path = "../macros" }
 nalgebra-glm = { workspace = true }
 core = { path = "../core" }
 assets = { path = "../assets" }
+material = {path = "../material"}

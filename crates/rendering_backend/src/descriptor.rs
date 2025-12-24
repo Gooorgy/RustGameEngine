@@ -1,5 +1,5 @@
 use crate::buffer::BufferHandle;
-use crate::image::ImageHandle;
+use crate::image::GpuImageHandle;
 use crate::sampler::SamplerHandle;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -21,7 +21,7 @@ pub enum DescriptorType {
 pub enum DescriptorWrite {
     UniformBuffer(u32, BufferHandle),
     // SampledImage(u32, ImageHandle, SamplerHandle),
-    CombinedImageSampler(u32, ImageHandle, SamplerHandle),
+    CombinedImageSampler(u32, GpuImageHandle, SamplerHandle),
 }
 
 bitflags::bitflags! {
@@ -46,8 +46,19 @@ pub struct DescriptorLayoutDesc {
     pub bindings: Vec<DescriptorBinding>,
 }
 
-pub enum DescriptorValue{
+pub enum DescriptorValue {
     UniformBuffer(BufferHandle),
     StorageBuffer(BufferHandle),
-    SampledImage{image: ImageHandle, sampler: SamplerHandle},
+    SampledImage(SampledImageInfo),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct SampledImageInfo {
+    pub image: GpuImageHandle,
+    pub sampler: SamplerHandle,
+}
+
+pub struct DescriptorWriteDesc {
+    pub binding: usize,
+    pub value: DescriptorValue,
 }

@@ -5,20 +5,23 @@ use crate::backend_impl::descriptor_info::{
     AllocatedDescriptorSet, DescriptorLayoutInfo, DescriptorPoolChunk,
 };
 use crate::backend_impl::image_util::AllocatedImage;
-use crate::buffer::{BufferDesc, BufferHandle};
+use crate::buffer::{BufferDesc, BufferHandle, BufferUsageFlags};
 use crate::descriptor::{
-    DescriptorLayoutDesc, DescriptorLayoutHandle, DescriptorSetHandle, DescriptorValue, ShaderStage,
+    DescriptorLayoutDesc, DescriptorLayoutHandle, DescriptorSetHandle, DescriptorValue,
+    DescriptorWriteDesc, ShaderStage,
 };
-use crate::image::{ImageDesc, ImageHandle};
+use crate::image::{GpuImageHandle, ImageDesc};
 
 use crate::backend_impl::pipeline_info::PipelineInfo;
 use crate::backend_impl::resource_registry::ResourceRegistry;
+use crate::memory::MemoryHint;
 use crate::pipeline::{PipelineDesc, PipelineHandle};
 use crate::sampler::{SamplerDesc, SamplerHandle};
 use ash::vk::MemoryPropertyFlags;
 use ash::vk::{self};
 use ash::Instance;
 use std::{error::Error, ffi::CString, mem, ptr, slice};
+use std::alloc::Layout;
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 const SHADOW_MAP_CASCADE_COUNT: usize = 3;
@@ -165,7 +168,7 @@ impl VulkanBackend {
             .register_descriptor_layout(layout_info)
     }
 
-    pub fn create_image(&mut self, image_desc: ImageDesc) -> ImageHandle {
+    pub fn create_image(&mut self, image_desc: ImageDesc) -> GpuImageHandle {
         let image = AllocatedImage::new(
             image_desc,
             &self.device_info,
@@ -174,6 +177,54 @@ impl VulkanBackend {
         );
 
         self.resource_registry.register_image(image)
+    }
+
+    pub fn update_image_data(&mut self, image_handle: GpuImageHandle, data: &[u8]) {
+        let image = &self.resource_registry.images[image_handle.0];
+        let buffer_desc = BufferDesc {
+            usage: BufferUsageFlags::TRANSFER_SRC,
+            size: data.len(),
+            memory_hint: MemoryHint::CPUWritable,
+        };
+        let buffer =
+            AllocatedBuffer::new(&self.device_info, &self.instance, buffer_desc, Some(data));
+
+        let command_buffer = self.begin_single_time_command();
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &command_buffer,
+            image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            false,
+        );
+
+        self.end_single_time_command(command_buffer);
+
+        self.copy_buffer_to_image(buffer.buffer, &image);
+
+        let command_buffer = self.begin_single_time_command();
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &command_buffer,
+            image.image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            false,
+        );
+
+        self.end_single_time_command(command_buffer);
+
+        unsafe {
+            self.device_info
+                .logical_device
+                .destroy_buffer(buffer.buffer, None);
+            self.device_info
+                .logical_device
+                .free_memory(buffer.buffer_memory, None);
+        }
     }
 
     pub fn create_buffer<T>(
@@ -251,7 +302,7 @@ impl VulkanBackend {
         }
     }
 
-    pub fn end_frame(&mut self, final_image_handle: ImageHandle) {
+    pub fn end_frame(&mut self, final_image_handle: GpuImageHandle) {
         let final_image = &self.resource_registry.images[final_image_handle.0];
         let swapchain_image =
             self.swapchain_info.swapchain_images[self.current_swapchain_image as usize];
@@ -284,6 +335,15 @@ impl VulkanBackend {
             swapchain_image,
             final_extend,
             self.swapchain_info.swapchain_extent,
+        );
+
+        image_util::transition_image_layout(
+            &self.device_info,
+            &self.command_buffer,
+            final_image.image,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            false,
         );
 
         image_util::transition_image_layout(
@@ -364,8 +424,8 @@ impl VulkanBackend {
 
     pub fn begin_rendering(
         &mut self,
-        color_image_handles: &[ImageHandle],
-        depth_image_handle: Option<&ImageHandle>,
+        color_image_handles: &[GpuImageHandle],
+        depth_image_handle: Option<&GpuImageHandle>,
     ) {
         let mut color_infos: Vec<vk::RenderingAttachmentInfo> =
             Vec::with_capacity(color_image_handles.len());
@@ -490,8 +550,11 @@ impl VulkanBackend {
         }
     }
 
-    pub fn bind_descriptor_set(&mut self, set: DescriptorSetHandle, pipeline: PipelineHandle) {
-        let vk_set = self.resource_registry.descriptor_sets[set.0].descriptor_set;
+    pub fn bind_descriptor_sets(&mut self, sets: &[DescriptorSetHandle], pipeline: PipelineHandle) {
+        let vk_sets = sets
+            .iter()
+            .map(|set| self.resource_registry.descriptor_sets[set.0].descriptor_set)
+            .collect::<Vec<_>>();
         let vk_pipeline_layout = self.resource_registry.pipelines[pipeline.0].pipeline_layout;
 
         unsafe {
@@ -500,7 +563,7 @@ impl VulkanBackend {
                 vk::PipelineBindPoint::GRAPHICS,
                 vk_pipeline_layout,
                 0,
-                &[vk_set],
+                vk_sets.as_slice(),
                 &[],
             );
         }
@@ -522,72 +585,90 @@ impl VulkanBackend {
     pub fn update_descriptor_set(
         &mut self,
         set_handle: DescriptorSetHandle,
-        binding: u32,
-        value: DescriptorValue,
+        write_descs: &[DescriptorWriteDesc],
     ) {
         let set = self.resource_registry.descriptor_sets[set_handle.0].descriptor_set;
 
-        match value {
-            DescriptorValue::UniformBuffer(buffer) => {
-                let buffer = &self.resource_registry.buffers[buffer.0];
-                let buffer_info = vk::DescriptorBufferInfo::default()
-                    .buffer(buffer.buffer)
-                    .offset(0)
-                    .range(buffer.buffer_size);
+        let mut descriptor_uniform_buffer_infos = vec![];
+        let mut descriptor_storage_buffer_infos = vec![];
+        let mut descriptor_image_infos = vec![];
 
-                let write = vk::WriteDescriptorSet::default()
+        for write_desc in write_descs {
+            match write_desc.value {
+                DescriptorValue::UniformBuffer(buffer) => {
+                    let buffer = &self.resource_registry.buffers[buffer.0];
+                    let buffer_info = vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.buffer)
+                        .offset(0)
+                        .range(buffer.buffer_size);
+
+                    descriptor_uniform_buffer_infos.push((write_desc.binding, buffer_info));
+                }
+                DescriptorValue::StorageBuffer(buffer) => {
+                    let buffer = &self.resource_registry.buffers[buffer.0];
+                    let buffer_info = vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.buffer)
+                        .offset(0)
+                        .range(buffer.buffer_size);
+
+                    descriptor_storage_buffer_infos.push((write_desc.binding, buffer_info));
+                }
+
+                DescriptorValue::SampledImage(sampled_image_info) => {
+                    let image = &self.resource_registry.images[sampled_image_info.image.0];
+                    let sampler = self.resource_registry.samplers[sampled_image_info.sampler.0];
+                    let descriptor_image_info = vk::DescriptorImageInfo::default()
+                        .sampler(sampler)
+                        .image_view(image.image_view)
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+                    descriptor_image_infos.push((write_desc.binding, descriptor_image_info));
+                }
+            }
+        }
+
+        let mut uniform_writes = descriptor_uniform_buffer_infos
+            .iter()
+            .map(|(binding, info)| {
+                vk::WriteDescriptorSet::default()
                     .dst_set(set)
-                    .dst_binding(binding)
+                    .dst_binding(*binding as u32)
                     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .buffer_info(slice::from_ref(&buffer_info));
+                    .buffer_info(slice::from_ref(info))
+            })
+            .collect::<Vec<_>>();
 
-                unsafe {
-                    self.device_info
-                        .logical_device
-                        .update_descriptor_sets(&[write], &[]);
-                }
-            }
-
-            DescriptorValue::StorageBuffer(buffer) => {
-                let buffer = &self.resource_registry.buffers[buffer.0];
-                let buffer_info = vk::DescriptorBufferInfo::default()
-                    .buffer(buffer.buffer)
-                    .offset(0)
-                    .range(buffer.buffer_size);
-
-                let write = vk::WriteDescriptorSet::default()
+        let mut storage_writes = descriptor_storage_buffer_infos
+            .iter()
+            .map(|(binding, info)| {
+                vk::WriteDescriptorSet::default()
                     .dst_set(set)
-                    .dst_binding(binding)
+                    .dst_binding(*binding as u32)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .buffer_info(slice::from_ref(&buffer_info));
+                    .buffer_info(slice::from_ref(info))
+            })
+            .collect::<Vec<_>>();
 
-                unsafe {
-                    self.device_info
-                        .logical_device
-                        .update_descriptor_sets(&[write], &[]);
-                }
-            }
-
-            DescriptorValue::SampledImage { image, sampler } => {
-                let image = &self.resource_registry.images[image.0];
-                let sampler = self.resource_registry.samplers[sampler.0];
-                let descriptor_image_info = vk::DescriptorImageInfo::default()
-                    .sampler(sampler)
-                    .image_view(image.image_view)
-                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-
-                let write = vk::WriteDescriptorSet::default()
+        let mut image_writes = descriptor_image_infos
+            .iter()
+            .map(|(binding, info)| {
+                vk::WriteDescriptorSet::default()
                     .dst_set(set)
-                    .dst_binding(binding)
+                    .dst_binding(*binding as u32)
                     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .image_info(slice::from_ref(&descriptor_image_info));
+                    .image_info(slice::from_ref(info))
+            })
+            .collect::<Vec<_>>();
 
-                unsafe {
-                    self.device_info
-                        .logical_device
-                        .update_descriptor_sets(&[write], &[]);
-                }
-            }
+        let mut writes = vec![];
+
+        writes.append(&mut uniform_writes);
+        writes.append(&mut storage_writes);
+        writes.append(&mut image_writes);
+        unsafe {
+            self.device_info
+                .logical_device
+                .update_descriptor_sets(writes.as_slice(), &[]);
         }
     }
 
@@ -609,25 +690,109 @@ impl VulkanBackend {
         }
     }
 
-    pub fn update_push_constants_raw<T>(
+    pub fn update_push_constants_raw(
         &mut self,
         pipeline_handle: PipelineHandle,
         stage: ShaderStage,
-        data: &[T],
+        data: &[u8],
+        offset: u32,
     ) {
         let pipeline_layout = self.resource_registry.pipelines[pipeline_handle.0].pipeline_layout;
-
-        let fff = data.as_ptr() as *const u8;
 
         unsafe {
             self.device_info.logical_device.cmd_push_constants(
                 self.command_buffer,
                 pipeline_layout,
                 stage.into(),
-                0,
-                std::slice::from_raw_parts((data.as_ptr()) as *const u8, mem::size_of::<T>()),
+                offset,
+                data,
             )
         }
+    }
+
+    fn begin_single_time_command(&self) -> vk::CommandBuffer {
+        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1)
+            .command_pool(self.device_info.command_pool);
+
+        let command_buffer = unsafe {
+            self.device_info
+                .logical_device
+                .allocate_command_buffers(&command_buffer_allocate_info)
+                .expect("Failed to allocate command buffer!")
+        };
+
+        let begin_info = vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+        unsafe {
+            self.device_info
+                .logical_device
+                .begin_command_buffer(command_buffer[0], &begin_info)
+                .expect("Failed to begin command buffer recording!");
+        }
+
+        command_buffer[0]
+    }
+
+    fn end_single_time_command(&self, command_buffer: vk::CommandBuffer) {
+        unsafe {
+            self.device_info
+                .logical_device
+                .end_command_buffer(command_buffer)
+                .expect("Failed to end command buffer!");
+        };
+
+        let submit_info =
+            vk::SubmitInfo::default().command_buffers(slice::from_ref(&command_buffer));
+        unsafe {
+            self.device_info
+                .logical_device
+                .queue_submit(
+                    self.device_info.queue_info.graphics_queue,
+                    &[submit_info],
+                    vk::Fence::null(),
+                )
+                .expect("Failed to submit queue!");
+            self.device_info
+                .logical_device
+                .queue_wait_idle(self.device_info.queue_info.graphics_queue)
+                .expect("Failed to wait on queue!");
+            self.device_info
+                .logical_device
+                .free_command_buffers(self.device_info.command_pool, &[command_buffer]);
+        }
+    }
+
+    fn copy_buffer_to_image(&self, buffer: vk::Buffer, image: &AllocatedImage) {
+        let command_buffer = self.begin_single_time_command();
+
+        let region = vk::BufferImageCopy::default()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(
+                vk::ImageSubresourceLayers::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .mip_level(0)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            )
+            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+            .image_extent(image.image_extent);
+
+        unsafe {
+            self.device_info.logical_device.cmd_copy_buffer_to_image(
+                command_buffer,
+                buffer,
+                image.image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[region],
+            );
+        }
+
+        self.end_single_time_command(command_buffer);
     }
 
     // pub fn update_descriptor_set(

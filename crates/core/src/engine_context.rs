@@ -55,7 +55,7 @@ impl EngineContext {
     /// my_system.value += 1;
     /// assert_eq!(my_system.value, 43);
     /// ```
-    pub fn expect_system_mut<T: 'static>(&self) -> RefMut<T> {
+    pub fn expect_system_mut<T: 'static>(&'_ self) -> RefMut<'_, T> {
         // Ensure the reference stays within the context
         let system = self
             .systems

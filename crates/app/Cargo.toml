@@ -8,7 +8,8 @@ assets = { path = "../assets" }
 scene = { path = "../scene" }
 core = { path = "../core" }
 rendering_backend = { path = "../rendering_backend" }
-render_utils = { path = "../renderers/render_utils" }
-
+material = { path = "../material" }
+renderer = { path = "../renderer" }
+game_object = {path = "../game_object"}
 
 winit = "0.30.9"
