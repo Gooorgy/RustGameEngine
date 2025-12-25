@@ -39,8 +39,12 @@ fn main() {
         .get_from_context::<MaterialManager>()
         .add_material_instance(material);
 
+    let image = app
+        .get_from_context::<AssetManager>()
+        .get_image(".\\resources\\textures\\texture.png");
+
     let material2 = PbrMaterial {
-        base_color: MaterialColorParameter::Constant(vec4(0.0, 255.0, 0.0, 0.0)),
+        base_color: MaterialColorParameter::Handle(image.unwrap()),
         normal: MaterialColorParameter::Constant(vec4(0.0, 0.0, 0.0, 0.0)),
         ambient_occlusion: MaterialParameter::Constant(0.0),
         roughness: MaterialParameter::Constant(0.0),

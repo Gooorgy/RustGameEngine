@@ -150,20 +150,20 @@ impl ResourceManager {
         let image_desc = ImageDesc {
             width,
             height,
-            usage: ImageUsageFlags::SAMPLED,
+            usage: ImageUsageFlags::SAMPLED | ImageUsageFlags::TRANSFER_DST,
             aspect: ImageAspect::Color,
             array_layers: 0,
             is_cubemap: false,
             mip_levels: 0,
-            format: TextureFormat::R16g16b16a16Float,
+            format: TextureFormat::R8g8b8a8Unorm,
             clear_value: None,
-            depth: 0,
+            depth: 1,
         };
 
         let image_handle = vulkan_backend.create_image(image_desc);
         vulkan_backend.update_image_data(image_handle, data.as_ref());
         self.images.insert(asset_id, image_handle);
-        
+
         image_handle
     }
 }

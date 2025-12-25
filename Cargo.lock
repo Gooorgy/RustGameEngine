@@ -2018,15 +2018,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "render_utils"
-version = "0.1.0"
-dependencies = [
- "material",
- "nalgebra-glm",
- "rendering_backend",
-]
-
-[[package]]
 name = "renderer"
 version = "0.1.0"
 dependencies = [

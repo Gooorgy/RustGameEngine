@@ -21,7 +21,6 @@ use ash::vk::MemoryPropertyFlags;
 use ash::vk::{self};
 use ash::Instance;
 use std::{error::Error, ffi::CString, mem, ptr, slice};
-use std::alloc::Layout;
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 const SHADOW_MAP_CASCADE_COUNT: usize = 3;

@@ -77,11 +77,11 @@ impl AssetManager {
         self.id_to_image.get(image_handle).map(|x| Rc::clone(x))
     }
 
-    pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<Rc<Asset<ImageAsset>>> {
+    pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<ImageHandle> {
         let path_str = path.as_ref().to_str()?.to_string();
 
         if let Some(asset_id) = self.path_to_image_id.get(&path_str) {
-            return self.id_to_image.get(asset_id).map(|x| Rc::clone(x));
+            return Some(*asset_id);
         }
 
         match load_image(path) {
@@ -95,7 +95,7 @@ impl AssetManager {
                 self.id_to_image
                     .insert(asset_id, Rc::clone(&image_asset_rc));
                 self.next_id += 1;
-                Some(image_asset_rc)
+                Some(asset_id)
             }
             Err(e) => {
                 eprintln!("AssetManager: Failed to load image {}", e);

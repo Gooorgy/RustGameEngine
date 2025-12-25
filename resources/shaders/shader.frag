@@ -13,15 +13,15 @@ layout(location = 3) in vec3 inNormal;
 layout(location = 2) in vec3 inPos;
 
 #ifdef HAS_BASE_COLOR
-layout(binding = 0) uniform sampler2D baseColor;
+layout(set = 1, binding = 0) uniform sampler2D baseColor;
 #endif
 
 #ifdef HAS_NORMAL
-layout(binding = 1) uniform sampler2D normal;
+layout(set = 1, binding = 1) uniform sampler2D normal;
 #endif
 
 #ifdef HAS_ORM
-layout(binding = 2) uniform sampler2D orm;
+layout(set = 1, binding = 2) uniform sampler2D orm;
 #endif
 
 layout(push_constant) uniform MaterialConstants {
