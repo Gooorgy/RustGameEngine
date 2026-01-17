@@ -1,7 +1,9 @@
 use crate::primitives::types::EnginePrimitiveType;
+use core::types::transform::Transform;
 use core::EngineContext;
 use nalgebra_glm::Vec3;
-use core::types::transform::Transform;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub trait GameObject: GameObjectDefaults + HasGameObjectType {
     fn setup(&mut self, engine_context: &EngineContext);
@@ -26,6 +28,7 @@ pub trait GameObjectDefaults {
 
 pub trait HasGameObjectType {
     fn get_game_object_type(&self) -> GameObjectType;
+    
 }
 
 pub trait HasGameObjectTypeImpl {

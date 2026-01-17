@@ -1240,16 +1240,7 @@ impl VulkanBackend {
     //         let split_start = splits[i];
     //         let split_end = splits[i + 1];
     //
-    //         let frustum_corners = [
-    //             vec3(-1.0, -1.0, 0.0),
-    //             vec3(1.0, -1.0, 0.0),
-    //             vec3(1.0, 1.0, 0.0),
-    //             vec3(-1.0, 1.0, 0.0),
-    //             vec3(-1.0, -1.0, 1.0),
-    //             vec3(1.0, -1.0, 1.0),
-    //             vec3(1.0, 1.0, 1.0),
-    //             vec3(-1.0, 1.0, 1.0),
-    //         ];
+
     //
     //         let mut corners_world = [Vec3::zeros(); 8];
     //

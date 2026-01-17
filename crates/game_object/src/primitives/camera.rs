@@ -1,39 +1,57 @@
-use nalgebra_glm::{vec3, Mat4, Vec3, Vec4};
+use core::types::transform::Transform;
+use macros::primitive_game_object;
+use nalgebra_glm::{
+    clamp_scalar, identity, rotate_x, rotate_y, rotate_z, translate, vec1, vec3, Mat4, Vec3, Vec4,
+};
 
+#[primitive_game_object]
 pub struct Camera {
-    pub position: Vec3,
     pub velocity: Vec3,
-
-    pub pitch: f32,
-    pub yaw: f32,
 
     pub near_clip: f32,
     pub far_clip: f32,
+
+    pub fov: f32,
 }
+
+// impl HasGameObjectType for Camera {
+//     fn get_game_object_type(&self) -> GameObjectType {
+//         GameObjectType::EnginePrimitive(EnginePrimitiveType::Camera(CameraData {
+//             view: self.get_view_matrix(),
+//             projection: Self::get_projection_matrix(),
+//             far_clip: self.far_clip,
+//             near_clip: self.near_clip,
+//             fov: self.fov,
+//         }))
+//     }
+// }
 
 impl Camera {
     pub fn new() -> Self {
         Self {
-            position: Vec3::new(0.0, 0.0, 0.0),
             velocity: Vec3::new(0.0, 0.0, 0.0),
-            pitch: 0.0,
-            yaw: 0.0,
-
+            transform: Transform::default(),
+            fov: 70.0,
             near_clip: 0.1,
             far_clip: 1000.0,
         }
     }
 
     pub fn update(&mut self, delta_time: f32) {
-        let camera_rotation = self.get_rotation_matrix();
+        //let camera_rotation = self.get_rotation_matrix();
 
-        let ff = camera_rotation
+        let rot_x = rotate_x(&identity(), self.transform.rotation.x);
+        let rot_y = rotate_y(&identity(), self.transform.rotation.y);
+        let rot_z = rotate_z(&identity(), self.transform.rotation.z);
+        let rotation = rot_z * rot_y * rot_x;
+
+        let ff = rotation
             * (Vec4::new(self.velocity.x, self.velocity.y, self.velocity.z, 0.0)
-            * 50.0
-            * delta_time);
+                * 50.0
+                * delta_time);
 
         let x = vec3(ff.x, ff.y, ff.z);
-        self.position += x;
+        self.transform.location += x;
     }
 
     // pub fn process_keyboard_event(&mut self, key_event: RawKeyEvent) {
@@ -68,41 +86,34 @@ impl Camera {
     // }
 
     pub fn process_cursor_moved(&mut self, mouse_x: f32, mouse_y: f32) {
-        self.yaw += mouse_x / 200.0;
-        self.pitch -= mouse_y / 200.0;
+        self.transform.rotation.y -= mouse_x / 200.0;
+        self.transform.rotation.x -= mouse_y / 200.0;
 
-        if self.pitch > 1.5 {
-            self.pitch = 1.5;
-        }
-        if self.pitch < -1.5 {
-            self.pitch = -1.5;
-        }
+        let x = vec1(-89.0);
+
+        self.transform.rotation.x = clamp_scalar(
+            self.transform.rotation.x,
+            -89.0_f32.to_radians(),
+            89.0_f32.to_radians(),
+        );
     }
 
     pub fn get_view_matrix(&self) -> Mat4 {
-        nalgebra_glm::inverse(&self.get_transform())
+        let translation = translate(&identity(), &self.transform.location);
+
+        let rot_x = rotate_x(&identity(), self.transform.rotation.x);
+        let rot_y = rotate_y(&identity(), self.transform.rotation.y);
+        let rot_z = rotate_z(&identity(), self.transform.rotation.z);
+        let rotation = rot_z * rot_y * rot_x;
+
+        let mat = translation * rotation;
+        nalgebra_glm::inverse(&mat)
     }
 
-    pub fn get_transform(&self) -> Mat4 {
-        let camera_translation = nalgebra_glm::translate(&Mat4::identity(), &self.position);
-        let camera_rotation = self.get_rotation_matrix();
-
-        camera_translation * camera_rotation
-    }
-
-    pub fn get_rotation_matrix(&self) -> Mat4 {
-        let pitch_rotation = nalgebra_glm::quat_angle_axis(self.pitch, &Vec3::new(1.0, 0.0, 0.0));
-        let yaw_rotation = nalgebra_glm::quat_angle_axis(self.yaw, &Vec3::new(0.0, -1.0, 0.0));
-
-        nalgebra_glm::quat_to_mat4(&yaw_rotation) * nalgebra_glm::quat_to_mat4(&pitch_rotation)
-    }
-
-    pub fn get_projection_matrix(&self) -> Mat4 {
-        let aspect_ratio = 800.0 / 600.0;
-
+    pub fn get_projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
         let mut projection = nalgebra_glm::perspective(
             aspect_ratio,
-            70_f32.to_radians(),
+            self.fov.to_radians(),
             self.near_clip,
             self.far_clip,
         );

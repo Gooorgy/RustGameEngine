@@ -108,6 +108,10 @@ impl ApplicationHandler for AppHandler {
                         height: WINDOW_HEIGHT,
                         width: WINDOW_WIDTH,
                     },
+                    shadow_resolution: Resolution {
+                        width: 1024,
+                        height: 1024,
+                    }
                 },
             );
 
@@ -142,7 +146,7 @@ impl ApplicationHandler for AppHandler {
                     let renderer = self.renderer.as_mut().unwrap();
 
                     let camera_ubo = CameraMvpUbo {
-                        proj: self.camera.get_projection_matrix(),
+                        proj: self.camera.get_projection_matrix( 800.0 / 600.0),
                         view: self.camera.get_view_matrix(),
                     };
 

@@ -1,6 +1,10 @@
 use app::App;
 use assets::AssetManager;
 use core::EngineContext;
+use ecs::component::component_storage::World;
+use ecs::component::query::Query;
+use ecs::component::Component;
+use ecs::systems::{System, SystemFunction};
 use game_object::primitives::static_mesh::StaticMesh;
 use game_object::traits::GameObjectDefaults;
 use material::material_manager::MaterialManager;
@@ -70,5 +74,67 @@ fn main() {
     app.get_from_context::<SceneManager>()
         .register_game_object(static_mesh3);
 
+    let mut world = World::new();
+    let comp = TestComponent {
+        test: String::from("Hallo"),
+        data: 0,
+    };
+
+    let x = world.create_entity(comp);
+    println!("Created entity: {:?}", x);
+    let comp1 = TestComponent {
+        test: String::from("Hallo2"),
+        data: 0,
+    };
+    let x3 = world.create_entity(comp1);
+        println!("Created entity: {:?}", x3);
+    // let comp2 = TestComponent {
+    //     test: String::from("Hallo"),
+    //     data: 0,
+    // };
+
+
+    let comps = TestComponent {
+        test: String::from("Hallo from other archetype"),
+        data: 0,
+    };
+
+    let compsss = Test {
+        data: 0,
+    };
+    
+    
+    let s = world.create_entity((comps, compsss));
+
+    
+    fn test(mut query: Query<&mut TestComponent>) {
+        let len = query.iter().count();
+        println!("len: {}", len);
+        let c = query.iter();
+        for cc in c {
+            println!("{:?}", cc.test);
+        }
+    }
+
+    world.register_system(Box::new(System::new(test)));
+    world.update();
+
+    //world.create_entity((comp2, comp1));
+
     app.run();
+}
+
+pub struct Test {
+    data: u32,
+}
+
+pub struct TestComponent {
+    data: usize,
+    test: String,
+}
+
+impl Component for TestComponent {}
+
+impl Component for Test {
+    
 }

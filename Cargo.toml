@@ -17,7 +17,7 @@ assets = { path = "crates/assets" }
 game_object = { path = "crates/game_object" }
 material = { path = "crates/material" }
 core = { path = "crates/core" }
-
+ecs = { path = "crates/ecs" }
 
 noise = "0.9.0"
 
@@ -26,7 +26,7 @@ walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "crates/app", "crates/assets", "crates/common", "crates/core", "crates/game_object", "crates/imgui", "crates/macros", "crates/material", "crates/renderer", "crates/rendering_backend", "crates/scene",
+    "crates/app", "crates/assets", "crates/common", "crates/core", "crates/ecs", "crates/game_object", "crates/imgui", "crates/macros", "crates/material", "crates/renderer", "crates/rendering_backend", "crates/scene",
 ]
 
 [workspace.dependencies]

@@ -1,8 +1,8 @@
 use crate::registration::GameObjectRegistration;
 use assets::MeshHandle;
-use game_object::primitives::types::EnginePrimitiveType;
-use game_object::traits::{GameObject, GameObjectType};
 use core::types::transform::Transform;
+use game_object::primitives::types::EnginePrimitiveType;
+use game_object::traits::{GameObject, GameObjectDefaults, GameObjectType};
 use material::material_manager::MaterialHandle;
 
 pub struct SceneManager {
@@ -15,6 +15,16 @@ impl SceneManager {
             game_objects: Vec::new(),
         }
     }
+
+    // pub fn test(&mut self) {
+    //     for game_object in self.game_objects.iter_mut() {
+    //         let x = GameObject::get_ref_type(game_object);
+    //         let x = match x {
+    //             EnginePrimitiveType::StaticMesh(s) => s.borrow().get_transform(),
+    //             _ => todo!(),
+    //         };
+    //     }
+    // }
 
     pub fn register_game_object(
         &mut self,
@@ -43,7 +53,9 @@ impl SceneManager {
                     EnginePrimitiveType::StaticMesh(mesh_data) => {
                         let scene_mesh_data = SceneMeshData {
                             mesh_handle: mesh_data.mesh_handle,
-                            material_handle: mesh_data.material_handle.expect("missing material handle"),
+                            material_handle: mesh_data
+                                .material_handle
+                                .expect("missing material handle"),
                             transform: object.get_transform(),
                         };
                         meshes.push(scene_mesh_data);
@@ -61,5 +73,5 @@ impl SceneManager {
 pub struct SceneMeshData {
     pub mesh_handle: MeshHandle,
     pub transform: Transform,
-    pub material_handle: MaterialHandle
+    pub material_handle: MaterialHandle,
 }

@@ -4,39 +4,41 @@ use crate::image::GpuImageHandle;
 #[derive(Copy, Clone, Debug)]
 pub struct PipelineHandle(pub usize);
 
+#[derive(Clone, Debug)]
 pub struct PipelineDesc {
     pub vertex_shader: String,
     pub fragment_shader: Option<String>,
     pub layout: Vec<DescriptorLayoutHandle>,
     pub vertex_input: VertexInputDesc,
     pub rasterization: RasterizationStateDesc,
-    pub blend: BlendStateDesc,
+    pub blend: Option<BlendStateDesc>,
     pub depth_stencil: DepthStencilDesc,
     pub color_attachments: Vec<GpuImageHandle>,
     pub depth_attachment: Option<GpuImageHandle>,
     pub push_constant_ranges: Vec<PushConstantDesc>,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct PushConstantDesc {
     pub stages: ShaderStage,
     pub offset: u32,
     pub size: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct VertexInputDesc {
     pub bindings: Vec<VertexBindingDesc>,
     pub attributes: Vec<VertexAttributeDesc>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct VertexBindingDesc {
     pub binding: u32,
     pub stride: u32,
     pub input_rate: VertexInputRate,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum VertexInputRate {
     Vertex,
     Instance,

@@ -99,30 +99,19 @@ impl PipelineInfo {
             alpha_to_one_enable: vk::FALSE,
             ..Default::default()
         };
-
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState::default()
-            .color_write_mask(desc.blend.attachments[0].color_write_mask.into())
-            .blend_enable(desc.blend.attachments[0].blend_enable)
-            .src_color_blend_factor(desc.blend.attachments[0].src_color_blend.into())
-            .dst_color_blend_factor(desc.blend.attachments[0].dst_color_blend.into())
-            .color_blend_op(desc.blend.attachments[0].color_blend_op.into())
-            .src_alpha_blend_factor(desc.blend.attachments[0].src_alpha_blend.into())
-            .dst_alpha_blend_factor(desc.blend.attachments[0].dst_alpha_blend.into())
-            .alpha_blend_op(desc.blend.attachments[0].alpha_blend_op.into());
-
-        let color_blend_attachments = [color_blend_attachment];
-        let color_blend_state_create_info = vk::PipelineColorBlendStateCreateInfo::default()
-            .logic_op_enable(desc.blend.logic_op_enable)
-            .logic_op(vk::LogicOp::COPY)
-            .attachments(&color_blend_attachments);
-
+        
+        
         let depth_stencil_state_create_info = vk::PipelineDepthStencilStateCreateInfo::default()
             .depth_test_enable(desc.depth_stencil.depth_test_enable)
             .depth_write_enable(desc.depth_stencil.depth_write_enable)
             .depth_compare_op(desc.depth_stencil.depth_compare_op.into())
             .stencil_test_enable(desc.depth_stencil.stencil_test_enable);
-        
-        let set_layouts = desc.layout.iter().map(|layout_handle| resource_registry.descriptor_layouts[layout_handle.0].layout).collect::<Vec<_>>();
+
+        let set_layouts = desc
+            .layout
+            .iter()
+            .map(|layout_handle| resource_registry.descriptor_layouts[layout_handle.0].layout)
+            .collect::<Vec<_>>();
 
         let mut pipeline_layout_create_info =
             vk::PipelineLayoutCreateInfo::default().set_layouts(set_layouts.as_slice());
@@ -167,18 +156,43 @@ impl PipelineInfo {
             rendering_info = rendering_info.depth_attachment_format(df);
         }
 
-        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::default()
+        let mut pipeline_create_info = vk::GraphicsPipelineCreateInfo::default()
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input_info_create_info)
             .input_assembly_state(&input_assembly_create_info)
             .viewport_state(&viewport_state_create_info)
             .rasterization_state(&rasterizer_create_info)
             .multisample_state(&multisampling_create_info)
-            .color_blend_state(&color_blend_state_create_info)
             .dynamic_state(&dynamic_state_create_info)
             .layout(pipeline_layout)
             .depth_stencil_state(&depth_stencil_state_create_info)
             .push_next(&mut rendering_info);
+        
+        let mut color_blend_attachments = vec![];
+        let mut color_blend_state_create_info = None;
+        if let Some(blend) = desc.blend {
+            let color_blend_attachment = vk::PipelineColorBlendAttachmentState::default()
+                .color_write_mask(blend.attachments[0].color_write_mask.into())
+                .blend_enable(blend.attachments[0].blend_enable)
+                .src_color_blend_factor(blend.attachments[0].src_color_blend.into())
+                .dst_color_blend_factor(blend.attachments[0].dst_color_blend.into())
+                .color_blend_op(blend.attachments[0].color_blend_op.into())
+                .src_alpha_blend_factor(blend.attachments[0].src_alpha_blend.into())
+                .dst_alpha_blend_factor(blend.attachments[0].dst_alpha_blend.into())
+                .alpha_blend_op(blend.attachments[0].alpha_blend_op.into());
+
+            color_blend_attachments.push(color_blend_attachment);
+            
+            color_blend_state_create_info = Some(vk::PipelineColorBlendStateCreateInfo::default()
+                .logic_op_enable(blend.logic_op_enable)
+                .logic_op(vk::LogicOp::COPY)
+                .attachments(color_blend_attachments.as_slice()));
+            
+        };
+        
+        if let Some(color_blend_state_create_info) = &color_blend_state_create_info {
+            pipeline_create_info = pipeline_create_info.color_blend_state(color_blend_state_create_info);
+        }
 
         let graphics_pipelines = unsafe {
             device

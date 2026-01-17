@@ -1,7 +1,7 @@
 #[derive(Copy, Clone, Debug)]
 pub struct GpuImageHandle(pub usize);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ImageDesc {
     pub width: u32,
     pub height: u32,
@@ -24,7 +24,7 @@ pub enum TextureFormat {
 }
 
 bitflags::bitflags! {
-    #[derive(Clone, Debug)]
+    #[derive(Clone,Copy, Debug)]
     pub struct ImageUsageFlags: u32 {
         const COLOR_ATTACHMENT   = 0b0001;
         const DEPTH_ATTACHMENT   = 0b0010;

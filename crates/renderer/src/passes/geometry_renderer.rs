@@ -105,7 +105,7 @@ impl GeometryRenderer {
                     size: material_data.push_constant_data.len(),
                 },
             ],
-            blend: BlendStateDesc {
+            blend: Some(BlendStateDesc {
                 logic_op_enable: false,
                 attachments: vec![BlendAttachmentDesc {
                     color_write_mask: ColorWriteMask::ALL,
@@ -117,7 +117,7 @@ impl GeometryRenderer {
                     dst_alpha_blend: BlendFactor::Zero,
                     alpha_blend_op: BlendOp::Add,
                 }],
-            },
+            }),
             rasterization: RasterizationStateDesc {
                 depth_clamp_enable: false,
                 depth_bias_enable: false,
