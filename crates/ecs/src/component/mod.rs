@@ -1,17 +1,14 @@
-use std::any::Any;
+use std::any::{Any, TypeId};
 
-mod archetype;
+pub(crate) mod archetype;
 pub mod component_storage;
-pub mod query;
+mod impls;
+
+use crate::component::archetype::{ColumnFactory, ComponentValue};
+pub use ecs_macros::Component;
 
 pub trait Component: Any {}
 
-// impl<T1: 'static> Component for T1 {
-//     fn insert(&mut self, entity: Entity, archetype: &mut Archetype) {
-//         let type_id = TypeId::of::<T1>();
-//     }
-//
-//     fn type_ids(&self) -> &[TypeId] {
-//         todo!()
-//     }
-// }
+pub(crate) trait ComponentInsertion {
+    fn for_each_component(self, f: impl FnMut(TypeId, ComponentValue, ColumnFactory));
+}

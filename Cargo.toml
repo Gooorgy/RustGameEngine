@@ -26,7 +26,7 @@ walkdir = "2.5.0"
 
 [workspace]
 members = [
-    "crates/app", "crates/assets", "crates/common", "crates/core", "crates/ecs", "crates/game_object", "crates/imgui", "crates/macros", "crates/material", "crates/renderer", "crates/rendering_backend", "crates/scene",
+    "crates/*"
 ]
 
 [workspace.dependencies]

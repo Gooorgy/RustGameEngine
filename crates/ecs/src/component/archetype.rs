@@ -10,7 +10,7 @@ pub struct Archetype {
 }
 
 impl Archetype {
-    pub fn new(factories: Vec<(&ColumnFactory, TypeId)>) -> Self {
+    pub(crate) fn new(factories: Vec<(&ColumnFactory, TypeId)>) -> Self {
         let mut columns = vec![];
         let mut components = HashMap::new();
         for (factory, type_id) in factories {
@@ -37,10 +37,6 @@ impl Archetype {
 
         Some(new_row)
     }
-
-    // pub fn column<T>(&self, column_index: usize) -> Vec<T> {
-    //     self.columns[column_index].data.pu
-    // }
 }
 
 pub struct ComponentValue {

@@ -1,5 +1,5 @@
 use core::types::transform::Transform;
-use macros::primitive_game_object;
+use legacy_macros::primitive_game_object;
 use nalgebra_glm::{
     clamp_scalar, identity, rotate_x, rotate_y, rotate_z, translate, vec1, vec3, Mat4, Vec3, Vec4,
 };

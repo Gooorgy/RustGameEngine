@@ -3,7 +3,7 @@ use crate::traits::{GameObject, GameObjectType, HasGameObjectType};
 use assets::MeshHandle;
 use core::types::transform::Transform;
 use core::EngineContext;
-use macros::primitive_game_object;
+use legacy_macros::primitive_game_object;
 use material::material_manager::MaterialHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
