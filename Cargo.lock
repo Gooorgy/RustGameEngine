@@ -95,6 +95,7 @@ dependencies = [
  "assets",
  "core",
  "game_object",
+ "input",
  "material",
  "renderer",
  "rendering_backend",
@@ -439,6 +440,8 @@ dependencies = [
 name = "core"
 version = "0.1.0"
 dependencies = [
+ "assets",
+ "ecs",
  "legacy_macros",
  "nalgebra-glm",
 ]
@@ -954,6 +957,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "input"
+version = "0.1.0"
+
+[[package]]
 name = "interpolate_name"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1278,6 +1285,7 @@ dependencies = [
  "ecs",
  "game_object",
  "image",
+ "input",
  "material",
  "nalgebra",
  "nalgebra-glm",

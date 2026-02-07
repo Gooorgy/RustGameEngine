@@ -18,6 +18,7 @@ game_object = { path = "crates/game_object" }
 material = { path = "crates/material" }
 core = { path = "crates/core" }
 ecs = { path = "crates/ecs" }
+input = { path = "crates/input" }
 
 noise = "0.9.0"
 

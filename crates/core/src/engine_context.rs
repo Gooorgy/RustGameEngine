@@ -1,73 +1,89 @@
+use ecs::world::World;
 use std::any::{Any, TypeId};
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// Context that holds and manages different systems.
+/// Context that holds and manages different managers.
 ///
-/// Systems can be registered and retrieved in a type-safe way.
+/// Managers can be registered and retrieved in a type-safe way.
 pub struct EngineContext {
-    systems: HashMap<TypeId, Box<dyn Any>>,
+    managers: HashMap<TypeId, Box<dyn Any>>,
+    world: World,
 }
 
 impl EngineContext {
     pub fn new() -> EngineContext {
         Self {
-            systems: HashMap::new(),
+            managers: HashMap::new(),
+            world: World::new(),
         }
     }
 
-    /// Inserts a system into the `EngineContext`.
+    pub fn get_world(&mut self) -> &mut World {
+        &mut self.world
+    }
+
+    pub fn update(&mut self, delta_time: f32) {
+        let ctx = ecs::systems::ManagerContext::new(&self.managers, delta_time);
+        self.world.update(&ctx);
+    }
+
+    /// Returns a reference to the managers HashMap for creating ManagerContext
+    pub fn managers(&self) -> &HashMap<TypeId, Box<dyn Any>> {
+        &self.managers
+    }
+
+    /// Inserts a manager into the `EngineContext`.
     ///
     /// # Example
     ///
     /// ```
     /// use core::engine_context::EngineContext;
     ///
-    /// struct MySystem;
+    /// struct MyManager;
     /// let mut context = EngineContext::new();
-    /// context.register_system(MySystem);
+    /// context.register_manager(MyManager);
     /// ```
-    pub fn register_system<T: 'static>(&mut self, system: T) {
-        self.systems
-            .insert(system.type_id(), Box::new(Rc::new(RefCell::new(system))));
+    pub fn register_manager<T: 'static>(&mut self, manager: T) {
+        self.managers
+            .insert(manager.type_id(), Box::new(Rc::new(RefCell::new(manager))));
     }
 
-    /// Retrieves a mutable reference to a system.
+    /// Retrieves a mutable reference to a manager.
     ///
     /// # Panics
     ///
-    /// Panics if the system has not been registered.
+    /// Panics if the manager has not been registered.
     ///
     /// # Example
     ///
     /// ```
     /// use core::EngineContext;
     ///
-    /// struct MySystem {
+    /// struct MyManager {
     ///     value: i32,
     /// }
     ///
     /// let mut context = EngineContext::new();
-    /// context.register_system(MySystem { value: 42 });
+    /// context.register_manager(MyManager { value: 42 });
     ///
-    /// let mut my_system = context.expect_system_mut::<MySystem>();
-    /// my_system.value += 1;
-    /// assert_eq!(my_system.value, 43);
+    /// let mut my_manager = context.expect_manager_mut::<MyManager>();
+    /// my_manager.value += 1;
+    /// assert_eq!(my_manager.value, 43);
     /// ```
-    pub fn expect_system_mut<T: 'static>(&'_ self) -> RefMut<'_, T> {
-        // Ensure the reference stays within the context
-        let system = self
-            .systems
+    pub fn expect_manager_mut<T: 'static>(&'_ self) -> RefMut<'_, T> {
+        let manager = self
+            .managers
             .get(&TypeId::of::<T>())
-            .and_then(|system| system.downcast_ref::<Rc<RefCell<T>>>())
+            .and_then(|manager| manager.downcast_ref::<Rc<RefCell<T>>>())
             .expect(&format!(
-                "System '{}' not found in EngineContext",
+                "Manager '{}' not found in EngineContext",
                 std::any::type_name::<T>()
             ))
             .borrow_mut();
 
-        system
+        manager
     }
 }
 
@@ -76,53 +92,53 @@ mod tests {
     use super::*;
 
     #[derive(Debug, PartialEq)]
-    struct TestSystem {
+    struct TestManager {
         value: i32,
     }
 
     #[test]
-    fn test_register_and_retrieve_system() {
+    fn test_register_and_retrieve_manager() {
         let mut context = EngineContext::new();
-        context.register_system(TestSystem { value: 10 });
+        context.register_manager(TestManager { value: 10 });
 
-        let mut system = context.expect_system_mut::<TestSystem>();
-        assert_eq!(system.value, 10);
+        let mut manager = context.expect_manager_mut::<TestManager>();
+        assert_eq!(manager.value, 10);
 
-        // Modify the system
-        system.value = 42;
+        // Modify the manager
+        manager.value = 42;
     }
 
     #[test]
-    #[should_panic(expected = "MissingSystem' not found in EngineContext")]
-    fn test_retrieve_nonexistent_system_panics() {
+    #[should_panic(expected = "MissingManager' not found in EngineContext")]
+    fn test_retrieve_nonexistent_manager_panics() {
         #[derive(Debug)]
-        struct MissingSystem;
+        struct MissingManager;
 
         let context = EngineContext::new();
-        let _ = context.expect_system_mut::<MissingSystem>();
+        let _ = context.expect_manager_mut::<MissingManager>();
     }
 
     #[test]
-    fn test_multiple_systems() {
+    fn test_multiple_managers() {
         #[derive(Debug, PartialEq)]
-        struct AnotherSystem {
+        struct AnotherManager {
             name: &'static str,
         }
 
         let mut context = EngineContext::new();
-        context.register_system(TestSystem { value: 7 });
-        context.register_system(AnotherSystem { name: "test" });
+        context.register_manager(TestManager { value: 7 });
+        context.register_manager(AnotherManager { name: "test" });
 
-        let mut test_system = context.expect_system_mut::<TestSystem>();
-        let mut another_system = context.expect_system_mut::<AnotherSystem>();
+        let mut test_manager = context.expect_manager_mut::<TestManager>();
+        let mut another_manager = context.expect_manager_mut::<AnotherManager>();
 
-        assert_eq!(test_system.value, 7);
-        assert_eq!(another_system.name, "test");
+        assert_eq!(test_manager.value, 7);
+        assert_eq!(another_manager.name, "test");
 
-        test_system.value = 99;
-        another_system.name = "changed";
+        test_manager.value = 99;
+        another_manager.name = "changed";
 
-        assert_eq!(test_system.value, 99);
-        assert_eq!(another_system.name, "changed");
+        assert_eq!(test_manager.value, 99);
+        assert_eq!(another_manager.name, "changed");
     }
 }

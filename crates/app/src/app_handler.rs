@@ -1,6 +1,7 @@
 use assets::AssetManager;
 use core::EngineContext;
 use game_object::primitives::camera::Camera;
+use input::InputManager;
 use material::material_manager::MaterialManager;
 use renderer::frame_data::{Resolution, ResolutionSettings};
 use renderer::renderer::Renderer;
@@ -14,9 +15,9 @@ use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::error::OsError;
-use winit::event::{DeviceEvent, DeviceId, ElementState, RawKeyEvent, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::KeyCode;
+use winit::keyboard::KeyCode as WinitKeyCode;
 use winit::window::{Window, WindowId};
 
 // Replace this with env lookup?
@@ -54,38 +55,7 @@ impl AppHandler {
     }
 
     pub fn get_from_context<T: 'static>(&self) -> RefMut<T> {
-        self.engine_context.expect_system_mut::<T>()
-    }
-
-    fn update_camera(&mut self, key_event: RawKeyEvent) {
-        if key_event.state == ElementState::Pressed {
-            if key_event.physical_key == KeyCode::KeyW {
-                self.camera.velocity.z = -1.0
-            }
-            if key_event.physical_key == KeyCode::KeyS {
-                self.camera.velocity.z = 1.0
-            }
-            if key_event.physical_key == KeyCode::KeyA {
-                self.camera.velocity.x = -1.0
-            }
-            if key_event.physical_key == KeyCode::KeyD {
-                self.camera.velocity.x = 1.0
-            }
-        }
-        if key_event.state == ElementState::Released {
-            if key_event.physical_key == KeyCode::KeyW {
-                self.camera.velocity.z = 0.0
-            }
-            if key_event.physical_key == KeyCode::KeyS {
-                self.camera.velocity.z = 0.0
-            }
-            if key_event.physical_key == KeyCode::KeyA {
-                self.camera.velocity.x = 0.0
-            }
-            if key_event.physical_key == KeyCode::KeyD {
-                self.camera.velocity.x = 0.0
-            }
-        }
+        self.engine_context.expect_manager_mut::<T>()
     }
 }
 
@@ -111,7 +81,7 @@ impl ApplicationHandler for AppHandler {
                     shadow_resolution: Resolution {
                         width: 1024,
                         height: 1024,
-                    }
+                    },
                 },
             );
 
@@ -134,19 +104,37 @@ impl ApplicationHandler for AppHandler {
                     self.last_frame_time = Instant::now();
                     let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
                     std::io::stdout().flush().unwrap();
+
+                    {
+                        let mut input_manager =
+                            self.engine_context.expect_manager_mut::<InputManager>();
+                        input_manager.update();
+
+                        self.camera.velocity.x = input_manager.get_axis("horizontal");
+                        self.camera.velocity.z = -input_manager.get_axis("vertical");
+
+                        let mouse_delta = input_manager.get_mouse_delta();
+                        self.camera
+                            .process_cursor_moved(mouse_delta[0], mouse_delta[1]);
+
+                        input_manager.end_frame();
+                    }
+
                     self.camera.update(delta_time);
 
-                    let mut scene_manager = self.engine_context.expect_system_mut::<SceneManager>();
-                    let mut asset_manager = self.engine_context.expect_system_mut::<AssetManager>();
+                    let mut scene_manager =
+                        self.engine_context.expect_manager_mut::<SceneManager>();
+                    let mut asset_manager =
+                        self.engine_context.expect_manager_mut::<AssetManager>();
                     let mut material_manager =
-                        self.engine_context.expect_system_mut::<MaterialManager>();
+                        self.engine_context.expect_manager_mut::<MaterialManager>();
                     let mut resource_manager =
-                        self.engine_context.expect_system_mut::<ResourceManager>();
+                        self.engine_context.expect_manager_mut::<ResourceManager>();
 
                     let renderer = self.renderer.as_mut().unwrap();
 
                     let camera_ubo = CameraMvpUbo {
-                        proj: self.camera.get_projection_matrix( 800.0 / 600.0),
+                        proj: self.camera.get_projection_matrix(800.0 / 600.0),
                         view: self.camera.get_view_matrix(),
                     };
 
@@ -159,7 +147,6 @@ impl ApplicationHandler for AppHandler {
                         camera_ubo,
                     );
 
-                    //app.draw_frame(delta_time);
                     let window = &self.window.as_ref().unwrap();
                     window.set_title(&format!(
                         "{} - FPS: {}- FrameTime: {}",
@@ -182,14 +169,114 @@ impl ApplicationHandler for AppHandler {
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        let vulkan_app = self.vulkan_backend.as_mut().unwrap();
+        let mut input_manager = self.engine_context.expect_manager_mut::<InputManager>();
+
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                self.camera
-                    .process_cursor_moved(delta.0 as f32, delta.1 as f32);
+                input_manager.on_mouse_moved(delta.0 as f32, delta.1 as f32);
             }
-            DeviceEvent::Key(input) => self.update_camera(input),
+            DeviceEvent::Key(raw_key_event) => {
+                if let winit::keyboard::PhysicalKey::Code(key_code) = raw_key_event.physical_key {
+                    if let Some(input_key) = convert_winit_keycode(key_code) {
+                        match raw_key_event.state {
+                            ElementState::Pressed => input_manager.on_key_pressed(input_key),
+                            ElementState::Released => input_manager.on_key_released(input_key),
+                        }
+                    }
+                }
+            }
+            DeviceEvent::MouseWheel { delta } => {
+                let scroll = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => y,
+                    winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / 100.0,
+                };
+                input_manager.on_mouse_wheel(scroll);
+            }
+            DeviceEvent::Button { button, state } => {
+                let mouse_button = match button {
+                    0 => Some(input::MouseButton::Left),
+                    1 => Some(input::MouseButton::Right),
+                    2 => Some(input::MouseButton::Middle),
+                    3 => Some(input::MouseButton::Button4),
+                    4 => Some(input::MouseButton::Button5),
+                    _ => None,
+                };
+                if let Some(btn) = mouse_button {
+                    match state {
+                        ElementState::Pressed => input_manager.on_mouse_button_pressed(btn),
+                        ElementState::Released => input_manager.on_mouse_button_released(btn),
+                    }
+                }
+            }
             _ => {}
         }
     }
+}
+
+fn convert_winit_keycode(key: WinitKeyCode) -> Option<input::KeyCode> {
+    use input::KeyCode;
+    Some(match key {
+        WinitKeyCode::KeyA => KeyCode::A,
+        WinitKeyCode::KeyB => KeyCode::B,
+        WinitKeyCode::KeyC => KeyCode::C,
+        WinitKeyCode::KeyD => KeyCode::D,
+        WinitKeyCode::KeyE => KeyCode::E,
+        WinitKeyCode::KeyF => KeyCode::F,
+        WinitKeyCode::KeyG => KeyCode::G,
+        WinitKeyCode::KeyH => KeyCode::H,
+        WinitKeyCode::KeyI => KeyCode::I,
+        WinitKeyCode::KeyJ => KeyCode::J,
+        WinitKeyCode::KeyK => KeyCode::K,
+        WinitKeyCode::KeyL => KeyCode::L,
+        WinitKeyCode::KeyM => KeyCode::M,
+        WinitKeyCode::KeyN => KeyCode::N,
+        WinitKeyCode::KeyO => KeyCode::O,
+        WinitKeyCode::KeyP => KeyCode::P,
+        WinitKeyCode::KeyQ => KeyCode::Q,
+        WinitKeyCode::KeyR => KeyCode::R,
+        WinitKeyCode::KeyS => KeyCode::S,
+        WinitKeyCode::KeyT => KeyCode::T,
+        WinitKeyCode::KeyU => KeyCode::U,
+        WinitKeyCode::KeyV => KeyCode::V,
+        WinitKeyCode::KeyW => KeyCode::W,
+        WinitKeyCode::KeyX => KeyCode::X,
+        WinitKeyCode::KeyY => KeyCode::Y,
+        WinitKeyCode::KeyZ => KeyCode::Z,
+        WinitKeyCode::Digit0 => KeyCode::Key0,
+        WinitKeyCode::Digit1 => KeyCode::Key1,
+        WinitKeyCode::Digit2 => KeyCode::Key2,
+        WinitKeyCode::Digit3 => KeyCode::Key3,
+        WinitKeyCode::Digit4 => KeyCode::Key4,
+        WinitKeyCode::Digit5 => KeyCode::Key5,
+        WinitKeyCode::Digit6 => KeyCode::Key6,
+        WinitKeyCode::Digit7 => KeyCode::Key7,
+        WinitKeyCode::Digit8 => KeyCode::Key8,
+        WinitKeyCode::Digit9 => KeyCode::Key9,
+        WinitKeyCode::Space => KeyCode::Space,
+        WinitKeyCode::Enter => KeyCode::Enter,
+        WinitKeyCode::Tab => KeyCode::Tab,
+        WinitKeyCode::Backspace => KeyCode::Backspace,
+        WinitKeyCode::Delete => KeyCode::Delete,
+        WinitKeyCode::Escape => KeyCode::Escape,
+        WinitKeyCode::ShiftLeft | WinitKeyCode::ShiftRight => KeyCode::Shift,
+        WinitKeyCode::ControlLeft | WinitKeyCode::ControlRight => KeyCode::Control,
+        WinitKeyCode::AltLeft | WinitKeyCode::AltRight => KeyCode::Alt,
+        WinitKeyCode::ArrowLeft => KeyCode::Left,
+        WinitKeyCode::ArrowRight => KeyCode::Right,
+        WinitKeyCode::ArrowUp => KeyCode::Up,
+        WinitKeyCode::ArrowDown => KeyCode::Down,
+        WinitKeyCode::F1 => KeyCode::F1,
+        WinitKeyCode::F2 => KeyCode::F2,
+        WinitKeyCode::F3 => KeyCode::F3,
+        WinitKeyCode::F4 => KeyCode::F4,
+        WinitKeyCode::F5 => KeyCode::F5,
+        WinitKeyCode::F6 => KeyCode::F6,
+        WinitKeyCode::F7 => KeyCode::F7,
+        WinitKeyCode::F8 => KeyCode::F8,
+        WinitKeyCode::F9 => KeyCode::F9,
+        WinitKeyCode::F10 => KeyCode::F10,
+        WinitKeyCode::F11 => KeyCode::F11,
+        WinitKeyCode::F12 => KeyCode::F12,
+        _ => return None,
+    })
 }

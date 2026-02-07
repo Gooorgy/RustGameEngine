@@ -10,6 +10,7 @@ core = { path = "../core" }
 rendering_backend = { path = "../rendering_backend" }
 material = { path = "../material" }
 renderer = { path = "../renderer" }
-game_object = {path = "../game_object"}
+game_object = { path = "../game_object" }
+input = { path = "../input" }
 
 winit = "0.30.9"

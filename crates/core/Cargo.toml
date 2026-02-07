@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 legacy_macros = { path = "../legacy_macros" }
 nalgebra-glm = { workspace = true }
+ecs = { path = "../ecs" }
+assets = { path = "../assets" }

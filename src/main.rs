@@ -1,15 +1,12 @@
 use app::App;
 use assets::AssetManager;
 use core::EngineContext;
-use ecs::component::Component;
-use ecs::systems::{System, SystemFunction};
 use game_object::primitives::static_mesh::StaticMesh;
 use game_object::traits::GameObjectDefaults;
+use input::{AxisAction, AxisBinding, InputAction, InputBinding, InputManager, KeyCode};
 use material::material_manager::MaterialManager;
 use material::{MaterialColorParameter, MaterialParameter, PbrMaterial};
 use nalgebra_glm::{vec3, vec4};
-use ecs::query::Query;
-use ecs::world::World;
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use scene::scene::SceneManager;
 
@@ -20,10 +17,36 @@ fn main() {
     let resource_manager = ResourceManager::new();
     let material_manager = MaterialManager::new();
 
-    engine_context.register_system(resource_manager);
-    engine_context.register_system(scene_manager);
-    engine_context.register_system(asset_manager);
-    engine_context.register_system(material_manager);
+    // Setup InputManager with default bindings
+    let mut input_manager = InputManager::new();
+
+    // Bind movement actions
+    input_manager.bind_action("move_forward", vec![InputBinding::Key(KeyCode::W)]);
+    input_manager.bind_action("move_backward", vec![InputBinding::Key(KeyCode::S)]);
+    input_manager.bind_action("move_left", vec![InputBinding::Key(KeyCode::A)]);
+    input_manager.bind_action("move_right", vec![InputBinding::Key(KeyCode::D)]);
+
+    // Bind axes for movement
+    input_manager.bind_axis(
+        AxisAction::HORIZONTAL,
+        AxisBinding::Composite {
+            positive: InputAction::from("move_right"),
+            negative: InputAction::from("move_left"),
+        },
+    );
+    input_manager.bind_axis(
+        AxisAction::VERTICAL,
+        AxisBinding::Composite {
+            positive: InputAction::from("move_forward"),
+            negative: InputAction::from("move_backward"),
+        },
+    );
+
+    engine_context.register_manager(resource_manager);
+    engine_context.register_manager(scene_manager);
+    engine_context.register_manager(asset_manager);
+    engine_context.register_manager(material_manager);
+    engine_context.register_manager(input_manager);
 
     let app = App::new(engine_context);
     let mesh_handle = app
@@ -74,58 +97,5 @@ fn main() {
     app.get_from_context::<SceneManager>()
         .register_game_object(static_mesh3);
 
-    let mut world = World::new();
-    let comp = TestComponent {
-        test: String::from("Hallo"),
-        data: 0,
-    };
-
-    let x = world.create_entity(comp);
-    println!("Created entity: {:?}", x);
-    let comp1 = TestComponent {
-        test: String::from("Hallo2"),
-        data: 0,
-    };
-    let x3 = world.create_entity(comp1);
-    println!("Created entity: {:?}", x3);
-    // let comp2 = TestComponent {
-    //     test: String::from("Hallo"),
-    //     data: 0,
-    // };
-
-    let comps = TestComponent {
-        test: String::from("Hallo from other archetype"),
-        data: 0,
-    };
-
-    let compsss = Test { data: 0 };
-
-    let s = world.create_entity((comps, compsss));
-
-    fn test(mut query: Query<&mut TestComponent>) {
-        let len = query.iter().count();
-        println!("len: {}", len);
-        let c = query.iter();
-        for cc in c {
-            println!("{:?}", cc.test);
-        }
-    }
-
-    world.register_system(Box::new(System::new(test)));
-    world.update();
-
-    //world.create_entity((comp2, comp1));
-
     app.run();
-}
-
-#[derive(Component)]
-pub struct Test {
-    data: u32,
-}
-
-#[derive(Component)]
-pub struct TestComponent {
-    data: usize,
-    test: String,
 }

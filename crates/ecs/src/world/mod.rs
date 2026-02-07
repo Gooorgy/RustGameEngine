@@ -2,7 +2,7 @@ use crate::component::archetype::{Archetype, ColumnFactory};
 use crate::component::component_storage::ComponentInsertion;
 use crate::entity::Entity;
 use crate::query::{Query, QueryParameter};
-use crate::systems::SystemFunction;
+use crate::systems::{ManagerContext, SystemFunction};
 use std::any::TypeId;
 use std::collections::HashMap;
 
@@ -114,11 +114,11 @@ impl World {
         Entity(index)
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, ctx: &ManagerContext) {
         let systems = std::mem::take(&mut self.systems);
 
         for system in &systems {
-            system.run(self);
+            system.run(self, ctx);
         }
 
         self.systems = systems;
