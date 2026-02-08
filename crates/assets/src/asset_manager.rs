@@ -15,6 +15,7 @@ pub struct ImageAsset {
     pub height: u32,
 }
 
+#[derive(Debug)]
 pub struct MeshAsset {
     pub mesh: Rc<Mesh>,
 }
@@ -24,7 +25,6 @@ pub struct MaterialAsset;
 // Convenient aliases
 
 pub type MeshHandle = AssetId<MeshAsset>;
-pub type MaterialHandle = AssetId<MaterialAsset>;
 pub type ImageHandle = AssetId<ImageAsset>;
 
 pub union Param {

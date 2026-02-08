@@ -1,7 +1,9 @@
-use crate::pipeline::{BlendFactor, BlendOp, ColorWriteMask, CompareOp, CullMode, FrontFace, PolygonMode, VertexFormat};
-use ash::vk;
 use crate::descriptor::ShaderStage;
+use crate::pipeline::{
+    BlendFactor, BlendOp, ColorWriteMask, CompareOp, CullMode, FrontFace, PolygonMode, VertexFormat,
+};
 use crate::sampler::{Filter, SamplerAddressMode};
+use ash::vk;
 
 impl From<VertexFormat> for vk::Format {
     fn from(fmt: VertexFormat) -> Self {
@@ -118,7 +120,7 @@ impl From<CompareOp> for vk::CompareOp {
 
 impl From<SamplerAddressMode> for vk::SamplerAddressMode {
     fn from(sampler_address_mode: SamplerAddressMode) -> Self {
-        match sampler_address_mode { 
+        match sampler_address_mode {
             SamplerAddressMode::Repeat => vk::SamplerAddressMode::REPEAT,
             SamplerAddressMode::ClampToBorder => vk::SamplerAddressMode::CLAMP_TO_BORDER,
             SamplerAddressMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
@@ -129,7 +131,7 @@ impl From<SamplerAddressMode> for vk::SamplerAddressMode {
 
 impl From<Filter> for vk::Filter {
     fn from(filter: Filter) -> Self {
-        match filter { 
+        match filter {
             Filter::Nearest => vk::Filter::NEAREST,
             Filter::Linear => vk::Filter::LINEAR,
         }

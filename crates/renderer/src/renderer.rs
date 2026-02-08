@@ -1,5 +1,6 @@
 use crate::frame_data::{FrameData, ResolutionSettings};
 use crate::passes::geometry_renderer::GeometryRenderer;
+use crate::render_data::MeshRenderRequest;
 use crate::render_scene::{MaterialData, MeshRenderData, RenderScene};
 use assets::AssetManager;
 use material::material_manager::{MaterialHandle, MaterialManager};
@@ -11,7 +12,6 @@ use rendering_backend::descriptor::{
     DescriptorBinding, DescriptorLayoutDesc, DescriptorLayoutHandle, DescriptorSetHandle,
     DescriptorType, DescriptorValue, DescriptorWriteDesc, SampledImageInfo, ShaderStage,
 };
-use scene::scene::SceneManager;
 use std::collections::HashMap;
 
 pub struct Renderer {
@@ -39,7 +39,7 @@ impl Renderer {
     pub fn draw_frame(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
-        scene_manager: &mut SceneManager,
+        mesh_requests: &[MeshRenderRequest],
         material_manager: &mut MaterialManager,
         asset_manager: &mut AssetManager,
         resource_manager: &mut ResourceManager,
@@ -47,7 +47,7 @@ impl Renderer {
     ) {
         let render_scene = self.create_render_scene(
             vulkan_backend,
-            scene_manager,
+            mesh_requests,
             material_manager,
             asset_manager,
             resource_manager,
@@ -64,22 +64,23 @@ impl Renderer {
     fn create_render_scene(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
-        scene_manager: &mut SceneManager,
+        mesh_requests: &[MeshRenderRequest],
         material_manager: &mut MaterialManager,
         asset_manager: &mut AssetManager,
         resource_manager: &mut ResourceManager,
         camera: CameraMvpUbo,
     ) -> RenderScene {
-        let scene_data = scene_manager.get_static_meshes();
-
         let mut meshes = vec![];
         let mut model_matrices = vec![];
-        for data in scene_data {
-            let mesh_asset = asset_manager.get_mesh_by_handle(&data.mesh_handle).expect(
-                format!("No asset found for mesh_handle: {}", data.mesh_handle.id).as_str(),
-            );
 
-            let model_matrix = data.transform.get_model_matrix();
+        for request in mesh_requests {
+            let mesh_asset = asset_manager
+                .get_mesh_by_handle(&request.mesh_handle)
+                .expect(
+                    format!("No asset found for mesh_handle: {}", request.mesh_handle.id).as_str(),
+                );
+
+            let model_matrix = request.transform.get_model_matrix();
             model_matrices.push(model_matrix);
 
             let gpu_mesh_data = resource_manager.get_or_create_mesh(
@@ -88,15 +89,15 @@ impl Renderer {
                 mesh_asset.data.mesh.clone(),
             );
 
-            let material_bindings = material_manager.get_material_data(data.material_handle);
-            let shader_variant = material_manager.get_variant(data.material_handle);
+            let material_bindings = material_manager.get_material_data(request.material_handle);
+            let shader_variant = material_manager.get_variant(request.material_handle);
             let layout_key = LayoutKey {
                 shader_path: shader_variant.name.clone(),
             };
 
             let (set_handle, layout_handle) = self.get_or_create_descriptors(
                 vulkan_backend,
-                data.material_handle,
+                request.material_handle,
                 material_bindings,
                 resource_manager,
                 asset_manager,
@@ -110,7 +111,7 @@ impl Renderer {
                     descriptor_set_handle: set_handle,
                     descriptor_layout_handle: layout_handle,
                     push_constant_data: material_manager
-                        .get_material_push_const_data(data.material_handle),
+                        .get_material_push_const_data(request.material_handle),
                 },
             };
 

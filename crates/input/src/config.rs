@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::axis_action::{AxisAction, AxisBinding};
 use crate::input_action::{InputAction, InputBinding};
+use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct InputConfig {

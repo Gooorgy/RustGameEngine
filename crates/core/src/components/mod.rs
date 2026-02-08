@@ -1,8 +1,7 @@
-mod SpectatorCamera;
-
 use crate::types::transform::Transform;
-use assets::{MaterialHandle, MeshHandle};
+use assets::MeshHandle;
 use ecs::component::Component;
+use material::material_manager::MaterialHandle;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Clone, Debug, Component, Default)]
@@ -21,22 +20,49 @@ impl DerefMut for TransformComponent {
     }
 }
 
+#[derive(Clone, Debug, Component)]
 pub struct MeshComponent {
     pub mesh_handle: MeshHandle,
-    pub material_handle: Option<MaterialHandle>,
 }
 
 impl MeshComponent {
     pub fn new(mesh_handle: MeshHandle) -> Self {
-        Self {
-            mesh_handle,
-            material_handle: None,
-        }
+        Self { mesh_handle }
     }
+}
 
-    pub fn with_material(mut self, material: MaterialHandle) -> Self {
-        self.material_handle = Some(material);
+#[derive(Clone, Component)]
+pub struct MaterialComponent {
+    pub material_handle: MaterialHandle,
+}
 
-        self
+impl MaterialComponent {
+    pub fn new(material_handle: MaterialHandle) -> Self {
+        Self { material_handle }
+    }
+}
+
+#[derive(Clone, Debug, Component)]
+pub struct CameraComponent {
+    pub near_clip: f32,
+    pub far_clip: f32,
+    pub fov: f32,
+    pub active: bool,
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct CameraControllerComponent {
+    pub speed: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+impl CameraControllerComponent {
+    pub fn new(speed: f32) -> Self {
+        Self {
+            speed,
+            yaw: 0.0,
+            pitch: 0.0,
+        }
     }
 }

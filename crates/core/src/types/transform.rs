@@ -26,6 +26,21 @@ impl Transform {
         }
     }
 
+    pub fn with_location(mut self, location: Vec3) -> Self {
+        self.location = location;
+        self
+    }
+
+    pub fn with_rotation(mut self, rotation: nalgebra_glm::Vec3) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
+    pub fn with_scale(mut self, scale: nalgebra_glm::Vec3) -> Self {
+        self.scale = scale;
+        self
+    }
+
     pub fn get_model_matrix(&self) -> Mat4 {
         let translation = translate(&identity(), &self.location);
 
@@ -37,5 +52,14 @@ impl Transform {
         let scale = scaling(&self.scale);
 
         translation * rotation * scale
+    }
+
+    pub fn get_view_matrix(&self) -> Mat4 {
+        let translation = translate(&identity(), &self.location);
+        let rot_x = rotate_x(&identity(), self.rotation.x);
+        let rot_y = rotate_y(&identity(), self.rotation.y);
+        let rot_z = rotate_z(&identity(), self.rotation.z);
+        let rotation = rot_z * rot_y * rot_x;
+        nalgebra_glm::inverse(&(translation * rotation))
     }
 }

@@ -1,6 +1,6 @@
-use std::any::TypeId;
 use crate::component::archetype::{ColumnFactory, ComponentValue, HasColumnFactory};
 use crate::component::{Component, ComponentInsertion};
+use std::any::TypeId;
 
 macro_rules! impl_component_insertion {
     ($($t:ident),*) => {

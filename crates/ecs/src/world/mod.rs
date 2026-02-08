@@ -70,20 +70,12 @@ impl World {
     }
 
     pub fn query<Q: QueryParameter>(&mut self) -> Query<Q> {
-        todo!();
-        // Query {
-        //     world: self,
-        //
-        // }
-
-        // let key = QueryKey::of::<Q>();
-        //
-        // let cache = self
-        //     .query_cache
-        //     .entry(key)
-        //     .or_insert_with(|| QueryCache::default());
-        //
-        // if cache.generation != self.archetype_gen {}
+        let mut query = Query {
+            world: self,
+            matches: vec![],
+        };
+        query.build_matches();
+        query
     }
 
     pub fn create_entity(&mut self, components: impl ComponentInsertion) -> Entity {

@@ -8,3 +8,5 @@ legacy_macros = { path = "../legacy_macros" }
 nalgebra-glm = { workspace = true }
 ecs = { path = "../ecs" }
 assets = { path = "../assets" }
+material = { path = "../material" }
+input = { path = "../input" }

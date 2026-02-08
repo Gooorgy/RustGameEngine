@@ -144,4 +144,3 @@ impl<'w, Q: QueryParameter> Iterator for QueryIter<'w, Q> {
         }
     }
 }
-

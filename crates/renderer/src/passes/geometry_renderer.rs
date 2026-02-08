@@ -52,7 +52,7 @@ impl GeometryRenderer {
                 pipeline,
                 ShaderStage::FRAGMENT,
                 mesh_data.material_data.push_constant_data.as_slice(),
-                16//size_of::<u32>() as u32,
+                16, //size_of::<u32>() as u32,
             );
 
             vulkan_backend.bind_vertex_buffer(mesh_data.mesh_data.vertex_buffer);
@@ -100,7 +100,7 @@ impl GeometryRenderer {
                     size: size_of::<u64>(),
                 },
                 PushConstantDesc {
-                    offset: 16,//size_of::<u32>() as u32,
+                    offset: 16, //size_of::<u32>() as u32,
                     stages: ShaderStage::FRAGMENT,
                     size: material_data.push_constant_data.len(),
                 },

@@ -26,7 +26,7 @@ impl From<&str> for AxisAction {
 }
 
 #[derive(Debug, Clone)]
-pub enum AxisBinding{
+pub enum AxisBinding {
     Composite {
         positive: InputAction,
         negative: InputAction,
@@ -34,7 +34,7 @@ pub enum AxisBinding{
     Analog {
         source: AnalogSource,
         sensitivity: f32,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -94,8 +94,6 @@ fn map_descriptor_type(descriptor_type: DescriptorType) -> vk::DescriptorType {
     }
 }
 
-
-
 pub struct AllocatedDescriptorSet {
     pub descriptor_set: vk::DescriptorSet,
     pub pool: vk::DescriptorPool,
@@ -135,24 +133,24 @@ impl AllocatedDescriptorSet {
     //             DescriptorWrite::SampledImage(dst_binding, _, _) => {}
     //             DescriptorWrite::CombinedImageSampler(dst_binding, _, _) => {}
     //         });
-    // 
+    //
     //     let buffer_info = vk::DescriptorBufferInfo::default()
     //         .buffer(camera_mvp_buffer.buffer)
     //         .offset(0)
     //         .range(mem::size_of::<CameraMvpUbo>() as u64);
-    // 
+    //
     //     let dynamic_buffer_info = vk::DescriptorBufferInfo::default()
     //         .buffer(dynamic_model_buffer.buffer)
     //         .offset(0)
     //         .range(dynamic_alignment);
-    // 
+    //
     //     let image_info = [vk::DescriptorImageInfo::default()
     //         .image_view(*texture_image_view)
     //         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
     //         .sampler(*texture_sampler)];
-    // 
+    //
     //     let mut write_descriptor_sets = vec![];
-    // 
+    //
     //     write_descriptor_sets.push(
     //         vk::WriteDescriptorSet::default()
     //             .dst_set(descriptor_set)
@@ -162,7 +160,7 @@ impl AllocatedDescriptorSet {
     //             .descriptor_count(1)
     //             .buffer_info(slice::from_ref(&buffer_info)),
     //     );
-    // 
+    //
     //     write_descriptor_sets.push(
     //         vk::WriteDescriptorSet::default()
     //             .dst_set(descriptor_set)
@@ -172,7 +170,7 @@ impl AllocatedDescriptorSet {
     //             .descriptor_count(1)
     //             .buffer_info(slice::from_ref(&dynamic_buffer_info)),
     //     );
-    // 
+    //
     //     write_descriptor_sets.push(
     //         vk::WriteDescriptorSet::default()
     //             .dst_set(descriptor_set)
@@ -182,7 +180,7 @@ impl AllocatedDescriptorSet {
     //             .descriptor_count(1)
     //             .image_info(image_info.as_slice()),
     //     );
-    // 
+    //
     //     println!("Write descriptor sets");
     //     unsafe {
     //         device_info

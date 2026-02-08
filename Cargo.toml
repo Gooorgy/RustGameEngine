@@ -12,9 +12,7 @@ nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
 rendering_backend = { path = "crates/rendering_backend" }
 app = { path = "crates/app" }
-scene = { path = "crates/scene" }
 assets = { path = "crates/assets" }
-game_object = { path = "crates/game_object" }
 material = { path = "crates/material" }
 core = { path = "crates/core" }
 ecs = { path = "crates/ecs" }

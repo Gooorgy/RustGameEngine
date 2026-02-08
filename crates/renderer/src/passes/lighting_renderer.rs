@@ -1,5 +1,5 @@
-use nalgebra_glm::{vec3, Vec3};
 use crate::frame_data::{FrameData, ResolutionSettings};
+use nalgebra_glm::{Vec3, vec3};
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::descriptor::ShaderStage;
 use rendering_backend::pipeline::CullMode::Front;
@@ -72,20 +72,20 @@ impl LightingRenderer {
     ) {
         // let lambda = 0.9;
         // let mut splits = [0.0; cascade_count + 1];
-        // 
+        //
         // for i in 0..cascade_count {
         //     let idm = i as f32 / cascade_count as f32;
         //     let log = near * (far / near).powf(idm);
         //     let uniform = near + (far - near) * idm;
-        // 
+        //
         //     let split = log * lambda + uniform * (1.0 - lambda);
         //     splits[i] = split;
         // }
-        // 
+        //
         // for i in 0..cascade_count {
         //     let split_start = splits[i];
         //     let split_end = splits[i + 1];
-        // 
+        //
         //     let frustum_corners = [
         //         vec3(-1.0, -1.0, 0.0),
         //         vec3(1.0, -1.0, 0.0),
@@ -96,12 +96,12 @@ impl LightingRenderer {
         //         vec3(1.0, 1.0, 1.0),
         //         vec3(-1.0, 1.0, 1.0),
         //     ];
-        // 
+        //
         //     let mut corners_world = [Vec3::zeros(); 8];
-        // 
+        //
         //     let aspect_ratio = resolution_settings.window_resolution.get_aspect_ratio();
-        // 
-        // 
+        //
+        //
         //     //let projection = nalgebra_glm::perspective(aspect_ratio, )
         //}
     }

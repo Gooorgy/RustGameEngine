@@ -19,7 +19,7 @@ pub struct ResourceManager {
     pub images: HashMap<u64, GpuImageHandle>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,

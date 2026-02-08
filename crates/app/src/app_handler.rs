@@ -1,14 +1,14 @@
 use assets::AssetManager;
-use core::EngineContext;
-use game_object::primitives::camera::Camera;
+use core::{CameraControllerComponent, EngineContext, TransformComponent};
+use ecs::world::World;
 use input::InputManager;
 use material::material_manager::MaterialManager;
 use renderer::frame_data::{Resolution, ResolutionSettings};
+use renderer::render_data::RenderDataCollector;
 use renderer::renderer::Renderer;
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
-use scene::scene::SceneManager;
 use std::cell::RefMut;
 use std::io::Write;
 use std::time::Instant;
@@ -31,7 +31,6 @@ pub struct AppHandler {
     vulkan_backend: Option<VulkanBackend>,
     renderer: Option<Renderer>,
     last_frame_time: Instant,
-    camera: Camera,
 }
 
 impl AppHandler {
@@ -42,7 +41,6 @@ impl AppHandler {
             vulkan_backend: None,
             renderer: None,
             last_frame_time: Instant::now(),
-            camera: Camera::new(),
         }
     }
 
@@ -56,6 +54,10 @@ impl AppHandler {
 
     pub fn get_from_context<T: 'static>(&self) -> RefMut<T> {
         self.engine_context.expect_manager_mut::<T>()
+    }
+
+    pub fn get_world(&mut self) -> &mut World {
+        self.engine_context.get_world()
     }
 }
 
@@ -110,20 +112,26 @@ impl ApplicationHandler for AppHandler {
                             self.engine_context.expect_manager_mut::<InputManager>();
                         input_manager.update();
 
-                        self.camera.velocity.x = input_manager.get_axis("horizontal");
-                        self.camera.velocity.z = -input_manager.get_axis("vertical");
-
-                        let mouse_delta = input_manager.get_mouse_delta();
-                        self.camera
-                            .process_cursor_moved(mouse_delta[0], mouse_delta[1]);
-
                         input_manager.end_frame();
+                        drop(input_manager);
+
+                        // Update camera controller via ECS
+                        self.engine_context.update(delta_time);
                     }
 
-                    self.camera.update(delta_time);
+                    let world = self.engine_context.get_world();
+                    let mut render_data = RenderDataCollector::new();
+                    render_data
+                        .collect_from_world(world, WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32);
 
-                    let mut scene_manager =
-                        self.engine_context.expect_manager_mut::<SceneManager>();
+                    let camera_ubo = render_data
+                        .camera
+                        .map(|c| CameraMvpUbo {
+                            view: c.view,
+                            proj: c.proj,
+                        })
+                        .expect("No active camera in world");
+
                     let mut asset_manager =
                         self.engine_context.expect_manager_mut::<AssetManager>();
                     let mut material_manager =
@@ -133,14 +141,9 @@ impl ApplicationHandler for AppHandler {
 
                     let renderer = self.renderer.as_mut().unwrap();
 
-                    let camera_ubo = CameraMvpUbo {
-                        proj: self.camera.get_projection_matrix(800.0 / 600.0),
-                        view: self.camera.get_view_matrix(),
-                    };
-
                     renderer.draw_frame(
                         app,
-                        &mut scene_manager,
+                        &render_data.mesh_requests,
                         &mut material_manager,
                         &mut asset_manager,
                         &mut resource_manager,

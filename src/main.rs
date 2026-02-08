@@ -1,26 +1,28 @@
 use app::App;
 use assets::AssetManager;
 use core::EngineContext;
-use game_object::primitives::static_mesh::StaticMesh;
-use game_object::traits::GameObjectDefaults;
-use input::{AxisAction, AxisBinding, InputAction, InputBinding, InputManager, KeyCode};
+use core::components::{
+    CameraComponent, CameraControllerComponent, MaterialComponent, MeshComponent,
+    TransformComponent,
+};
+use core::types::transform::Transform;
+use ecs::systems::{System, SystemFunction};
+use input::{
+    AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, InputManager, KeyCode,
+};
 use material::material_manager::MaterialManager;
 use material::{MaterialColorParameter, MaterialParameter, PbrMaterial};
 use nalgebra_glm::{vec3, vec4};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
-use scene::scene::SceneManager;
 
 fn main() {
     let mut engine_context = EngineContext::new();
-    let scene_manager = SceneManager::new();
     let asset_manager = AssetManager::default();
     let resource_manager = ResourceManager::new();
     let material_manager = MaterialManager::new();
 
-    // Setup InputManager with default bindings
     let mut input_manager = InputManager::new();
 
-    // Bind movement actions
     input_manager.bind_action("move_forward", vec![InputBinding::Key(KeyCode::W)]);
     input_manager.bind_action("move_backward", vec![InputBinding::Key(KeyCode::S)]);
     input_manager.bind_action("move_left", vec![InputBinding::Key(KeyCode::A)]);
@@ -42,13 +44,28 @@ fn main() {
         },
     );
 
+    input_manager.bind_axis(
+        AxisAction::MOUSE_X,
+        AxisBinding::Analog {
+            source: AnalogSource::MouseX,
+            sensitivity: 5.0,
+        },
+    );
+
+    input_manager.bind_axis(
+        AxisAction::MOUSE_Y,
+        AxisBinding::Analog {
+            source: AnalogSource::MouseY,
+            sensitivity: 5.0,
+        },
+    );
+
     engine_context.register_manager(resource_manager);
-    engine_context.register_manager(scene_manager);
     engine_context.register_manager(asset_manager);
     engine_context.register_manager(material_manager);
     engine_context.register_manager(input_manager);
 
-    let app = App::new(engine_context);
+    let mut app = App::new(engine_context);
     let mesh_handle = app
         .get_from_context::<AssetManager>()
         .get_mesh(".\\resources\\models\\test.obj");
@@ -83,19 +100,43 @@ fn main() {
         .get_from_context::<MaterialManager>()
         .add_material_instance(material2);
 
-    let static_mesh2 = StaticMesh::new(mesh_handle.unwrap())
-        .with_location(vec3(5.0, 1.0, 5.0))
-        .with_material(material);
-    let static_mesh3 = StaticMesh::new(mesh_handle.unwrap())
-        .with_location(vec3(5.0, 10.0, 5.0))
-        .with_scale(vec3(0.3, 0.3, 0.3))
-        .with_material(material2);
+    let world = app.get_world();
 
-    app.get_from_context::<SceneManager>()
-        .register_game_object(static_mesh2);
+    world.create_entity((
+        TransformComponent(Transform::default()),
+        MeshComponent {
+            mesh_handle: mesh_handle.unwrap(),
+        },
+        MaterialComponent {
+            material_handle: material,
+        },
+    ));
 
-    app.get_from_context::<SceneManager>()
-        .register_game_object(static_mesh3);
+    world.create_entity((
+        TransformComponent(
+            Transform::default()
+                .with_location(vec3(0.0, 10.0, 5.0))
+                .with_scale(vec3(0.5, 0.5, 0.5)),
+        ),
+        MeshComponent {
+            mesh_handle: mesh_handle.unwrap(),
+        },
+        MaterialComponent {
+            material_handle: material2,
+        },
+    ));
 
+    world.create_entity((
+        TransformComponent(Transform::default()),
+        CameraComponent {
+            near_clip: 0.1,
+            far_clip: 1000.0,
+            fov: 70.0,
+            active: true,
+        },
+        CameraControllerComponent::new(50.0),
+    ));
+
+    world.register_system(Box::new(System::new(core::systems::basic_camera_system)));
     app.run();
 }

@@ -94,12 +94,12 @@ version = "0.1.0"
 dependencies = [
  "assets",
  "core",
- "game_object",
+ "ecs",
  "input",
  "material",
+ "nalgebra-glm",
  "renderer",
  "rendering_backend",
- "scene",
  "winit",
 ]
 
@@ -442,7 +442,9 @@ version = "0.1.0"
 dependencies = [
  "assets",
  "ecs",
+ "input",
  "legacy_macros",
+ "material",
  "nalgebra-glm",
 ]
 
@@ -711,17 +713,6 @@ name = "foreign-types-shared"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
-
-[[package]]
-name = "game_object"
-version = "0.1.0"
-dependencies = [
- "assets",
- "core",
- "legacy_macros",
- "material",
- "nalgebra-glm",
-]
 
 [[package]]
 name = "gethostname"
@@ -1283,7 +1274,6 @@ dependencies = [
  "assets",
  "core",
  "ecs",
- "game_object",
  "image",
  "input",
  "material",
@@ -1291,7 +1281,6 @@ dependencies = [
  "nalgebra-glm",
  "noise",
  "rendering_backend",
- "scene",
  "serde",
  "typed-arena",
  "walkdir",
@@ -2046,10 +2035,11 @@ name = "renderer"
 version = "0.1.0"
 dependencies = [
  "assets",
+ "core",
+ "ecs",
  "material",
  "nalgebra-glm",
  "rendering_backend",
- "scene",
 ]
 
 [[package]]
@@ -2121,18 +2111,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "scene"
-version = "0.1.0"
-dependencies = [
- "assets",
- "core",
- "game_object",
- "material",
- "nalgebra-glm",
- "rendering_backend",
 ]
 
 [[package]]

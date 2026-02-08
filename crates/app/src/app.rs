@@ -1,5 +1,6 @@
 use crate::app_handler::AppHandler;
 use core::EngineContext;
+use ecs::world::World;
 use std::cell::RefMut;
 use winit::event_loop::EventLoop;
 
@@ -28,5 +29,9 @@ impl App {
 
     pub fn get_from_context<T: 'static>(&'_ self) -> RefMut<'_, T> {
         self.app_handler.get_from_context::<T>()
+    }
+
+    pub fn get_world(&mut self) -> &mut World {
+        self.app_handler.get_world()
     }
 }

@@ -99,8 +99,7 @@ impl PipelineInfo {
             alpha_to_one_enable: vk::FALSE,
             ..Default::default()
         };
-        
-        
+
         let depth_stencil_state_create_info = vk::PipelineDepthStencilStateCreateInfo::default()
             .depth_test_enable(desc.depth_stencil.depth_test_enable)
             .depth_write_enable(desc.depth_stencil.depth_write_enable)
@@ -167,7 +166,7 @@ impl PipelineInfo {
             .layout(pipeline_layout)
             .depth_stencil_state(&depth_stencil_state_create_info)
             .push_next(&mut rendering_info);
-        
+
         let mut color_blend_attachments = vec![];
         let mut color_blend_state_create_info = None;
         if let Some(blend) = desc.blend {
@@ -182,16 +181,18 @@ impl PipelineInfo {
                 .alpha_blend_op(blend.attachments[0].alpha_blend_op.into());
 
             color_blend_attachments.push(color_blend_attachment);
-            
-            color_blend_state_create_info = Some(vk::PipelineColorBlendStateCreateInfo::default()
-                .logic_op_enable(blend.logic_op_enable)
-                .logic_op(vk::LogicOp::COPY)
-                .attachments(color_blend_attachments.as_slice()));
-            
+
+            color_blend_state_create_info = Some(
+                vk::PipelineColorBlendStateCreateInfo::default()
+                    .logic_op_enable(blend.logic_op_enable)
+                    .logic_op(vk::LogicOp::COPY)
+                    .attachments(color_blend_attachments.as_slice()),
+            );
         };
-        
+
         if let Some(color_blend_state_create_info) = &color_blend_state_create_info {
-            pipeline_create_info = pipeline_create_info.color_blend_state(color_blend_state_create_info);
+            pipeline_create_info =
+                pipeline_create_info.color_blend_state(color_blend_state_create_info);
         }
 
         let graphics_pipelines = unsafe {

@@ -1,7 +1,7 @@
-use crate::image::{ImageAspect, ImageDesc, ImageUsageFlags, TextureFormat};
-use ash::{vk, Device, Instance};
 use crate::backend_impl::device::DeviceInfo;
 use crate::backend_impl::utils;
+use crate::image::{ImageAspect, ImageDesc, ImageUsageFlags, TextureFormat};
+use ash::{vk, Device, Instance};
 
 pub struct AllocatedImage {
     pub image: vk::Image,

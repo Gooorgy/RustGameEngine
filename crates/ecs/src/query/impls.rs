@@ -1,5 +1,5 @@
-use crate::component::archetype::{Archetype, Column};
 use crate::component::Component;
+use crate::component::archetype::{Archetype, Column};
 use crate::query::QueryParameter;
 use std::any::TypeId;
 

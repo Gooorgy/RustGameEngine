@@ -45,7 +45,7 @@ impl AllocatedBuffer {
                     .map_memory(memory, 0, buffer_size, vk::MemoryMapFlags::empty())
                     .expect("failed to map memory")
             };
-            
+
             Some(x)
         } else {
             None
