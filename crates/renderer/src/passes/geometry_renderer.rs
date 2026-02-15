@@ -30,7 +30,7 @@ impl GeometryRenderer {
         frame_data: &FrameData,
     ) {
         vulkan_backend.begin_rendering(
-            &[frame_data.frame_images.gbuffer_albedo],
+            &[frame_data.frame_images.gbuffer_albedo, frame_data.frame_images.gbuffer_normal],
             Some(&frame_data.frame_images.gbuffer_depth),
         );
 
@@ -80,7 +80,7 @@ impl GeometryRenderer {
         let pipeline_desc = PipelineDesc {
             vertex_shader: "vert".into(),
             fragment_shader: Some(material_data.shader_variant.name.clone()),
-            color_attachments: vec![frame_data.frame_images.gbuffer_albedo],
+            color_attachments: vec![frame_data.frame_images.gbuffer_albedo, frame_data.frame_images.gbuffer_normal],
             depth_attachment: Some(frame_data.frame_images.gbuffer_depth),
             layout: vec![
                 frame_data.descriptor_layout_handle,
@@ -116,7 +116,17 @@ impl GeometryRenderer {
                     src_alpha_blend: BlendFactor::One,
                     dst_alpha_blend: BlendFactor::Zero,
                     alpha_blend_op: BlendOp::Add,
-                }],
+                },
+                                  BlendAttachmentDesc {
+                                      color_write_mask: ColorWriteMask::ALL,
+                                      blend_enable: false,
+                                      src_color_blend: BlendFactor::One,
+                                      dst_color_blend: BlendFactor::Zero,
+                                      color_blend_op: BlendOp::Add,
+                                      src_alpha_blend: BlendFactor::One,
+                                      dst_alpha_blend: BlendFactor::Zero,
+                                      alpha_blend_op: BlendOp::Add,
+                                  }],
             }),
             rasterization: RasterizationStateDesc {
                 depth_clamp_enable: false,

@@ -4,7 +4,7 @@ pub mod systems;
 pub mod types;
 
 pub use components::{
-    CameraComponent, CameraControllerComponent, MaterialComponent, MeshComponent,
-    TransformComponent,
+    CameraComponent, CameraControllerComponent, DirectionalLightComponent, MaterialComponent,
+    MeshComponent, TransformComponent,
 };
 pub use engine_context::*;

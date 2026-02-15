@@ -22,4 +22,8 @@ pub struct SamplerDesc {
     pub address_u: SamplerAddressMode,
     pub address_v: SamplerAddressMode,
     pub address_w: SamplerAddressMode,
+    pub compare_enable: bool,
+    pub compare_op: Option<CompareOp>,
 }
+
+use crate::pipeline::CompareOp;

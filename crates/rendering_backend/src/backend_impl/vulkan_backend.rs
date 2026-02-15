@@ -244,7 +244,7 @@ impl VulkanBackend {
     }
 
     pub fn create_sampler(&mut self, desc: SamplerDesc) -> SamplerHandle {
-        let sampler_info = vk::SamplerCreateInfo::default()
+        let mut sampler_info = vk::SamplerCreateInfo::default()
             .mag_filter(desc.mag_filter.into())
             .min_filter(desc.min_filter.into())
             .address_mode_u(desc.address_u.into())
@@ -252,7 +252,12 @@ impl VulkanBackend {
             .address_mode_w(desc.address_w.into())
             .anisotropy_enable(false)
             .max_anisotropy(1.0)
-            .unnormalized_coordinates(false);
+            .unnormalized_coordinates(false)
+            .compare_enable(desc.compare_enable);
+
+        if let Some(compare_op) = desc.compare_op {
+            sampler_info = sampler_info.compare_op(compare_op.into());
+        }
 
         let sampler = unsafe {
             self.device_info
@@ -485,14 +490,17 @@ impl VulkanBackend {
                 })
         });
 
-        let begin_render_info = vk::RenderingInfo::default()
+        let mut begin_render_info = vk::RenderingInfo::default()
             .render_area(vk::Rect2D {
                 extent: self.swapchain_info.swapchain_extent,
                 offset: vk::Offset2D { x: 0, y: 0 },
             })
             .layer_count(1)
-            .color_attachments(&color_infos)
-            .depth_attachment(depth_info.as_ref().expect(""));
+            .color_attachments(&color_infos);
+
+        if let Some(ref depth) = depth_info {
+            begin_render_info = begin_render_info.depth_attachment(depth);
+        }
 
         unsafe {
             self.device_info
@@ -503,6 +511,95 @@ impl VulkanBackend {
         let width = self.swapchain_info.swapchain_extent.width as f32;
         let height = self.swapchain_info.swapchain_extent.height as f32;
         self.set_viewport_scissor(width, height);
+    }
+
+    pub fn begin_rendering_with_extent(
+        &mut self,
+        color_image_handles: &[GpuImageHandle],
+        depth_image_handle: Option<&GpuImageHandle>,
+        width: u32,
+        height: u32,
+    ) {
+        let mut color_infos: Vec<vk::RenderingAttachmentInfo> =
+            Vec::with_capacity(color_image_handles.len());
+        for handle in color_image_handles {
+            let img = &mut self.resource_registry.images[handle.0];
+
+            if img.image_layout != vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL {
+                image_util::transition_image_layout(
+                    &self.device_info,
+                    &self.command_buffer,
+                    img.image,
+                    img.image_layout,
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    false,
+                );
+                img.image_layout = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
+            }
+
+            color_infos.push(
+                vk::RenderingAttachmentInfo::default()
+                    .image_view(img.image_view)
+                    .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 1.0],
+                        },
+                    }),
+            );
+        }
+
+        let depth_info = depth_image_handle.map(|handle| {
+            let img = &mut self.resource_registry.images[handle.0];
+
+            if img.image_layout != vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+                image_util::transition_image_layout(
+                    &self.device_info,
+                    &self.command_buffer,
+                    img.image,
+                    img.image_layout,
+                    vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    true,
+                );
+                img.image_layout = vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+
+            vk::RenderingAttachmentInfo::default()
+                .image_view(img.image_view)
+                .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                })
+        });
+
+        let extent = vk::Extent2D { width, height };
+
+        let mut begin_render_info = vk::RenderingInfo::default()
+            .render_area(vk::Rect2D {
+                extent,
+                offset: vk::Offset2D { x: 0, y: 0 },
+            })
+            .layer_count(1)
+            .color_attachments(&color_infos);
+
+        if let Some(ref depth) = depth_info {
+            begin_render_info = begin_render_info.depth_attachment(depth);
+        }
+
+        unsafe {
+            self.device_info
+                .logical_device
+                .cmd_begin_rendering(self.command_buffer, &begin_render_info)
+        }
+
+        self.set_viewport_scissor(width as f32, height as f32);
     }
 
     pub fn end_rendering(&self) {
@@ -575,6 +672,18 @@ impl VulkanBackend {
                 index_count,
                 1,
                 first_index,
+                0,
+                0,
+            );
+        }
+    }
+
+    pub fn draw(&self, vertex_count: u32) {
+        unsafe {
+            self.device_info.logical_device.cmd_draw(
+                self.command_buffer,
+                vertex_count,
+                1,
                 0,
                 0,
             );
@@ -669,6 +778,19 @@ impl VulkanBackend {
                 .logical_device
                 .update_descriptor_sets(writes.as_slice(), &[]);
         }
+    }
+
+    pub fn transition_image(&mut self, image_handle: GpuImageHandle, is_depth: bool) {
+        let img = &mut self.resource_registry.images[image_handle.0];
+        image_util::transition_image_layout(
+            &self.device_info,
+            &self.command_buffer,
+            img.image,
+            img.image_layout,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            is_depth,
+        );
+        img.image_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
     }
 
     pub fn update_push_constants<T>(
@@ -1563,7 +1685,7 @@ impl VulkanBackend {
     //     let (image_index, _is_sub_optimal) = match image_result {
     //         Ok(result) => result,
     //         Err(error_result) => match error_result {
-    //             vk::Result::ERROR_OUT_OF_DATE_KHR => {
+    //             vk::Result::ERROR_OU T_OF_DATE_KHR => {
     //                 self.recreate_swapchain();
     //                 println!("Error SWAPCHAIN");
     //                 return;

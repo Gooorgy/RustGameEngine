@@ -124,6 +124,7 @@ impl ApplicationHandler for AppHandler {
                     render_data
                         .collect_from_world(world, WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32);
 
+                    let camera_render_data = render_data.camera.clone();
                     let camera_ubo = render_data
                         .camera
                         .map(|c| CameraMvpUbo {
@@ -131,6 +132,8 @@ impl ApplicationHandler for AppHandler {
                             proj: c.proj,
                         })
                         .expect("No active camera in world");
+
+                    let directional_light = render_data.directional_light;
 
                     let mut asset_manager =
                         self.engine_context.expect_manager_mut::<AssetManager>();
@@ -148,6 +151,8 @@ impl ApplicationHandler for AppHandler {
                         &mut asset_manager,
                         &mut resource_manager,
                         camera_ubo,
+                        camera_render_data,
+                        directional_light,
                     );
 
                     let window = &self.window.as_ref().unwrap();

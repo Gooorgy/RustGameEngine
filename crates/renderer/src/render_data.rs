@@ -1,9 +1,12 @@
 use assets::MeshHandle;
 use core::types::transform::Transform;
-use core::{CameraComponent, MaterialComponent, MeshComponent, TransformComponent};
+use core::{
+    CameraComponent, DirectionalLightComponent, MaterialComponent, MeshComponent,
+    TransformComponent,
+};
 use ecs::world::World;
 use material::material_manager::MaterialHandle;
-use nalgebra_glm::Mat4;
+use nalgebra_glm::{Mat4, Vec3};
 
 /// A request to render a mesh with a specific transform and material.
 #[derive(Clone)]
@@ -13,9 +16,22 @@ pub struct MeshRenderRequest {
     pub transform: Transform,
 }
 
+#[derive(Clone)]
 pub struct CameraRenderData {
     pub view: Mat4,
     pub proj: Mat4,
+    pub near_clip: f32,
+    pub far_clip: f32,
+    pub fov: f32,
+    pub aspect_ratio: f32,
+}
+
+pub struct DirectionalLightData {
+    pub direction: Vec3,
+    pub color: Vec3,
+    pub intensity: f32,
+    pub ambient_color: Vec3,
+    pub ambient_intensity: f32,
 }
 
 /// Collects render data from the ECS World.
@@ -23,6 +39,7 @@ pub struct CameraRenderData {
 pub struct RenderDataCollector {
     pub mesh_requests: Vec<MeshRenderRequest>,
     pub camera: Option<CameraRenderData>,
+    pub directional_light: Option<DirectionalLightData>,
 }
 
 impl RenderDataCollector {
@@ -30,6 +47,7 @@ impl RenderDataCollector {
         Self {
             mesh_requests: Vec::new(),
             camera: None,
+            directional_light: None,
         }
     }
 
@@ -37,8 +55,10 @@ impl RenderDataCollector {
     pub fn collect_from_world(&mut self, world: &mut World, aspect_ratio: f32) {
         self.mesh_requests.clear();
         self.camera = None;
+        self.directional_light = None;
         self.collect_meshes(world);
         self.collect_camera(world, aspect_ratio);
+        self.collect_directional_light(world);
     }
 
     fn collect_meshes(&mut self, world: &mut World) {
@@ -69,9 +89,39 @@ impl RenderDataCollector {
                     camera.far_clip,
                 );
                 proj[(1, 1)] *= -1.0; // Vulkan Y-flip
-                self.camera = Some(CameraRenderData { view, proj });
+                self.camera = Some(CameraRenderData {
+                    view,
+                    proj,
+                    near_clip: camera.near_clip,
+                    far_clip: camera.far_clip,
+                    fov: camera.fov,
+                    aspect_ratio,
+                });
                 break;
             }
+        }
+    }
+
+    fn collect_directional_light(&mut self, world: &mut World) {
+        let mut query =
+            world.query::<(&mut TransformComponent, &mut DirectionalLightComponent)>();
+        for (transform, light) in query.iter() {
+            // Compute forward direction from Euler angles (rotation = pitch, yaw, roll)
+            let pitch = transform.rotation.x;
+            let yaw = transform.rotation.y;
+            let direction = Vec3::new(
+                yaw.cos() * pitch.cos(),
+                pitch.sin(),
+                yaw.sin() * pitch.cos(),
+            );
+            self.directional_light = Some(DirectionalLightData {
+                direction: nalgebra_glm::normalize(&direction),
+                color: light.color,
+                intensity: light.intensity,
+                ambient_color: light.ambient_color,
+                ambient_intensity: light.ambient_intensity,
+            });
+            break;
         }
     }
 }

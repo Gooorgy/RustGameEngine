@@ -2,6 +2,7 @@ use crate::types::transform::Transform;
 use assets::MeshHandle;
 use ecs::component::Component;
 use material::material_manager::MaterialHandle;
+use nalgebra_glm::Vec3;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Clone, Debug, Component, Default)]
@@ -65,4 +66,12 @@ impl CameraControllerComponent {
             pitch: 0.0,
         }
     }
+}
+
+#[derive(Clone, Debug, Component)]
+pub struct DirectionalLightComponent {
+    pub color: Vec3,
+    pub intensity: f32,
+    pub ambient_color: Vec3,
+    pub ambient_intensity: f32,
 }

@@ -1,11 +1,11 @@
 use app::App;
 use assets::AssetManager;
-use core::EngineContext;
 use core::components::{
-    CameraComponent, CameraControllerComponent, MaterialComponent, MeshComponent,
-    TransformComponent,
+    CameraComponent, CameraControllerComponent, DirectionalLightComponent, MaterialComponent,
+    MeshComponent, TransformComponent,
 };
 use core::types::transform::Transform;
+use core::EngineContext;
 use ecs::systems::{System, SystemFunction};
 use input::{
     AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, InputManager, KeyCode,
@@ -66,9 +66,13 @@ fn main() {
     engine_context.register_manager(input_manager);
 
     let mut app = App::new(engine_context);
-    let mesh_handle = app
+    let floor_mesh = app
         .get_from_context::<AssetManager>()
-        .get_mesh(".\\resources\\models\\test.obj");
+        .get_mesh(".\\resources\\models\\floor.obj");
+
+    let cube_mesh = app
+        .get_from_context::<AssetManager>()
+        .get_mesh(".\\resources\\models\\cube.obj");
 
     let material = PbrMaterial {
         base_color: MaterialColorParameter::Constant(vec4(255.0, 0.0, 0.0, 0.0)),
@@ -105,7 +109,7 @@ fn main() {
     world.create_entity((
         TransformComponent(Transform::default()),
         MeshComponent {
-            mesh_handle: mesh_handle.unwrap(),
+            mesh_handle: floor_mesh.unwrap(),
         },
         MaterialComponent {
             material_handle: material,
@@ -115,11 +119,11 @@ fn main() {
     world.create_entity((
         TransformComponent(
             Transform::default()
-                .with_location(vec3(0.0, 10.0, 5.0))
-                .with_scale(vec3(0.5, 0.5, 0.5)),
+                .with_location(vec3(0.0, 1.0, 0.0))
+                .with_scale(vec3(1.0, 1.0, 1.0)),
         ),
         MeshComponent {
-            mesh_handle: mesh_handle.unwrap(),
+            mesh_handle: cube_mesh.unwrap(),
         },
         MaterialComponent {
             material_handle: material2,
@@ -135,6 +139,18 @@ fn main() {
             active: true,
         },
         CameraControllerComponent::new(50.0),
+    ));
+
+    world.create_entity((
+        TransformComponent(Transform::default().with_rotation(
+            nalgebra_glm::normalize(&vec3(0.5, 1.0, 0.5))
+        )),
+        DirectionalLightComponent {
+            ambient_color: vec3(1.0, 1.0, 1.0),
+            color: vec3(1.0, 1.0, 1.0),
+            ambient_intensity: 0.3,
+            intensity: 1.0,
+        },
     ));
 
     world.register_system(Box::new(System::new(core::systems::basic_camera_system)));

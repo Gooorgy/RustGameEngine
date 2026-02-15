@@ -170,17 +170,19 @@ impl PipelineInfo {
         let mut color_blend_attachments = vec![];
         let mut color_blend_state_create_info = None;
         if let Some(blend) = desc.blend {
-            let color_blend_attachment = vk::PipelineColorBlendAttachmentState::default()
-                .color_write_mask(blend.attachments[0].color_write_mask.into())
-                .blend_enable(blend.attachments[0].blend_enable)
-                .src_color_blend_factor(blend.attachments[0].src_color_blend.into())
-                .dst_color_blend_factor(blend.attachments[0].dst_color_blend.into())
-                .color_blend_op(blend.attachments[0].color_blend_op.into())
-                .src_alpha_blend_factor(blend.attachments[0].src_alpha_blend.into())
-                .dst_alpha_blend_factor(blend.attachments[0].dst_alpha_blend.into())
-                .alpha_blend_op(blend.attachments[0].alpha_blend_op.into());
-
-            color_blend_attachments.push(color_blend_attachment);
+            for attachment in &blend.attachments {
+                color_blend_attachments.push(
+                    vk::PipelineColorBlendAttachmentState::default()
+                        .color_write_mask(attachment.color_write_mask.into())
+                        .blend_enable(attachment.blend_enable)
+                        .src_color_blend_factor(attachment.src_color_blend.into())
+                        .dst_color_blend_factor(attachment.dst_color_blend.into())
+                        .color_blend_op(attachment.color_blend_op.into())
+                        .src_alpha_blend_factor(attachment.src_alpha_blend.into())
+                        .dst_alpha_blend_factor(attachment.dst_alpha_blend.into())
+                        .alpha_blend_op(attachment.alpha_blend_op.into()),
+                );
+            }
 
             color_blend_state_create_info = Some(
                 vk::PipelineColorBlendStateCreateInfo::default()

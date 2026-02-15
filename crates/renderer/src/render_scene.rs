@@ -1,4 +1,5 @@
-use material::material_manager::{MaterialVariant, ShaderPushConstantInfo};
+use crate::render_data::{CameraRenderData, DirectionalLightData};
+use material::material_manager::MaterialVariant;
 use rendering_backend::backend_impl::resource_manager::MeshData;
 use rendering_backend::buffer::BufferHandle;
 use rendering_backend::descriptor::{DescriptorLayoutHandle, DescriptorSetHandle};
@@ -6,6 +7,8 @@ use rendering_backend::descriptor::{DescriptorLayoutHandle, DescriptorSetHandle}
 pub struct RenderScene {
     pub meshes: Vec<MeshRenderData>,
     pub camera: BufferHandle,
+    pub camera_data: Option<CameraRenderData>,
+    pub directional_light: Option<DirectionalLightData>,
 }
 
 pub struct MeshRenderData {

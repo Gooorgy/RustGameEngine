@@ -45,7 +45,7 @@ void main() {
     #ifdef HAS_NORMAL
     outNormal = texture(normal, fragTexCoord);
     #else
-    outNormal = pc.normal;
+    outNormal = vec4(inNormal, 0);
     #endif
 
     #ifdef HAS_ORM

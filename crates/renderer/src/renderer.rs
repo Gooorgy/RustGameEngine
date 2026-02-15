@@ -1,6 +1,7 @@
 use crate::frame_data::{FrameData, ResolutionSettings};
 use crate::passes::geometry_renderer::GeometryRenderer;
-use crate::render_data::MeshRenderRequest;
+use crate::passes::lighting_renderer::LightingRenderer;
+use crate::render_data::{DirectionalLightData, MeshRenderRequest};
 use crate::render_scene::{MaterialData, MeshRenderData, RenderScene};
 use assets::AssetManager;
 use material::material_manager::{MaterialHandle, MaterialManager};
@@ -12,6 +13,7 @@ use rendering_backend::descriptor::{
     DescriptorBinding, DescriptorLayoutDesc, DescriptorLayoutHandle, DescriptorSetHandle,
     DescriptorType, DescriptorValue, DescriptorWriteDesc, SampledImageInfo, ShaderStage,
 };
+use crate::render_data::CameraRenderData;
 use std::collections::HashMap;
 
 pub struct Renderer {
@@ -19,6 +21,7 @@ pub struct Renderer {
     layout_cache: HashMap<LayoutKey, DescriptorLayoutHandle>,
     descriptor_cache: HashMap<MaterialHandle, DescriptorSetHandle>,
     geometry_renderer: GeometryRenderer,
+    lighting_renderer: LightingRenderer,
 }
 
 impl Renderer {
@@ -28,11 +31,13 @@ impl Renderer {
     ) -> Self {
         let frame_data = FrameData::new(vulkan_backend, resolution_settings, 1000);
         let geometry_renderer = GeometryRenderer::new();
+        let lighting_renderer = LightingRenderer::new(vulkan_backend, &frame_data);
         Self {
             frame_data,
             layout_cache: HashMap::new(),
             descriptor_cache: HashMap::new(),
             geometry_renderer,
+            lighting_renderer,
         }
     }
 
@@ -44,6 +49,8 @@ impl Renderer {
         asset_manager: &mut AssetManager,
         resource_manager: &mut ResourceManager,
         camera: CameraMvpUbo,
+        camera_render_data: Option<CameraRenderData>,
+        directional_light: Option<DirectionalLightData>,
     ) {
         let render_scene = self.create_render_scene(
             vulkan_backend,
@@ -52,13 +59,18 @@ impl Renderer {
             asset_manager,
             resource_manager,
             camera,
+            camera_render_data,
+            directional_light,
         );
         vulkan_backend.begin_frame();
 
         self.geometry_renderer
             .draw_frame(vulkan_backend, &render_scene, &self.frame_data);
 
-        vulkan_backend.end_frame(self.frame_data.frame_images.gbuffer_albedo);
+        self.lighting_renderer
+            .draw_frame(vulkan_backend, &render_scene, &self.frame_data);
+
+        vulkan_backend.end_frame(self.frame_data.frame_images.draw_image);
     }
 
     fn create_render_scene(
@@ -69,6 +81,8 @@ impl Renderer {
         asset_manager: &mut AssetManager,
         resource_manager: &mut ResourceManager,
         camera: CameraMvpUbo,
+        camera_render_data: Option<CameraRenderData>,
+        directional_light: Option<DirectionalLightData>,
     ) -> RenderScene {
         let mut meshes = vec![];
         let mut model_matrices = vec![];
@@ -127,6 +141,8 @@ impl Renderer {
         RenderScene {
             meshes,
             camera: self.frame_data.camera_buffer,
+            camera_data: camera_render_data,
+            directional_light,
         }
     }
 
