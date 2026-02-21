@@ -29,7 +29,6 @@ impl FrameImages {
         resolution_settings: ResolutionSettings,
     ) -> Self {
         let window_resolution = resolution_settings.window_resolution;
-        let shadow_map_resolution = resolution_settings.shadow_resolution;
         let gbuffer_albedo = vulkan_backend.create_image(ImageDesc {
             width: window_resolution.width,
             height: window_resolution.height,
@@ -97,34 +96,35 @@ impl FrameImages {
                 | ImageUsageFlags::STORAGE,
         });
 
-        let shadow_cascade_image_desc = ImageDesc {
-            width: shadow_map_resolution.width,
-            height: shadow_map_resolution.height,
-            depth: 1,
-            format: TextureFormat::D32Float,
-            clear_value: None,
-            array_layers: 1,
-            is_cubemap: false,
-            mip_levels: 1,
-            aspect: ImageAspect::Depth,
-            usage: ImageUsageFlags::DEPTH_ATTACHMENT
-                | ImageUsageFlags::TRANSFER_SRC
-                | ImageUsageFlags::TRANSFER_DST
-                | ImageUsageFlags::SAMPLED
-                | ImageUsageFlags::STORAGE,
-        };
-
-        let shadow_image1 = vulkan_backend.create_image(shadow_cascade_image_desc);
-        let shadow_image2 = vulkan_backend.create_image(shadow_cascade_image_desc);
-        let shadow_image3 = vulkan_backend.create_image(shadow_cascade_image_desc);
-        let shadow_image4 = vulkan_backend.create_image(shadow_cascade_image_desc);
+        let shadow_cascades = resolution_settings
+            .shadow_resolutions
+            .iter()
+            .map(|res| {
+                vulkan_backend.create_image(ImageDesc {
+                    width: res.width,
+                    height: res.height,
+                    depth: 1,
+                    format: TextureFormat::D32Float,
+                    clear_value: None,
+                    array_layers: 1,
+                    is_cubemap: false,
+                    mip_levels: 1,
+                    aspect: ImageAspect::Depth,
+                    usage: ImageUsageFlags::DEPTH_ATTACHMENT
+                        | ImageUsageFlags::TRANSFER_SRC
+                        | ImageUsageFlags::TRANSFER_DST
+                        | ImageUsageFlags::SAMPLED
+                        | ImageUsageFlags::STORAGE,
+                })
+            })
+            .collect();
 
         Self {
             gbuffer_albedo,
             gbuffer_normal,
             gbuffer_depth,
             draw_image,
-            shadow_cascades: vec![shadow_image1, shadow_image2, shadow_image3, shadow_image4],
+            shadow_cascades,
         }
     }
 }
@@ -182,8 +182,7 @@ impl FrameData {
             compare_op: None,
         });
 
-        // Shadow/lighting resources
-        const CASCADE_COUNT: usize = 3;
+        const CASCADE_COUNT: usize = 4;
 
         let cascade_buffer = vulkan_backend.create_buffer::<Mat4>(
             BufferDesc {
@@ -194,7 +193,6 @@ impl FrameData {
             None,
         );
 
-        // LightingUbo: light_direction(Vec4) + light_color(Vec4) + ambient_light(Vec4) + cascade_depths(Vec4) = 4 * Vec4
         let lighting_buffer = vulkan_backend.create_buffer::<Vec4>(
             BufferDesc {
                 size: size_of::<Vec4>() * 4,
@@ -214,7 +212,6 @@ impl FrameData {
             compare_op: Some(CompareOp::Less),
         });
 
-        // Shadow pass descriptor layout (set 0): cascade UBO + model SSBO
         let shadow_descriptor_layout =
             vulkan_backend.create_descriptor_layout(DescriptorLayoutDesc {
                 bindings: vec![
@@ -249,7 +246,6 @@ impl FrameData {
             ],
         );
 
-        // Lighting pass descriptor layout (set 0)
         let lighting_descriptor_layout =
             vulkan_backend.create_descriptor_layout(DescriptorLayoutDesc {
                 bindings: vec![
@@ -306,6 +302,12 @@ impl FrameData {
                         descriptor_type: DescriptorType::UniformBuffer,
                         count: 1,
                         stages: ShaderStage::VERTEX | ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 9,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
                     },
                 ],
             });
@@ -366,7 +368,7 @@ impl FrameData {
 
 pub struct ResolutionSettings {
     pub window_resolution: Resolution,
-    pub shadow_resolution: Resolution,
+    pub shadow_resolutions: Vec<Resolution>,
 }
 
 pub struct Resolution {

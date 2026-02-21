@@ -75,7 +75,7 @@ fn main() {
         .get_mesh(".\\resources\\models\\cube.obj");
 
     let material = PbrMaterial {
-        base_color: MaterialColorParameter::Constant(vec4(255.0, 0.0, 0.0, 0.0)),
+        base_color: MaterialColorParameter::Constant(vec4(128.0, 128.0, 128.0, 0.0)),
         normal: MaterialColorParameter::Constant(vec4(0.0, 0.0, 0.0, 0.0)),
         ambient_occlusion: MaterialParameter::Constant(0.0),
         roughness: MaterialParameter::Constant(0.0),
@@ -112,7 +112,7 @@ fn main() {
             mesh_handle: floor_mesh.unwrap(),
         },
         MaterialComponent {
-            material_handle: material,
+            material_handle: material2,
         },
     ));
 
@@ -121,6 +121,20 @@ fn main() {
             Transform::default()
                 .with_location(vec3(0.0, 1.0, 0.0))
                 .with_scale(vec3(1.0, 1.0, 1.0)),
+        ),
+        MeshComponent {
+            mesh_handle: cube_mesh.unwrap(),
+        },
+        MaterialComponent {
+            material_handle: material2,
+        },
+    ));
+
+    world.create_entity((
+        TransformComponent(
+            Transform::default()
+                .with_location(vec3(0.0, 1.0, 5.0))
+                .with_scale(vec3(2.0, 2.0, 2.0)),
         ),
         MeshComponent {
             mesh_handle: cube_mesh.unwrap(),
@@ -142,13 +156,13 @@ fn main() {
     ));
 
     world.create_entity((
-        TransformComponent(Transform::default().with_rotation(
-            nalgebra_glm::normalize(&vec3(0.5, 1.0, 0.5))
-        )),
+        TransformComponent(
+            Transform::default().with_rotation(nalgebra_glm::normalize(&vec3(0.5, 1.0, 0.5))),
+        ),
         DirectionalLightComponent {
             ambient_color: vec3(1.0, 1.0, 1.0),
             color: vec3(1.0, 1.0, 1.0),
-            ambient_intensity: 0.3,
+            ambient_intensity: 0.1,
             intensity: 1.0,
         },
     ));

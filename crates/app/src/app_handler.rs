@@ -1,5 +1,5 @@
 use assets::AssetManager;
-use core::{CameraControllerComponent, EngineContext, TransformComponent};
+use core::EngineContext;
 use ecs::world::World;
 use input::InputManager;
 use material::material_manager::MaterialManager;
@@ -71,19 +71,31 @@ impl ApplicationHandler for AppHandler {
 
             let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
 
-            // TODO: This is bad. but works for now...
-
-            let mut renderer = Renderer::new(
+            let renderer = Renderer::new(
                 &mut vulkan,
                 ResolutionSettings {
                     window_resolution: Resolution {
                         height: WINDOW_HEIGHT,
                         width: WINDOW_WIDTH,
                     },
-                    shadow_resolution: Resolution {
-                        width: 1024,
-                        height: 1024,
-                    },
+                    shadow_resolutions: vec![
+                        Resolution {
+                            width: 2048,
+                            height: 2048,
+                        },
+                        Resolution {
+                            width: 2048,
+                            height: 2048,
+                        },
+                        Resolution {
+                            width: 1024,
+                            height: 1024,
+                        },
+                        Resolution {
+                            width: 1024,
+                            height: 1024,
+                        },
+                    ],
                 },
             );
 
@@ -115,7 +127,6 @@ impl ApplicationHandler for AppHandler {
                         input_manager.end_frame();
                         drop(input_manager);
 
-                        // Update camera controller via ECS
                         self.engine_context.update(delta_time);
                     }
 

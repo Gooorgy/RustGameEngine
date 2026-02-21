@@ -11,8 +11,9 @@ use rendering_backend::pipeline::{
     PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
 };
 
-const CASCADE_COUNT: usize = 3;
-const SHADOW_MAP_RESOLUTION: u32 = 1024;
+const CASCADE_COUNT: usize = 4;
+const CASCADE_RESOLUTIONS: [u32; CASCADE_COUNT] = [2048, 2048, 1024, 1024];
+const SHADOW_DISTANCE: f32 = 100.0;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -43,7 +44,6 @@ pub struct LightingRenderer {
 
 impl LightingRenderer {
     pub fn new(vulkan_backend: &mut VulkanBackend, frame_data: &FrameData) -> Self {
-        // Shadow pipeline: vertex-only, depth-only, front-face culling, depth clamping
         let shadow_pipeline_desc = PipelineDesc {
             vertex_shader: String::from("shadow"),
             fragment_shader: None,
@@ -85,7 +85,6 @@ impl LightingRenderer {
 
         let shadow_pipeline = vulkan_backend.create_graphics_pipeline(shadow_pipeline_desc);
 
-        // Lighting pipeline: fullscreen triangle, color-only, no depth
         let lighting_pipeline_desc = PipelineDesc {
             vertex_shader: String::from("quad"),
             fragment_shader: Some(String::from("lighting")),
@@ -137,11 +136,9 @@ impl LightingRenderer {
             Some(c) => c,
             None => return,
         };
-
-        // 1. Compute cascades
+        
         let cascades = self.compute_cascades(camera, &light.direction);
 
-        // 2. Update GPU buffers
         let cascade_matrices: Vec<Mat4> = cascades.iter().map(|c| c.view_proj).collect();
         vulkan_backend.update_buffer(frame_data.cascade_buffer, cascade_matrices.as_slice());
 
@@ -163,22 +160,21 @@ impl LightingRenderer {
                 cascades.get(0).map_or(0.0, |c| c.depth),
                 cascades.get(1).map_or(0.0, |c| c.depth),
                 cascades.get(2).map_or(0.0, |c| c.depth),
-                0.0,
+                cascades.get(3).map_or(0.0, |c| c.depth),
             ),
         };
         vulkan_backend.update_buffer(frame_data.lighting_buffer, &[lighting_ubo]);
 
-        // Update lighting descriptor set with current images
         self.update_lighting_descriptors(vulkan_backend, frame_data);
 
-        // 3. Shadow pass - render each cascade
         for cascade_idx in 0..CASCADE_COUNT {
             let shadow_image = &frame_data.frame_images.shadow_cascades[cascade_idx];
+            let res = CASCADE_RESOLUTIONS[cascade_idx];
             vulkan_backend.begin_rendering_with_extent(
                 &[],
                 Some(shadow_image),
-                SHADOW_MAP_RESOLUTION,
-                SHADOW_MAP_RESOLUTION,
+                res,
+                res,
             );
 
             vulkan_backend.bind_pipeline(self.shadow_pipeline);
@@ -204,18 +200,15 @@ impl LightingRenderer {
             vulkan_backend.end_rendering();
         }
 
-        // 4. Transition shadow images to shader read
         for cascade_idx in 0..CASCADE_COUNT {
             vulkan_backend
                 .transition_image(frame_data.frame_images.shadow_cascades[cascade_idx], true);
         }
 
-        // Also transition g-buffer images to shader read for the lighting pass
         vulkan_backend.transition_image(frame_data.frame_images.gbuffer_albedo, false);
         vulkan_backend.transition_image(frame_data.frame_images.gbuffer_normal, false);
         vulkan_backend.transition_image(frame_data.frame_images.gbuffer_depth, true);
 
-        // 5. Lighting pass (uses swapchain extent via begin_rendering)
         vulkan_backend.begin_rendering(&[frame_data.frame_images.draw_image], None);
 
         vulkan_backend.bind_pipeline(self.lighting_pipeline);
@@ -288,6 +281,13 @@ impl LightingRenderer {
                 binding: 8,
                 value: DescriptorValue::UniformBuffer(frame_data.camera_buffer),
             },
+            DescriptorWriteDesc {
+                binding: 9,
+                value: DescriptorValue::SampledImage(SampledImageInfo {
+                    image: frame_data.frame_images.shadow_cascades[3],
+                    sampler: frame_data.shadow_sampler,
+                }),
+            },
         ];
 
         vulkan_backend.update_descriptor_set(frame_data.lighting_descriptor_set, &writes);
@@ -295,10 +295,9 @@ impl LightingRenderer {
 
     fn compute_cascades(&self, camera: &CameraRenderData, light_dir: &Vec3) -> Vec<Cascade> {
         let near = camera.near_clip;
-        let far = camera.far_clip;
+        let far = camera.far_clip.min(SHADOW_DISTANCE);
         let lambda = 0.9f32;
 
-        // Compute cascade splits
         let mut splits = vec![0.0f32; CASCADE_COUNT + 1];
         splits[0] = near;
         splits[CASCADE_COUNT] = far;
@@ -316,14 +315,14 @@ impl LightingRenderer {
             let split_near = splits[i];
             let split_far = splits[i + 1];
 
-            // Build sub-frustum projection (no Y-flip for frustum computation)
-            let mut sub_proj = glm::perspective(
+            // Build sub-frustum projection
+            let sub_proj = glm::perspective_rh_zo(
                 camera.aspect_ratio,
                 camera.fov.to_radians(),
                 split_near,
                 split_far,
             );
-            sub_proj[(1, 1)] *= -1.0; // Vulkan Y-flip
+
             let sub_inv_vp = glm::inverse(&(sub_proj * camera.view));
 
             // NDC corners of the frustum
@@ -338,48 +337,44 @@ impl LightingRenderer {
                 Vec4::new(-1.0, 1.0, 1.0, 1.0),
             ];
 
-            // Transform to world space
+            // Frustum to world space
             let mut world_corners = [Vec3::zeros(); 8];
             for (j, ndc) in ndc_corners.iter().enumerate() {
                 let world = sub_inv_vp * ndc;
                 world_corners[j] =
                     Vec3::new(world.x / world.w, world.y / world.w, world.z / world.w);
             }
-
-            // Compute bounding sphere center
+            
             let mut center = Vec3::zeros();
             for corner in &world_corners {
                 center += corner;
             }
             center /= 8.0;
-
-            // Compute radius
+            
             let mut radius = 0.0f32;
             for corner in &world_corners {
                 let dist = glm::length(&(corner - center));
                 radius = radius.max(dist);
             }
-            // Round up to texel size for stability
+            // Round texel size
             radius = (radius * 16.0).ceil() / 16.0;
 
-            // Build orthographic light view-proj
             let light_dir_norm = glm::normalize(light_dir);
             let light_view = glm::look_at(
-                &(center - light_dir_norm * radius),
+                &(center + light_dir_norm * radius),
                 &center,
                 &Vec3::new(0.0, 1.0, 0.0),
             );
-            let light_proj = glm::ortho(-radius, radius, -radius, radius, 0.0, 2.0 * radius);
+            let light_proj = glm::ortho_rh_zo(-radius, radius, -radius, radius, 0.0, 2.0 * radius);
 
             let mut shadow_vp = light_proj * light_view;
 
-            // Texel snapping: round the origin to shadow map texel boundaries
+            // Texel snapping
+            let snap_res = CASCADE_RESOLUTIONS[i] as f32;
             let shadow_origin = shadow_vp * Vec4::new(0.0, 0.0, 0.0, 1.0);
             let shadow_origin_snapped = Vec4::new(
-                (shadow_origin.x * SHADOW_MAP_RESOLUTION as f32 / 2.0).round()
-                    / (SHADOW_MAP_RESOLUTION as f32 / 2.0),
-                (shadow_origin.y * SHADOW_MAP_RESOLUTION as f32 / 2.0).round()
-                    / (SHADOW_MAP_RESOLUTION as f32 / 2.0),
+                (shadow_origin.x * snap_res / 2.0).round() / (snap_res / 2.0),
+                (shadow_origin.y * snap_res / 2.0).round() / (snap_res / 2.0),
                 shadow_origin.z,
                 shadow_origin.w,
             );
