@@ -1,5 +1,6 @@
-use crate::descriptor::{DescriptorLayoutDesc, DescriptorType};
+use crate::backend_impl::destroyable::Destroyable;
 use crate::backend_impl::device::DeviceInfo;
+use crate::descriptor::{DescriptorLayoutDesc, DescriptorType};
 use ash::vk;
 
 pub struct DescriptorPoolChunk {
@@ -94,8 +95,7 @@ fn map_descriptor_type(descriptor_type: DescriptorType) -> vk::DescriptorType {
 
 pub struct AllocatedDescriptorSet {
     pub descriptor_set: vk::DescriptorSet,
-    // Kept to track which pool this set was allocated from; used when pools are freed.
-    #[allow(dead_code)]
+    // Tracks which pool this set was allocated from; used when freeing individual sets.
     pub pool: vk::DescriptorPool,
 }
 
@@ -188,6 +188,29 @@ impl AllocatedDescriptorSet {
     //             .update_descriptor_sets(&write_descriptor_sets, &[]);
     //     }
     // }
+}
+
+impl Destroyable for DescriptorPoolChunk {
+    fn destroy(&self, device: &ash::Device) {
+        // Destroying a pool implicitly frees all sets allocated from it.
+        unsafe { device.destroy_descriptor_pool(self.pool, None); }
+    }
+}
+
+impl Destroyable for DescriptorLayoutInfo {
+    fn destroy(&self, device: &ash::Device) {
+        unsafe { device.destroy_descriptor_set_layout(self.layout, None); }
+    }
+}
+
+impl Destroyable for AllocatedDescriptorSet {
+    fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            device
+                .free_descriptor_sets(self.pool, &[self.descriptor_set])
+                .expect("Failed to free descriptor set");
+        }
+    }
 }
 
 // /// Uniform buffer count: 1 for camera, 1 for lighting

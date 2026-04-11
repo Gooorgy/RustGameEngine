@@ -1,3 +1,4 @@
+use crate::backend_impl::destroyable::Destroyable;
 use crate::backend_impl::device::DeviceInfo;
 use crate::backend_impl::utils;
 use crate::image::{ImageAspect, ImageDesc, ImageUsageFlags, TextureFormat};
@@ -6,8 +7,6 @@ use ash::{vk, Device, Instance};
 pub struct AllocatedImage {
     pub image: vk::Image,
     pub image_view: vk::ImageView,
-    // Kept for GPU memory lifetime; not read after construction.
-    #[allow(dead_code)]
     pub image_memory: vk::DeviceMemory,
     pub image_extent: vk::Extent3D,
     pub image_format: vk::Format,
@@ -352,4 +351,14 @@ fn map_usage_flags(usage: ImageUsageFlags) -> vk::ImageUsageFlags {
         flags |= vk::ImageUsageFlags::TRANSFER_DST;
     }
     flags
+}
+
+impl Destroyable for AllocatedImage {
+    fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            device.destroy_image_view(self.image_view, None);
+            device.destroy_image(self.image, None);
+            device.free_memory(self.image_memory, None);
+        }
+    }
 }

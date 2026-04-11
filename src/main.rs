@@ -5,9 +5,7 @@ use core::components::{
 };
 use core::types::transform::Transform;
 use ecs::systems::System;
-use input::{
-    AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode,
-};
+use input::{AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode};
 use material::{MaterialColorParameter, MaterialParameter, PbrMaterial};
 use nalgebra_glm::{vec3, vec4};
 use spatial::{ColliderComponent, Shape};
@@ -18,10 +16,14 @@ fn main() {
     {
         let ctx = app.engine_context_mut();
 
-        ctx.input().bind_action("move_forward", vec![InputBinding::Key(KeyCode::W)]);
-        ctx.input().bind_action("move_backward", vec![InputBinding::Key(KeyCode::S)]);
-        ctx.input().bind_action("move_left", vec![InputBinding::Key(KeyCode::A)]);
-        ctx.input().bind_action("move_right", vec![InputBinding::Key(KeyCode::D)]);
+        ctx.input()
+            .bind_action("move_forward", vec![InputBinding::Key(KeyCode::W)]);
+        ctx.input()
+            .bind_action("move_backward", vec![InputBinding::Key(KeyCode::S)]);
+        ctx.input()
+            .bind_action("move_left", vec![InputBinding::Key(KeyCode::A)]);
+        ctx.input()
+            .bind_action("move_right", vec![InputBinding::Key(KeyCode::D)]);
 
         ctx.input().bind_axis(
             AxisAction::HORIZONTAL,
@@ -54,7 +56,9 @@ fn main() {
 
         let floor_mesh = ctx.assets().get_mesh(".\\resources\\models\\floor.obj");
         let cube_mesh = ctx.assets().get_mesh(".\\resources\\models\\cube.obj");
-        let image = ctx.assets().get_image(".\\resources\\textures\\texture.png");
+        let image = ctx
+            .assets()
+            .get_image(".\\resources\\textures\\texture.png");
 
         let mat2 = ctx.materials().add_material_instance(PbrMaterial {
             base_color: MaterialColorParameter::Handle(image.unwrap()),
@@ -67,10 +71,16 @@ fn main() {
 
         let setup = ctx.world_setup();
 
-        let collider = setup.spatial.register_collider(Shape::Sphere { radius: 1.0 });
-        let collider2 = setup.spatial.register_collider(Shape::Sphere { radius: 2.0 });
+        let collider = setup
+            .spatial
+            .register_collider(Shape::Sphere { radius: 1.0 });
+        let collider2 = setup
+            .spatial
+            .register_collider(Shape::Sphere { radius: 2.0 });
+        let collider3 = setup
+            .spatial
+            .register_collider(Shape::Sphere { radius: 1.0 });
 
-        
         setup.world.create_entity((
             TransformComponent(Transform::default()),
             MeshComponent {
@@ -109,7 +119,21 @@ fn main() {
                 material_handle: mat2,
             },
             ColliderComponent { id: collider2 },
+        ));
 
+        setup.world.create_entity((
+            TransformComponent(
+                Transform::default()
+                    .with_location(vec3(8.0, 12.0, 10.0))
+                    .with_scale(vec3(1.0, 1.0, 1.0)),
+            ),
+            MeshComponent {
+                mesh_handle: cube_mesh.unwrap(),
+            },
+            MaterialComponent {
+                material_handle: mat2,
+            },
+            ColliderComponent { id: collider3 },
         ));
 
         setup.world.create_entity((
@@ -125,8 +149,7 @@ fn main() {
 
         setup.world.create_entity((
             TransformComponent(
-                Transform::default()
-                    .with_rotation(nalgebra_glm::normalize(&vec3(0.5, 1.0, 0.5))),
+                Transform::default().with_rotation(nalgebra_glm::normalize(&vec3(0.5, 1.0, 0.5))),
             ),
             DirectionalLightComponent {
                 ambient_color: vec3(1.0, 1.0, 1.0),

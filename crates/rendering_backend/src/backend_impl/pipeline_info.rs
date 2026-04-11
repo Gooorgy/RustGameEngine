@@ -1,3 +1,4 @@
+use crate::backend_impl::destroyable::Destroyable;
 use crate::backend_impl::device::DeviceInfo;
 use crate::backend_impl::resource_registry::ResourceRegistry;
 use crate::backend_impl::vk_vertex_info::VulkanVertexInfo;
@@ -910,6 +911,17 @@ impl PipelineInfo {
             device
                 .create_shader_module(&create_info, None)
                 .expect("Unable to create shader module")
+        }
+    }
+}
+
+impl Destroyable for PipelineInfo {
+    fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            for &pipeline in &self.pipelines {
+                device.destroy_pipeline(pipeline, None);
+            }
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
         }
     }
 }

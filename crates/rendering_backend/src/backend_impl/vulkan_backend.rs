@@ -283,6 +283,13 @@ impl VulkanBackend {
                 .logical_device
                 .reset_fences(&[self.render_fence])
                 .expect("Failed to reset fences");
+        }
+
+        // GPU is idle after the fence wait — safe to free any queued resources.
+        self.resource_registry
+            .flush_pending(&self.device_info.logical_device);
+
+        unsafe {
 
             let (swapchain_image_index, _) = self
                 .swapchain_info
@@ -2467,4 +2474,48 @@ impl VulkanBackend {
     //         ImageAspectFlags::COLOR,
     //     )
     // }
+}
+
+impl Drop for VulkanBackend {
+    fn drop(&mut self) {
+        unsafe {
+            self.device_info
+                .logical_device
+                .device_wait_idle()
+                .expect("device_wait_idle failed during shutdown");
+
+            // Free all registered GPU resources.
+            self.resource_registry
+                .destroy_all(&self.device_info.logical_device);
+
+            self.device_info
+                .logical_device
+                .destroy_semaphore(self.render_semaphore, None);
+            self.device_info
+                .logical_device
+                .destroy_semaphore(self.swapchain_semaphore, None);
+            self.device_info
+                .logical_device
+                .destroy_fence(self.render_fence, None);
+
+            // Command buffer is implicitly freed when its pool is destroyed.
+            self.device_info
+                .logical_device
+                .destroy_command_pool(self.device_info.command_pool, None);
+
+            self.swapchain_info
+                .swapchain_device
+                .destroy_swapchain(self.swapchain_info.swapchain, None);
+
+            self.device_info.logical_device.destroy_device(None);
+
+            // Surface must be destroyed before the instance.
+            self._surface_info
+                .surface_instance
+                .destroy_surface(self._surface_info.surface, None);
+
+            self.instance.destroy_instance(None);
+            // _entry (ash::Entry) drops automatically — it owns the loaded library handle.
+        }
+    }
 }

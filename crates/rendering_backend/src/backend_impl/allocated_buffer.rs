@@ -1,3 +1,4 @@
+use super::destroyable::Destroyable;
 use super::utils;
 use crate::backend_impl::device::DeviceInfo;
 use crate::buffer::{BufferDesc, BufferUsageFlags};
@@ -386,4 +387,16 @@ fn map_usage_flags(usage: BufferUsageFlags) -> vk::BufferUsageFlags {
         flags |= vk::BufferUsageFlags::TRANSFER_DST;
     }
     flags
+}
+
+impl Destroyable for AllocatedBuffer {
+    fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            if self.mapped_buffer.is_some() {
+                device.unmap_memory(self.buffer_memory);
+            }
+            device.destroy_buffer(self.buffer, None);
+            device.free_memory(self.buffer_memory, None);
+        }
+    }
 }

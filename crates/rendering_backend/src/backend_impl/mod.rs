@@ -1,4 +1,5 @@
 mod allocated_buffer;
+mod destroyable;
 mod camera;
 mod constants;
 mod conversions;
