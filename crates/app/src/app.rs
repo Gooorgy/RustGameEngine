@@ -2,12 +2,11 @@ use crate::app_handler::AppHandler;
 use core::EngineContext;
 use winit::event_loop::EventLoop;
 
-/// Entry point for the engine. Creates and owns the winit event loop and the
-/// application handler. Construct with `App::new`, set up your scene through
-/// `engine_context_mut`, then call `run` to enter the event loop.
+/// Entry point for the engine. Construct with `App::new`, configure the scene
+/// via `engine_context_mut`, then call `run` to enter the event loop.
 pub struct App {
     event_loop: EventLoop<()>,
-    app_handler: AppHandler,
+    engine_context: EngineContext,
 }
 
 impl Default for App {
@@ -17,26 +16,22 @@ impl Default for App {
 }
 
 impl App {
-    /// Creates the engine with a fresh `EngineContext` and a winit event loop.
-    pub fn new() -> App {
+    pub fn new() -> Self {
         let engine_context = EngineContext::new();
         let event_loop = EventLoop::new().expect("Failed to create event loop");
-        let app_handler = AppHandler::new(engine_context);
-        Self {
-            event_loop,
-            app_handler,
-        }
+        Self { event_loop, engine_context }
     }
 
     /// Returns a mutable reference to the `EngineContext` for scene setup.
     pub fn engine_context_mut(&mut self) -> &mut EngineContext {
-        self.app_handler.engine_context_mut()
+        &mut self.engine_context
     }
 
     /// Starts the winit event loop. Blocks until the window is closed.
-    pub fn run(mut self) {
+    pub fn run(self) {
+        let mut handler = AppHandler::new(self.engine_context);
         self.event_loop
-            .run_app(&mut self.app_handler)
+            .run_app(&mut handler)
             .expect("Failed to run event loop");
     }
 }
