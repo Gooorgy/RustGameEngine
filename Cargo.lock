@@ -100,6 +100,7 @@ dependencies = [
  "nalgebra-glm",
  "renderer",
  "rendering_backend",
+ "spatial",
  "winit",
 ]
 
@@ -446,6 +447,7 @@ dependencies = [
  "legacy_macros",
  "material",
  "nalgebra-glm",
+ "spatial",
 ]
 
 [[package]]
@@ -1282,6 +1284,7 @@ dependencies = [
  "noise",
  "rendering_backend",
  "serde",
+ "spatial",
  "typed-arena",
  "walkdir",
  "winit",
@@ -2246,6 +2249,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "spatial"
+version = "0.1.0"
+dependencies = [
+ "assets",
+ "ecs",
+ "nalgebra-glm",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ use rendering_backend::descriptor::{
 };
 use rendering_backend::pipeline::{
     CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode,
-    PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
+    PrimitiveTopology, PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
 };
 
 const CASCADE_COUNT: usize = 4;
@@ -81,6 +81,7 @@ impl LightingRenderer {
                 bindings: vec![],
                 attributes: vec![],
             },
+            topology: PrimitiveTopology::TriangleList,
         };
 
         let shadow_pipeline = vulkan_backend.create_graphics_pipeline(shadow_pipeline_desc);
@@ -112,6 +113,7 @@ impl LightingRenderer {
                 bindings: vec![],
                 attributes: vec![],
             },
+            topology: PrimitiveTopology::TriangleList,
         };
 
         let lighting_pipeline = vulkan_backend.create_graphics_pipeline(lighting_pipeline_desc);

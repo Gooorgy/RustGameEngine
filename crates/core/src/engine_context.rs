@@ -1,8 +1,19 @@
+use crate::TransformComponent;
+use assets::AssetManager;
 use ecs::world::World;
+use input::InputManager;
+use material::material_manager::MaterialManager;
 use std::any::{Any, TypeId};
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
+use spatial::{ColliderComponent, SpatialWorld};
+
+/// Provides simultaneous mutable access to both worlds, avoiding split-borrow issues.
+pub struct WorldSetup<'a> {
+    pub world: &'a mut World,
+    pub spatial: &'a mut SpatialWorld,
+}
 
 /// Context that holds and manages different managers.
 ///
@@ -10,13 +21,38 @@ use std::rc::Rc;
 pub struct EngineContext {
     managers: HashMap<TypeId, Box<dyn Any>>,
     world: World,
+    spatial_world: SpatialWorld,
 }
 
 impl EngineContext {
     pub fn new() -> EngineContext {
-        Self {
+        let mut ctx = Self {
             managers: HashMap::new(),
             world: World::new(),
+            spatial_world: SpatialWorld::new(),
+        };
+        ctx.register_manager(AssetManager::default());
+        ctx.register_manager(MaterialManager::new());
+        ctx.register_manager(InputManager::new());
+        ctx
+    }
+
+    pub fn assets(&self) -> RefMut<AssetManager> {
+        self.expect_manager_mut::<AssetManager>()
+    }
+
+    pub fn materials(&self) -> RefMut<MaterialManager> {
+        self.expect_manager_mut::<MaterialManager>()
+    }
+
+    pub fn input(&self) -> RefMut<InputManager> {
+        self.expect_manager_mut::<InputManager>()
+    }
+
+    pub fn world_setup(&mut self) -> WorldSetup<'_> {
+        WorldSetup {
+            world: &mut self.world,
+            spatial: &mut self.spatial_world,
         }
     }
 
@@ -24,9 +60,30 @@ impl EngineContext {
         &mut self.world
     }
 
+    pub fn get_spatial_world(&self) -> &SpatialWorld {
+        &self.spatial_world
+    }
+
+    pub fn get_spatial_world_mut(&mut self) -> &mut SpatialWorld {
+        &mut self.spatial_world
+    }
+
     pub fn update(&mut self, delta_time: f32) {
         let ctx = ecs::systems::ManagerContext::new(&self.managers, delta_time);
         self.world.update(&ctx);
+        self.sync_spatial();
+    }
+
+    fn sync_spatial(&mut self) {
+        self.spatial_world.clear_tree();
+        let updates = {
+            let mut query = self.world
+                .query::<(&mut TransformComponent, &mut ColliderComponent)>();
+            query.iter().map(|(t, c)| (c.id, t.location)).collect::<Vec<_>>()
+        };
+        for (id, center) in updates {
+            self.spatial_world.insert_collider(id, center);
+        }
     }
 
     /// Returns a reference to the managers HashMap for creating ManagerContext

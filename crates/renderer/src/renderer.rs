@@ -1,4 +1,5 @@
 use crate::frame_data::{FrameData, ResolutionSettings};
+use crate::passes::aabb_debug_renderer::AabbDebugRenderer;
 use crate::passes::geometry_renderer::GeometryRenderer;
 use crate::passes::lighting_renderer::LightingRenderer;
 use crate::render_data::{DirectionalLightData, MeshRenderRequest};
@@ -16,12 +17,15 @@ use rendering_backend::descriptor::{
 use crate::render_data::CameraRenderData;
 use std::collections::HashMap;
 
+pub use crate::passes::aabb_debug_renderer::DebugBox;
+
 pub struct Renderer {
     frame_data: FrameData,
     layout_cache: HashMap<LayoutKey, DescriptorLayoutHandle>,
     descriptor_cache: HashMap<MaterialHandle, DescriptorSetHandle>,
     geometry_renderer: GeometryRenderer,
     lighting_renderer: LightingRenderer,
+    aabb_debug_renderer: AabbDebugRenderer,
 }
 
 impl Renderer {
@@ -32,13 +36,19 @@ impl Renderer {
         let frame_data = FrameData::new(vulkan_backend, resolution_settings, 1000);
         let geometry_renderer = GeometryRenderer::new();
         let lighting_renderer = LightingRenderer::new(vulkan_backend, &frame_data);
+        let aabb_debug_renderer = AabbDebugRenderer::new(vulkan_backend);
         Self {
             frame_data,
             layout_cache: HashMap::new(),
             descriptor_cache: HashMap::new(),
             geometry_renderer,
             lighting_renderer,
+            aabb_debug_renderer,
         }
+    }
+
+    pub fn toggle_aabb_debug(&mut self) {
+        self.aabb_debug_renderer.toggle();
     }
 
     pub fn draw_frame(
@@ -51,6 +61,7 @@ impl Renderer {
         camera: CameraMvpUbo,
         camera_render_data: Option<CameraRenderData>,
         directional_light: Option<DirectionalLightData>,
+        aabbs: &[DebugBox],
     ) {
         let render_scene = self.create_render_scene(
             vulkan_backend,
@@ -69,6 +80,9 @@ impl Renderer {
 
         self.lighting_renderer
             .draw_frame(vulkan_backend, &render_scene, &self.frame_data);
+
+        self.aabb_debug_renderer
+            .draw_frame(vulkan_backend, aabbs, &self.frame_data, camera);
 
         vulkan_backend.end_frame(self.frame_data.frame_images.draw_image);
     }

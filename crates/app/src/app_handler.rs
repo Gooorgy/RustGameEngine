@@ -1,16 +1,13 @@
 use assets::AssetManager;
 use core::EngineContext;
-use ecs::world::World;
 use input::InputManager;
 use material::material_manager::MaterialManager;
 use renderer::frame_data::{Resolution, ResolutionSettings};
 use renderer::render_data::RenderDataCollector;
-use renderer::renderer::Renderer;
+use renderer::renderer::{DebugBox, Renderer};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
-use std::cell::RefMut;
-use std::io::Write;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -25,6 +22,8 @@ const WINDOW_TITLE: &str = "Vulkan Test";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
+/// Winit `ApplicationHandler` implementation. Owns the window, the Vulkan
+/// backend, and the renderer. Created by `App::new` and driven by the event loop.
 pub struct AppHandler {
     engine_context: EngineContext,
     window: Option<Window>,
@@ -34,7 +33,9 @@ pub struct AppHandler {
 }
 
 impl AppHandler {
-    pub fn new(engine_context: EngineContext) -> Self {
+    /// Creates the handler and registers `ResourceManager` into the context.
+    pub fn new(mut engine_context: EngineContext) -> Self {
+        engine_context.register_manager(ResourceManager::new());
         Self {
             window: None,
             engine_context,
@@ -52,12 +53,9 @@ impl AppHandler {
         event_loop.create_window(window_attributes)
     }
 
-    pub fn get_from_context<T: 'static>(&self) -> RefMut<T> {
-        self.engine_context.expect_manager_mut::<T>()
-    }
-
-    pub fn get_world(&mut self) -> &mut World {
-        self.engine_context.get_world()
+    /// Returns a mutable reference to the `EngineContext`.
+    pub fn engine_context_mut(&mut self) -> &mut EngineContext {
+        &mut self.engine_context
     }
 }
 
@@ -113,31 +111,35 @@ impl ApplicationHandler for AppHandler {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => match self.vulkan_backend {
-                Some(ref mut app) => {
+                Some(ref mut vulkan_backend) => {
                     let time_elapsed = self.last_frame_time.elapsed();
                     self.last_frame_time = Instant::now();
-                    let delta_time = time_elapsed.subsec_micros() as f32 / 1_000_000.0_f32;
-                    std::io::stdout().flush().unwrap();
+                    let delta_time = time_elapsed.as_secs_f32();
 
                     {
                         let mut input_manager =
                             self.engine_context.expect_manager_mut::<InputManager>();
                         input_manager.update();
 
-                        input_manager.end_frame();
-                        drop(input_manager);
+                        if input_manager.is_key_just_pressed(input::KeyCode::F3) {
+                            if let Some(renderer) = self.renderer.as_mut() {
+                                renderer.toggle_aabb_debug();
+                            }
+                        }
 
-                        self.engine_context.update(delta_time);
+                        input_manager.end_frame();
                     }
+
+                    self.engine_context.update(delta_time);
 
                     let world = self.engine_context.get_world();
                     let mut render_data = RenderDataCollector::new();
                     render_data
                         .collect_from_world(world, WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32);
 
-                    let camera_render_data = render_data.camera.clone();
-                    let camera_ubo = render_data
-                        .camera
+                    let camera_render_data = render_data.camera;
+                    let camera_ubo = camera_render_data
+                        .as_ref()
                         .map(|c| CameraMvpUbo {
                             view: c.view,
                             proj: c.proj,
@@ -154,16 +156,20 @@ impl ApplicationHandler for AppHandler {
                         self.engine_context.expect_manager_mut::<ResourceManager>();
 
                     let renderer = self.renderer.as_mut().unwrap();
-
-                    renderer.draw_frame(
-                        app,
-                        &render_data.mesh_requests,
-                        &mut material_manager,
-                        &mut asset_manager,
-                        &mut resource_manager,
-                        camera_ubo,
-                        camera_render_data,
-                        directional_light,
+                    let debug_boxes = self.engine_context.get_spatial_world().iter_aabbs().map(|aabb| DebugBox {
+                        max: aabb.upper,
+                        min: aabb.lower,
+                    }).collect::<Vec<_>>();
+                        renderer.draw_frame(
+                            vulkan_backend,
+                            &render_data.mesh_requests,
+                            &mut material_manager,
+                            &mut asset_manager,
+                            &mut resource_manager,
+                            camera_ubo,
+                            camera_render_data,
+                            directional_light,
+                            &*debug_boxes,
                     );
 
                     let window = &self.window.as_ref().unwrap();

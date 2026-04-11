@@ -5,10 +5,15 @@ use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::descriptor::ShaderStage;
 use rendering_backend::pipeline::{
     BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode,
-    DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PushConstantDesc,
-    RasterizationStateDesc, VertexInputDesc,
+    DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology,
+    PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
 };
 use std::collections::HashMap;
+
+/// Byte offset of the fragment push constant block. The vertex block occupies
+/// bytes 0-7 (one u64 mesh index), but Vulkan push constant ranges must be
+/// 16-byte aligned, so the fragment block starts here.
+const FRAGMENT_PUSH_CONSTANT_OFFSET: u32 = 16;
 
 pub struct GeometryRenderer {
     pub pipeline_cache: HashMap<MaterialVariant, PipelineHandle>,
@@ -52,7 +57,7 @@ impl GeometryRenderer {
                 pipeline,
                 ShaderStage::FRAGMENT,
                 mesh_data.material_data.push_constant_data.as_slice(),
-                16, //size_of::<u32>() as u32,
+                FRAGMENT_PUSH_CONSTANT_OFFSET,
             );
 
             vulkan_backend.bind_vertex_buffer(mesh_data.mesh_data.vertex_buffer);
@@ -74,8 +79,6 @@ impl GeometryRenderer {
         if let Some(pipeline) = descriptors {
             return *pipeline;
         }
-
-        println!("Pipeline not found... Creating new");
 
         let pipeline_desc = PipelineDesc {
             vertex_shader: "vert".into(),
@@ -100,7 +103,7 @@ impl GeometryRenderer {
                     size: size_of::<u64>(),
                 },
                 PushConstantDesc {
-                    offset: 16, //size_of::<u32>() as u32,
+                    offset: FRAGMENT_PUSH_CONSTANT_OFFSET,
                     stages: ShaderStage::FRAGMENT,
                     size: material_data.push_constant_data.len(),
                 },
@@ -140,6 +143,7 @@ impl GeometryRenderer {
                 bindings: vec![],
                 attributes: vec![],
             },
+            topology: PrimitiveTopology::TriangleList,
         };
 
         let pipeline_handle = vulkan_backend.create_graphics_pipeline(pipeline_desc);

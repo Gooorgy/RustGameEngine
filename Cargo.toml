@@ -17,7 +17,7 @@ material = { path = "crates/material" }
 core = { path = "crates/core" }
 ecs = { path = "crates/ecs" }
 input = { path = "crates/input" }
-
+spatial = {path = "crates/spatial"}
 noise = "0.9.0"
 
 [build-dependencies]

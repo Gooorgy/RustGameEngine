@@ -1,7 +1,7 @@
 use crate::backend_impl::device::DeviceInfo;
 use crate::backend_impl::resource_registry::ResourceRegistry;
 use crate::backend_impl::vk_vertex_info::VulkanVertexInfo;
-use crate::pipeline::PipelineDesc;
+use crate::pipeline::{PipelineDesc, PrimitiveTopology};
 use ash::vk;
 use ash::vk::{DynamicState, PipelineDynamicStateCreateInfo};
 use std::{ffi::CString, fs, io, path::Path, ptr};
@@ -73,7 +73,10 @@ impl PipelineInfo {
             .vertex_binding_descriptions(&vertex_binding_description);
 
         let input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::default()
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .topology(match desc.topology {
+                PrimitiveTopology::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
+                PrimitiveTopology::LineList => vk::PrimitiveTopology::LINE_LIST,
+            })
             .primitive_restart_enable(false);
 
         let viewport_state_create_info = vk::PipelineViewportStateCreateInfo::default()
@@ -126,7 +129,7 @@ impl PipelineInfo {
             })
             .collect::<Vec<_>>();
 
-        if (push_constant_ranges.len() > 0) {
+        if !push_constant_ranges.is_empty() {
             pipeline_layout_create_info =
                 pipeline_layout_create_info.push_constant_ranges(&push_constant_ranges);
         }

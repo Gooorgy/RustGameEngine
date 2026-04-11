@@ -10,3 +10,4 @@ ecs = { path = "../ecs" }
 assets = { path = "../assets" }
 material = { path = "../material" }
 input = { path = "../input" }
+spatial = {path = "../spatial"}

@@ -243,6 +243,10 @@ impl VulkanBackend {
         buffer.update_buffer(data);
     }
 
+    pub fn buffer_size(&self, buffer_handle: BufferHandle) -> usize {
+        self.resource_registry.buffers[buffer_handle.0].buffer_size as usize
+    }
+
     pub fn create_sampler(&mut self, desc: SamplerDesc) -> SamplerHandle {
         let mut sampler_info = vk::SamplerCreateInfo::default()
             .mag_filter(desc.mag_filter.into())
@@ -511,6 +515,49 @@ impl VulkanBackend {
         let width = self.swapchain_info.swapchain_extent.width as f32;
         let height = self.swapchain_info.swapchain_extent.height as f32;
         self.set_viewport_scissor(width, height);
+    }
+
+    /// Like begin_rendering but preserves existing color contents (LOAD op).
+    /// No depth attachment — suitable for debug overlays drawn on top of the scene.
+    pub fn begin_rendering_load(&mut self, color_image_handles: &[GpuImageHandle]) {
+        let mut color_infos: Vec<vk::RenderingAttachmentInfo> =
+            Vec::with_capacity(color_image_handles.len());
+        for handle in color_image_handles {
+            let img = &mut self.resource_registry.images[handle.0];
+            if img.image_layout != vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL {
+                image_util::transition_image_layout(
+                    &self.device_info,
+                    &self.command_buffer,
+                    img.image,
+                    img.image_layout,
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    false,
+                );
+                img.image_layout = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
+            }
+            color_infos.push(
+                vk::RenderingAttachmentInfo::default()
+                    .image_view(img.image_view)
+                    .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .load_op(vk::AttachmentLoadOp::LOAD)
+                    .store_op(vk::AttachmentStoreOp::STORE),
+            );
+        }
+        let begin_render_info = vk::RenderingInfo::default()
+            .render_area(vk::Rect2D {
+                extent: self.swapchain_info.swapchain_extent,
+                offset: vk::Offset2D { x: 0, y: 0 },
+            })
+            .layer_count(1)
+            .color_attachments(&color_infos);
+        unsafe {
+            self.device_info
+                .logical_device
+                .cmd_begin_rendering(self.command_buffer, &begin_render_info);
+        }
+        let w = self.swapchain_info.swapchain_extent.width as f32;
+        let h = self.swapchain_info.swapchain_extent.height as f32;
+        self.set_viewport_scissor(w, h);
     }
 
     pub fn begin_rendering_with_extent(

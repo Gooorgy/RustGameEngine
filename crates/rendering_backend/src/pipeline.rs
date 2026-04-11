@@ -4,6 +4,13 @@ use crate::image::GpuImageHandle;
 #[derive(Copy, Clone, Debug)]
 pub struct PipelineHandle(pub usize);
 
+#[derive(Clone, Copy, Debug, Default)]
+pub enum PrimitiveTopology {
+    #[default]
+    TriangleList,
+    LineList,
+}
+
 #[derive(Clone, Debug)]
 pub struct PipelineDesc {
     pub vertex_shader: String,
@@ -16,6 +23,7 @@ pub struct PipelineDesc {
     pub color_attachments: Vec<GpuImageHandle>,
     pub depth_attachment: Option<GpuImageHandle>,
     pub push_constant_ranges: Vec<PushConstantDesc>,
+    pub topology: PrimitiveTopology,
 }
 
 #[derive(Copy, Clone, Debug)]

@@ -50,3 +50,29 @@ impl<T1: Component, T2: Component, T3: Component> ComponentInsertion for (T1, T2
         );
     }
 }
+
+impl<T1: Component, T2: Component, T3: Component, T4: Component> ComponentInsertion for (T1, T2, T3, T4) {
+    fn for_each_component(self, mut f: impl FnMut(TypeId, ComponentValue, ColumnFactory)) {
+        f(
+            TypeId::of::<T1>(),
+            ComponentValue::new(self.0),
+            T1::get_factory(),
+        );
+        f(
+            TypeId::of::<T2>(),
+            ComponentValue::new(self.1),
+            T2::get_factory(),
+        );
+        f(
+            TypeId::of::<T3>(),
+            ComponentValue::new(self.2),
+            T3::get_factory(),
+        );
+        f(
+            TypeId::of::<T4>(),
+            ComponentValue::new(self.3),
+            T4::get_factory(),
+        );
+    }
+}
+
