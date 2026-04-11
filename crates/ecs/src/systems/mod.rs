@@ -30,7 +30,7 @@ impl<'a> ManagerContext<'a> {
 
     /// Retrieves a mutable reference to a manager, panicking if not found.
     pub fn expect_manager<T: 'static>(&self) -> RefMut<'_, T> {
-        self.get_manager::<T>().expect(&format!(
+        self.get_manager::<T>().unwrap_or_else(|| panic!(
             "Manager '{}' not found in ManagerContext",
             std::any::type_name::<T>()
         ))

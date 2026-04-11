@@ -80,7 +80,7 @@ impl DeviceInfo {
 
         let min_ubo_alignment = unsafe {
             let xc = instance.get_physical_device_properties(physical_device);
-            xc.limits.min_uniform_buffer_offset_alignment as u64
+            xc.limits.min_uniform_buffer_offset_alignment
         };
 
         Self {

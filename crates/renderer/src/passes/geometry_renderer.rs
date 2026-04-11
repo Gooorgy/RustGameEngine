@@ -153,8 +153,3 @@ impl GeometryRenderer {
         pipeline_handle
     }
 }
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct GeometryPipelineKey {
-    pub shader_path: String,
-}

@@ -2,7 +2,6 @@ use crate::backend_impl::device::DeviceInfo;
 use ash::vk::{CompareOp, MemoryPropertyFlags, PhysicalDeviceMemoryProperties, Sampler};
 use ash::{vk, Instance};
 use std::mem;
-use std::path::Path;
 
 pub fn find_memory_type(
     type_filter: u32,
@@ -18,6 +17,7 @@ pub fn find_memory_type(
     panic!()
 }
 
+#[allow(dead_code)]
 pub fn get_buffer_alignment<T>(device_info: &DeviceInfo) -> u64 {
     let mut dynamic_alignment = mem::size_of::<T>() as u64;
     let min_ubo_alignment = device_info.min_ubo_alignment;
@@ -29,6 +29,7 @@ pub fn get_buffer_alignment<T>(device_info: &DeviceInfo) -> u64 {
     dynamic_alignment
 }
 
+#[allow(dead_code)]
 pub fn create_texture_sampler(
     device_info: &DeviceInfo,
     instance: &Instance,

@@ -11,7 +11,7 @@ fn main() {
     let out_path = Path::new(&manifest_dir_string)
         .join("target")
         .join(build_type);
-    iterate_copy(&resource_dir, &out_path);
+    iterate_copy(resource_dir, &out_path);
 }
 
 fn iterate_copy(in_path: &Path, out_path: &Path) {

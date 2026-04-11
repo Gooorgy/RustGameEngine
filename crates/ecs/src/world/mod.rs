@@ -10,10 +10,8 @@ pub struct World {
     pub(crate) data: HashMap<ArchetypeKey, Archetype>,
     column_registry: ColumnRegistry,
     entities: Vec<Entity>,
-    sparse_data: Vec<Option<EntityStorageData>>,
     systems: Vec<Box<dyn SystemFunction>>,
     //query_cache: HashMap<QueryKey, QueryCache>,
-    archetype_gen: u64,
 }
 
 struct ColumnRegistry {
@@ -38,14 +36,15 @@ impl ColumnRegistry {
                 let factory = self
                     .factories
                     .get(type_id)
-                    .expect(format!("Factory for type {:?} not registered", type_id).as_str());
+                    .unwrap_or_else(|| panic!("Factory for type {:?} not registered", type_id));
 
-                (factory, type_id.clone())
+                (factory, *type_id)
             })
             .collect::<Vec<_>>()
     }
 }
 
+#[allow(dead_code)]
 pub struct EntityStorageData {
     pub archetype_key: ArchetypeKey,
     pub row: usize,
@@ -62,14 +61,12 @@ impl World {
             data: HashMap::new(),
             column_registry: ColumnRegistry::new(),
             entities: vec![],
-            sparse_data: vec![],
             systems: vec![],
-            archetype_gen: 0,
             //query_cache: HashMap::new(),
         }
     }
 
-    pub fn query<Q: QueryParameter>(&mut self) -> Query<Q> {
+    pub fn query<Q: QueryParameter>(&mut self) -> Query<'_, Q> {
         let mut query = Query {
             world: self,
             matches: vec![],
@@ -78,6 +75,7 @@ impl World {
         query
     }
 
+    #[allow(private_bounds)]
     pub fn create_entity(&mut self, components: impl ComponentInsertion) -> Entity {
         // this works until Entities are removable. leave this for now...
         let index = self.entities.len();
@@ -118,5 +116,11 @@ impl World {
 
     pub fn register_system(&mut self, system: Box<dyn SystemFunction>) {
         self.systems.push(system);
+    }
+}
+
+impl Default for World {
+    fn default() -> Self {
+        Self::new()
     }
 }

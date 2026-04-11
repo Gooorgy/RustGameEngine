@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct AssetId<T> {
-    pub id: u64,
+    pub(crate) id: u64,
     _marker: PhantomData<T>,
 }
 

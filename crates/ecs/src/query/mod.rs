@@ -19,6 +19,12 @@ pub trait QueryParameter {
 
     fn collect_columns(state: Self::MatchKey, columns_out: &mut Vec<usize>);
 
+    /// Fetches component references for the given row.
+    ///
+    /// # Safety
+    ///
+    /// `columns` must be valid, non-aliased pointers for lifetime `'w`, and `row`
+    /// must be within bounds for all referenced column slices.
     unsafe fn fetch<'w>(
         columns: &mut [*mut Column],
         row: usize,
@@ -36,7 +42,7 @@ pub struct Query<'a, Q: QueryParameter> {
 }
 
 impl<Q: QueryParameter> Query<'_, Q> {
-    pub fn iter(&mut self) -> QueryIter<Q> {
+    pub fn iter(&mut self) -> QueryIter<'_, Q> {
         QueryIter::new(&mut self.matches, &mut self.world.data as *mut _)
     }
 
@@ -44,7 +50,7 @@ impl<Q: QueryParameter> Query<'_, Q> {
         self.matches.clear();
 
         for (archetype_key, archetype) in &self.world.data {
-            if let Some(match_key) = Q::check_match(&archetype) {
+            if let Some(match_key) = Q::check_match(archetype) {
                 self.matches.push(Match {
                     match_key,
                     archetype_key: archetype_key.clone(),
@@ -100,15 +106,15 @@ impl<'w, Q: QueryParameter> Iterator for QueryIter<'w, Q> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             // Try to get next item from current archetype
-            if let Some(archetype_iter) = &mut self.current_archetype {
-                if archetype_iter.current_row < archetype_iter.total_rows {
-                    let row = archetype_iter.current_row;
-                    archetype_iter.current_row += 1;
+            if let Some(archetype_iter) = &mut self.current_archetype
+                && archetype_iter.current_row < archetype_iter.total_rows
+            {
+                let row = archetype_iter.current_row;
+                archetype_iter.current_row += 1;
 
-                    // SAFETY: column_ptrs are valid for 'w lifetime
-                    // and row is within bounds
-                    return Some(unsafe { Q::fetch(&mut archetype_iter.column_ptrs, row) });
-                }
+                // SAFETY: column_ptrs are valid for 'w lifetime
+                // and row is within bounds
+                return Some(unsafe { Q::fetch(&mut archetype_iter.column_ptrs, row) });
             }
 
             // SAFETY: world_data pointer is valid for 'w lifetime

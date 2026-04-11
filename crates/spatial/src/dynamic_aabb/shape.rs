@@ -59,7 +59,7 @@ impl ShapeKey {
                     radius: radius.to_bits(),
                 },
             Shape::Mesh { mesh_handle } =>
-                ShapeKey::Mesh { mesh_id: mesh_handle.id },
+                ShapeKey::Mesh { mesh_id: mesh_handle.raw() },
         }
     }
 }

@@ -63,21 +63,21 @@ macro_rules! impl_query_parameter {
                 $($rest::collect_columns($rest, columns_out);)*
             }
 
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, unused_assignments)]
             unsafe fn fetch<'w>(columns: &mut [*mut Column], row: usize) -> Self::Item<'w> {
                 let mut offset = 0;
 
                 let $first = {
                     let slice = &mut columns[offset..offset + $first::COLUMN_COUNT];
                     offset += $first::COLUMN_COUNT;
-                    $first::fetch(slice, row)
+                    unsafe { $first::fetch(slice, row) }
                 };
 
                 $(
                     let $rest = {
                         let slice = &mut columns[offset..offset + $rest::COLUMN_COUNT];
                         offset += $rest::COLUMN_COUNT;
-                        $rest::fetch(slice, row)
+                        unsafe { $rest::fetch(slice, row) }
                     };
                 )*
 

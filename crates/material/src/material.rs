@@ -66,7 +66,7 @@ impl Material for PbrMaterial {
 
         [base_color_binding, normal_binding, packed_texture]
             .into_iter()
-            .filter_map(|parameter| parameter)
+            .flatten()
             .collect::<Vec<_>>()
     }
 
@@ -130,7 +130,7 @@ impl Material for PbrMaterial {
             feature_name.push("orm");
         }
 
-        if (features.contains(PbrFeatures::HAS_NORMAL_TEXTURE)) {
+        if features.contains(PbrFeatures::HAS_NORMAL_TEXTURE) {
             feature_name.push("normal");
         }
 
@@ -138,7 +138,7 @@ impl Material for PbrMaterial {
             feature_name.push("color");
         }
 
-        if (feature_name.is_empty()) {
+        if feature_name.is_empty() {
             return format!("{}.{}", base_name, "base",);
         }
 
@@ -211,6 +211,7 @@ pub enum MaterialParameterBindingData {
     PackedTexture(PackedTextureData),
 }
 
+#[allow(dead_code)]
 pub struct PackedTextureData {
     channel_r: Option<ImageHandle>,
     channel_g: Option<ImageHandle>,

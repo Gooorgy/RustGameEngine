@@ -23,13 +23,12 @@ use ash::Instance;
 use std::{error::Error, ffi::CString, mem, ptr, slice};
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
-const SHADOW_MAP_CASCADE_COUNT: usize = 3;
-
 pub struct VulkanBackend {
     _entry: ash::Entry,
     instance: Instance,
     device_info: DeviceInfo,
-    surface_info: SurfaceInfo,
+    // Kept to own the Vulkan surface for its lifetime; not read after construction.
+    _surface_info: SurfaceInfo,
     resource_registry: ResourceRegistry,
     swapchain_info: SwapchainInfo,
     render_semaphore: vk::Semaphore,
@@ -54,7 +53,7 @@ impl VulkanBackend {
             _entry: entry,
             instance,
             device_info,
-            surface_info,
+            _surface_info: surface_info,
             swapchain_info,
             resource_registry: ResourceRegistry::new(),
             command_buffer,
@@ -118,7 +117,7 @@ impl VulkanBackend {
                 .free_memory(buffer.buffer_memory, None);
         }
 
-        drop(buffer);
+        let _ = buffer;
     }
 
     pub fn create_graphics_pipeline(&mut self, desc: PipelineDesc) -> PipelineHandle {
@@ -201,7 +200,7 @@ impl VulkanBackend {
 
         self.end_single_time_command(command_buffer);
 
-        self.copy_buffer_to_image(buffer.buffer, &image);
+        self.copy_buffer_to_image(buffer.buffer, image);
 
         let command_buffer = self.begin_single_time_command();
 
@@ -418,15 +417,12 @@ impl VulkanBackend {
         };
 
         match present_result {
-            Ok(result) => result,
-            Err(error_result) => match error_result {
-                vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                    //self.recreate_swapchain();
-                    println!("Error SWAPCHAIN");
-                    return;
-                }
-                _ => panic!(),
-            },
+            Ok(_) => {}
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                // TODO: recreate swapchain on resize
+                println!("Error SWAPCHAIN");
+            }
+            Err(_) => panic!("Unexpected present error"),
         };
     }
 

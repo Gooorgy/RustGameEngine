@@ -6,12 +6,15 @@ use ash::{vk, Device, Instance};
 pub struct AllocatedImage {
     pub image: vk::Image,
     pub image_view: vk::ImageView,
+    // Kept for GPU memory lifetime; not read after construction.
+    #[allow(dead_code)]
     pub image_memory: vk::DeviceMemory,
     pub image_extent: vk::Extent3D,
     pub image_format: vk::Format,
     pub image_layout: vk::ImageLayout,
 }
 
+#[allow(dead_code)]
 pub enum AllocatedImageType {
     Color,
     Depth,
@@ -205,16 +208,11 @@ pub fn transition_image_layout(
         aspect_mask = vk::ImageAspectFlags::DEPTH;
     }
 
-    let src_access_mask;
-    let dst_access_mask;
-    let source_stage;
-    let destination_stage;
+    let src_access_mask = vk::AccessFlags::MEMORY_WRITE;
+    let dst_access_mask = vk::AccessFlags::MEMORY_READ | vk::AccessFlags::MEMORY_WRITE;
 
-    src_access_mask = vk::AccessFlags::MEMORY_WRITE;
-    dst_access_mask = vk::AccessFlags::MEMORY_READ | vk::AccessFlags::MEMORY_WRITE;
-
-    source_stage = vk::PipelineStageFlags::ALL_COMMANDS;
-    destination_stage = vk::PipelineStageFlags::ALL_COMMANDS;
+    let source_stage = vk::PipelineStageFlags::ALL_COMMANDS;
+    let destination_stage = vk::PipelineStageFlags::ALL_COMMANDS;
 
     let barrier = vk::ImageMemoryBarrier::default()
         .src_access_mask(src_access_mask)
@@ -246,6 +244,7 @@ pub fn transition_image_layout(
     }
 }
 
+#[allow(dead_code, clippy::too_many_arguments)]
 pub fn create_image(
     device_info: &DeviceInfo,
     instance: &Instance,
@@ -307,7 +306,7 @@ pub fn create_image(
             .expect("failed to bind image memory");
     }
 
-    return (x, allocated_memory);
+    (x, allocated_memory)
 }
 
 fn map_texture_format(texture_format: TextureFormat) -> vk::Format {

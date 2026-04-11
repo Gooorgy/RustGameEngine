@@ -32,6 +32,15 @@ impl ResourceManager {
             images: HashMap::new(),
         }
     }
+}
+
+impl Default for ResourceManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ResourceManager {
 
     pub fn upload_meshes(
         &mut self,
@@ -44,7 +53,6 @@ impl ResourceManager {
 
             let vertex_buffer_size = mem::size_of_val(vertices);
             let index_buffer_size = mem::size_of_val(indices);
-            println!("uploading vertex buffer");
             let vertex_buffer_handle = vulkan_backend.create_buffer(
                 BufferDesc {
                     usage: BufferUsageFlags::VERTEX_BUFFER,
@@ -53,7 +61,6 @@ impl ResourceManager {
                 },
                 Some(vertices),
             );
-            println!("uploading index buffer");
             let index_buffer_handle = vulkan_backend.create_buffer(
                 BufferDesc {
                     usage: BufferUsageFlags::INDEX_BUFFER,
@@ -74,9 +81,9 @@ impl ResourceManager {
         }
     }
 
-    pub fn upload_images(&mut self, vulkan_backend: &mut VulkanBackend) {}
+    pub fn upload_images(&mut self, _vulkan_backend: &mut VulkanBackend) {}
 
-    pub fn get_by_handle(&self, vulkan_backend: &mut VulkanBackend, asset_id: u64) -> &MeshData {
+    pub fn get_by_handle(&self, _vulkan_backend: &mut VulkanBackend, asset_id: u64) -> &MeshData {
         self.mesh_data.get(&asset_id).unwrap()
     }
 
@@ -105,7 +112,6 @@ impl ResourceManager {
 
         let vertex_buffer_size = mem::size_of_val(vertices);
         let index_buffer_size = mem::size_of_val(indices);
-        println!("uploading vertex buffer");
         let vertex_buffer_handle = vulkan_backend.create_buffer(
             BufferDesc {
                 usage: BufferUsageFlags::VERTEX_BUFFER,
@@ -114,7 +120,6 @@ impl ResourceManager {
             },
             Some(vertices),
         );
-        println!("uploading index buffer");
         let index_buffer_handle = vulkan_backend.create_buffer(
             BufferDesc {
                 usage: BufferUsageFlags::INDEX_BUFFER,

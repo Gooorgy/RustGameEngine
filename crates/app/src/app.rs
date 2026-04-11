@@ -10,6 +10,12 @@ pub struct App {
     app_handler: AppHandler,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     /// Creates the engine with a fresh `EngineContext` and a winit event loop.
     pub fn new() -> App {

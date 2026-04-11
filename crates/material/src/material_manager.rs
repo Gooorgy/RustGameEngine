@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct MaterialHandle(usize);
 
 pub struct MaterialManager {
@@ -26,9 +26,7 @@ impl MaterialManager {
 
         let shader_variant =
             Self::create_variant(bindings, push_constant_size, shader_path.clone());
-        if (!self.shader_variants.contains_key(&shader_path)) {
-            self.shader_variants.insert(shader_path, shader_variant);
-        }
+        self.shader_variants.entry(shader_path).or_insert(shader_variant);
 
         let new_handle = self.materials.len();
         self.materials.push(Rc::new(RefCell::new(material)));
@@ -44,11 +42,17 @@ impl MaterialManager {
         &self,
         material_handle: MaterialHandle,
     ) -> Vec<MaterialParameterBinding> {
-        self.materials[material_handle.0].borrow().get_bindings()
+        self.materials
+            .get(material_handle.0)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", material_handle))
+            .borrow()
+            .get_bindings()
     }
 
     pub fn get_material_push_const_data(&self, material_handle: MaterialHandle) -> Vec<u8> {
-        self.materials[material_handle.0]
+        self.materials
+            .get(material_handle.0)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", material_handle))
             .borrow()
             .get_push_constants()
             .to_owned()
@@ -67,7 +71,7 @@ impl MaterialManager {
                 .map(|binding| ShaderBindingInfo {
                     index: binding.index,
                     binding_type: match binding.data {
-                        MaterialParameterBindingData::Texture(s) => BindingType::ImageSampler,
+                        MaterialParameterBindingData::Texture(_) => BindingType::ImageSampler,
                         _ => BindingType::ImageSampler,
                     },
                 })
@@ -76,11 +80,22 @@ impl MaterialManager {
     }
 
     pub fn get_variant(&self, material_handle: MaterialHandle) -> &MaterialVariant {
-        let material = self.materials[material_handle.0].borrow().get_shader_path();
+        let material = self
+            .materials
+            .get(material_handle.0)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", material_handle))
+            .borrow()
+            .get_shader_path();
 
         self.shader_variants
             .get(&material)
             .expect("Unknown material handle")
+    }
+}
+
+impl Default for MaterialManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

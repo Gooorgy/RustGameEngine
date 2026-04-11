@@ -24,6 +24,12 @@ pub struct EngineContext {
     spatial_world: SpatialWorld,
 }
 
+impl Default for EngineContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EngineContext {
     pub fn new() -> EngineContext {
         let mut ctx = Self {
@@ -37,15 +43,15 @@ impl EngineContext {
         ctx
     }
 
-    pub fn assets(&self) -> RefMut<AssetManager> {
+    pub fn assets(&self) -> RefMut<'_, AssetManager> {
         self.expect_manager_mut::<AssetManager>()
     }
 
-    pub fn materials(&self) -> RefMut<MaterialManager> {
+    pub fn materials(&self) -> RefMut<'_, MaterialManager> {
         self.expect_manager_mut::<MaterialManager>()
     }
 
-    pub fn input(&self) -> RefMut<InputManager> {
+    pub fn input(&self) -> RefMut<'_, InputManager> {
         self.expect_manager_mut::<InputManager>()
     }
 
@@ -134,7 +140,7 @@ impl EngineContext {
             .managers
             .get(&TypeId::of::<T>())
             .and_then(|manager| manager.downcast_ref::<Rc<RefCell<T>>>())
-            .expect(&format!(
+            .unwrap_or_else(|| panic!(
                 "Manager '{}' not found in EngineContext",
                 std::any::type_name::<T>()
             ))

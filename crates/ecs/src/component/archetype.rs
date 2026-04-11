@@ -62,14 +62,13 @@ impl ComponentValue {
 }
 
 pub struct Column {
-    pub data: Box<dyn ColumnData>,
+    pub(crate) data: Box<dyn ColumnData>,
 }
 
 pub(crate) trait ColumnData: Any {
     fn push_erased(&mut self, value: ComponentValue) -> Result<(), Box<dyn Error>>;
-    fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn len(&self) -> usize; // Add this method
+    fn len(&self) -> usize;
 }
 
 impl<T: Component + 'static> ColumnData for Vec<T> {
@@ -78,10 +77,6 @@ impl<T: Component + 'static> ColumnData for Vec<T> {
         self.push(x);
 
         Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {

@@ -6,14 +6,6 @@ use ash::vk;
 use ash::vk::{DynamicState, PipelineDynamicStateCreateInfo};
 use std::{ffi::CString, fs, io, path::Path, ptr};
 
-const SHADOW_SHADER: &str = "shadow";
-const FRAGMENT_SHADER: &str = "frag";
-const VERTEX_SHADER: &str = "vert";
-const LIGHTING_SHADER: &str = "lighting";
-
-const DEBUG_VERTEX: &str = "line_debug_vert";
-const DEBUG_FRAGMENT: &str = "line_debug_frag";
-
 const SHADER_PATH: &str = ".\\resources\\shaders";
 const SHADER_EXTENSION: &str = ".spv";
 

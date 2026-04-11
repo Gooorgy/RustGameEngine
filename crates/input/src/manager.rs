@@ -36,6 +36,15 @@ impl InputManager {
             config: InputConfig::default(),
         }
     }
+}
+
+impl Default for InputManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InputManager {
 
     /// Binds one or more `InputBinding`s to a named action. Any of the bindings
     /// being held counts as the action being down.

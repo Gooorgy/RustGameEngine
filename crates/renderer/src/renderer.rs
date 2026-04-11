@@ -51,6 +51,7 @@ impl Renderer {
         self.aabb_debug_renderer.toggle();
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn draw_frame(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
@@ -87,6 +88,7 @@ impl Renderer {
         vulkan_backend.end_frame(self.frame_data.frame_images.draw_image);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_render_scene(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
@@ -104,16 +106,14 @@ impl Renderer {
         for request in mesh_requests {
             let mesh_asset = asset_manager
                 .get_mesh_by_handle(&request.mesh_handle)
-                .expect(
-                    format!("No asset found for mesh_handle: {}", request.mesh_handle.id).as_str(),
-                );
+                .unwrap_or_else(|| panic!("No asset found for mesh_handle: {}", request.mesh_handle.raw()));
 
             let model_matrix = request.transform.get_model_matrix();
             model_matrices.push(model_matrix);
 
             let gpu_mesh_data = resource_manager.get_or_create_mesh(
                 vulkan_backend,
-                mesh_asset.id.id,
+                mesh_asset.id.raw(),
                 mesh_asset.data.mesh.clone(),
             );
 
@@ -154,7 +154,6 @@ impl Renderer {
 
         RenderScene {
             meshes,
-            camera: self.frame_data.camera_buffer,
             camera_data: camera_render_data,
             directional_light,
         }
@@ -169,7 +168,7 @@ impl Renderer {
         asset_manager: &mut AssetManager,
         layout_key: LayoutKey,
     ) -> (DescriptorSetHandle, DescriptorLayoutHandle) {
-        let layout_handle = self.get_or_create_layout(vulkan_backend, &*bindings, layout_key);
+        let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings, layout_key);
         let descriptors = self.descriptor_cache.get(&material_handle);
 
         let descriptor_handle = vulkan_backend.allocate_descriptor_set(layout_handle);
@@ -182,9 +181,8 @@ impl Renderer {
         for binding in bindings {
             let image_asset = match binding.data {
                 MaterialParameterBindingData::Texture(image_handle) => {
-                    asset_manager.get_image_by_handle(&image_handle).expect(
-                        format!("No asset found for image_handle: {}", image_handle.id).as_str(),
-                    )
+                    asset_manager.get_image_by_handle(&image_handle)
+                        .unwrap_or_else(|| panic!("No asset found for image_handle: {}", image_handle.raw()))
                 }
                 MaterialParameterBindingData::PackedTexture(_) => {
                     unimplemented!("Packed textures not supported yet")
@@ -193,7 +191,7 @@ impl Renderer {
 
             let gpu_image_handle = resource_manager.get_or_create_image(
                 vulkan_backend,
-                image_asset.id.id,
+                image_asset.id.raw(),
                 image_asset.data.image_data.clone(),
                 image_asset.data.width,
                 image_asset.data.height,
@@ -210,7 +208,7 @@ impl Renderer {
             descriptor_write_descs.push(descriptor_write_desc);
         }
 
-        vulkan_backend.update_descriptor_set(descriptor_handle, &*descriptor_write_descs);
+        vulkan_backend.update_descriptor_set(descriptor_handle, &descriptor_write_descs);
 
         (descriptor_handle, layout_handle)
     }
@@ -241,7 +239,7 @@ impl Renderer {
         };
 
         let layout_handle = vulkan_backend.create_descriptor_layout(layout_desc);
-        self.layout_cache.insert(layout_key, layout_handle.clone());
+        self.layout_cache.insert(layout_key, layout_handle);
 
         layout_handle
     }

@@ -27,11 +27,7 @@ pub struct MaterialAsset;
 pub type MeshHandle = AssetId<MeshAsset>;
 pub type ImageHandle = AssetId<ImageAsset>;
 
-pub union Param {
-    constant: u32,
-    handle: MeshHandle,
-}
-
+#[derive(Default)]
 pub struct AssetManager {
     path_to_mesh_id: HashMap<String, MeshHandle>,
     path_to_image_id: HashMap<String, ImageHandle>,
@@ -70,11 +66,11 @@ impl AssetManager {
     }
 
     pub fn get_mesh_by_handle(&self, mesh_handle: &MeshHandle) -> Option<Rc<Asset<MeshAsset>>> {
-        self.id_to_mesh.get(mesh_handle).map(|x| Rc::clone(x))
+        self.id_to_mesh.get(mesh_handle).map(Rc::clone)
     }
 
     pub fn get_image_by_handle(&self, image_handle: &ImageHandle) -> Option<Rc<Asset<ImageAsset>>> {
-        self.id_to_image.get(image_handle).map(|x| Rc::clone(x))
+        self.id_to_image.get(image_handle).map(Rc::clone)
     }
 
     pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<ImageHandle> {
@@ -107,22 +103,11 @@ impl AssetManager {
     pub fn get_meshes(&self) -> HashMap<u64, Rc<Mesh>> {
         self.id_to_mesh
             .iter()
-            .map(|(id, mesh)| (id.id, mesh.data.mesh.clone()))
+            .map(|(id, mesh)| (id.raw(), mesh.data.mesh.clone()))
             .collect()
     }
 }
 
-impl Default for AssetManager {
-    fn default() -> Self {
-        Self {
-            path_to_mesh_id: HashMap::new(),
-            path_to_image_id: HashMap::new(),
-            id_to_image: HashMap::new(),
-            id_to_mesh: HashMap::new(),
-            next_id: 0,
-        }
-    }
-}
 
 pub struct Asset<T> {
     pub data: T,
@@ -133,12 +118,9 @@ fn load_model<P>(path: P) -> Result<MeshAsset, LoadError>
 where
     P: AsRef<Path>,
 {
-    println!("Loading Model");
-
-    let (models, mat) =
+    let (models, _mat) =
         tobj::load_obj(path.as_ref(), &tobj::GPU_LOAD_OPTIONS).expect("Failed to load model");
 
-    println!("Finished loading Model");
     let model = models.first().expect("No model found");
     let mesh = &model.mesh;
 
@@ -171,7 +153,6 @@ where
 
         vertices.push(vert);
     }
-    println!("Returning");
 
     Ok(MeshAsset {
         mesh: Rc::new(Mesh {

@@ -159,7 +159,7 @@ impl LightingRenderer {
                 light.ambient_intensity,
             ),
             cascade_depths: Vec4::new(
-                cascades.get(0).map_or(0.0, |c| c.depth),
+                cascades.first().map_or(0.0, |c| c.depth),
                 cascades.get(1).map_or(0.0, |c| c.depth),
                 cascades.get(2).map_or(0.0, |c| c.depth),
                 cascades.get(3).map_or(0.0, |c| c.depth),
@@ -169,6 +169,7 @@ impl LightingRenderer {
 
         self.update_lighting_descriptors(vulkan_backend, frame_data);
 
+        #[allow(clippy::needless_range_loop)]
         for cascade_idx in 0..CASCADE_COUNT {
             let shadow_image = &frame_data.frame_images.shadow_cascades[cascade_idx];
             let res = CASCADE_RESOLUTIONS[cascade_idx];
@@ -300,10 +301,11 @@ impl LightingRenderer {
         let far = camera.far_clip.min(SHADOW_DISTANCE);
         let lambda = 0.9f32;
 
-        let mut splits = vec![0.0f32; CASCADE_COUNT + 1];
+        let mut splits = [0.0f32; CASCADE_COUNT + 1];
         splits[0] = near;
         splits[CASCADE_COUNT] = far;
 
+        #[allow(clippy::needless_range_loop)]
         for i in 1..CASCADE_COUNT {
             let idm = i as f32 / CASCADE_COUNT as f32;
             let log = near * (far / near).powf(idm);

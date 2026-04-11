@@ -72,40 +72,37 @@ impl RenderDataCollector {
             self.mesh_requests.push(MeshRenderRequest {
                 mesh_handle: mesh.mesh_handle,
                 material_handle: material.material_handle,
-                transform: transform.0.clone(),
+                transform: transform.0,
             });
         }
     }
 
     fn collect_camera(&mut self, world: &mut World, aspect_ratio: f32) {
         let mut query = world.query::<(&mut TransformComponent, &mut CameraComponent)>();
-        for (transform, camera) in query.iter() {
-            if camera.active {
-                let view = transform.0.get_view_matrix();
-                let mut proj = nalgebra_glm::perspective(
-                    aspect_ratio,
-                    camera.fov.to_radians(),
-                    camera.near_clip,
-                    camera.far_clip,
-                );
-                proj[(1, 1)] *= -1.0; // Vulkan Y-flip
-                self.camera = Some(CameraRenderData {
-                    view,
-                    proj,
-                    near_clip: camera.near_clip,
-                    far_clip: camera.far_clip,
-                    fov: camera.fov,
-                    aspect_ratio,
-                });
-                break;
-            }
+        if let Some((transform, camera)) = query.iter().find(|(_, cam)| cam.active) {
+            let view = transform.0.get_view_matrix();
+            let mut proj = nalgebra_glm::perspective(
+                aspect_ratio,
+                camera.fov.to_radians(),
+                camera.near_clip,
+                camera.far_clip,
+            );
+            proj[(1, 1)] *= -1.0; // Vulkan Y-flip
+            self.camera = Some(CameraRenderData {
+                view,
+                proj,
+                near_clip: camera.near_clip,
+                far_clip: camera.far_clip,
+                fov: camera.fov,
+                aspect_ratio,
+            });
         }
     }
 
     fn collect_directional_light(&mut self, world: &mut World) {
         let mut query =
             world.query::<(&mut TransformComponent, &mut DirectionalLightComponent)>();
-        for (transform, light) in query.iter() {
+        if let Some((transform, light)) = query.iter().next() {
             // Compute forward direction from Euler angles (rotation = pitch, yaw, roll)
             let pitch = transform.rotation.x;
             let yaw = transform.rotation.y;
@@ -121,7 +118,6 @@ impl RenderDataCollector {
                 ambient_color: light.ambient_color,
                 ambient_intensity: light.ambient_intensity,
             });
-            break;
         }
     }
 }

@@ -67,7 +67,8 @@ impl ApplicationHandler for AppHandler {
                     .expect("Failed to create window"),
             );
 
-            let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap()).expect("");
+            let mut vulkan = VulkanBackend::new(self.window.as_ref().unwrap())
+                .expect("Failed to initialize Vulkan backend");
 
             let renderer = Renderer::new(
                 &mut vulkan,
@@ -169,7 +170,7 @@ impl ApplicationHandler for AppHandler {
                             camera_ubo,
                             camera_render_data,
                             directional_light,
-                            &*debug_boxes,
+                            &debug_boxes,
                     );
 
                     let window = &self.window.as_ref().unwrap();

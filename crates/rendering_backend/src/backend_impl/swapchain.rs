@@ -7,7 +7,8 @@ pub struct SwapchainInfo {
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_images: Vec<vk::Image>,
 
-    pub swapchain_image_format: vk::SurfaceFormatKHR,
+    #[allow(dead_code)]
+    pub(super) swapchain_image_format: vk::SurfaceFormatKHR,
     pub swapchain_extent: vk::Extent2D,
 }
 
@@ -110,7 +111,7 @@ impl SwapchainInfo {
             }
         }
 
-        return *available_formats.first().unwrap();
+        *available_formats.first().unwrap()
     }
 
     fn choose_swap_present_mode(

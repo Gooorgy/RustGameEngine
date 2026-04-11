@@ -1,6 +1,4 @@
-use crate::descriptor::{DescriptorLayoutDesc, DescriptorType, DescriptorWrite, ShaderStage};
-use std::slice;
-
+use crate::descriptor::{DescriptorLayoutDesc, DescriptorType};
 use crate::backend_impl::device::DeviceInfo;
 use ash::vk;
 
@@ -96,6 +94,8 @@ fn map_descriptor_type(descriptor_type: DescriptorType) -> vk::DescriptorType {
 
 pub struct AllocatedDescriptorSet {
     pub descriptor_set: vk::DescriptorSet,
+    // Kept to track which pool this set was allocated from; used when pools are freed.
+    #[allow(dead_code)]
     pub pool: vk::DescriptorPool,
 }
 

@@ -151,6 +151,7 @@ impl DynamicAABBTree {
 
     /// Returns the sum of surface areas of all internal nodes. Lower is better.
     /// Useful for comparing tree quality after construction.
+    #[allow(dead_code)]
     pub fn compute_cost(&self) -> f32 {
         let mut cost = 0.0;
         for node in &self.nodes {
@@ -190,6 +191,7 @@ pub(crate) type NodeId = usize;
 pub(crate) struct Node {
     aabb: AABB,
     /// Some for leaf nodes, None for internal nodes.
+    #[allow(dead_code)]
     collider: Option<ColliderId>,
     parent: Option<NodeId>,
     left: Option<NodeId>,

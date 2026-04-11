@@ -1,5 +1,6 @@
 use crate::component::archetype::{ColumnFactory, ComponentValue, HasColumnFactory};
-use crate::component::{Component, ComponentInsertion};
+use crate::component::Component;
+use crate::component::component_storage::ComponentInsertion;
 use std::any::TypeId;
 
 macro_rules! impl_component_insertion {
