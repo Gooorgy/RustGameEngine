@@ -1,13 +1,14 @@
 use crate::TransformComponent;
 use assets::AssetManager;
+use ecs::systems::ManagerContext;
 use ecs::world::World;
 use input::InputManager;
 use material::material_manager::MaterialManager;
+use spatial::{ColliderComponent, SpatialWorld};
 use std::any::{Any, TypeId};
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
-use spatial::{ColliderComponent, SpatialWorld};
 
 /// Provides simultaneous mutable access to both worlds, avoiding split-borrow issues.
 pub struct WorldSetup<'a> {
@@ -15,11 +16,11 @@ pub struct WorldSetup<'a> {
     pub spatial: &'a mut SpatialWorld,
 }
 
-/// Context that holds and manages different managers.
-///
-/// Managers can be registered and retrieved in a type-safe way.
+/// Central engine context. Owns the ECS world, spatial world, and core manager instances.
 pub struct EngineContext {
-    managers: HashMap<TypeId, Box<dyn Any>>,
+    asset_manager: Rc<RefCell<AssetManager>>,
+    material_manager: Rc<RefCell<MaterialManager>>,
+    input_manager: Rc<RefCell<InputManager>>,
     world: World,
     spatial_world: SpatialWorld,
 }
@@ -32,27 +33,25 @@ impl Default for EngineContext {
 
 impl EngineContext {
     pub fn new() -> EngineContext {
-        let mut ctx = Self {
-            managers: HashMap::new(),
+        Self {
+            asset_manager: Rc::new(RefCell::new(AssetManager::default())),
+            material_manager: Rc::new(RefCell::new(MaterialManager::new())),
+            input_manager: Rc::new(RefCell::new(InputManager::new())),
             world: World::new(),
             spatial_world: SpatialWorld::new(),
-        };
-        ctx.register_manager(AssetManager::default());
-        ctx.register_manager(MaterialManager::new());
-        ctx.register_manager(InputManager::new());
-        ctx
+        }
     }
 
     pub fn assets(&self) -> RefMut<'_, AssetManager> {
-        self.expect_manager_mut::<AssetManager>()
+        self.asset_manager.borrow_mut()
     }
 
     pub fn materials(&self) -> RefMut<'_, MaterialManager> {
-        self.expect_manager_mut::<MaterialManager>()
+        self.material_manager.borrow_mut()
     }
 
     pub fn input(&self) -> RefMut<'_, InputManager> {
-        self.expect_manager_mut::<InputManager>()
+        self.input_manager.borrow_mut()
     }
 
     pub fn world_setup(&mut self) -> WorldSetup<'_> {
@@ -75,7 +74,17 @@ impl EngineContext {
     }
 
     pub fn update(&mut self, delta_time: f32) {
-        let ctx = ecs::systems::ManagerContext::new(&self.managers, delta_time);
+        // Rc::clone is O(1) — just bumps reference counts.
+        // The HashMap is an implementation detail hidden from callers.
+        let managers: HashMap<TypeId, Box<dyn Any>> = [
+            (TypeId::of::<AssetManager>(), Box::new(self.asset_manager.clone()) as Box<dyn Any>),
+            (TypeId::of::<MaterialManager>(), Box::new(self.material_manager.clone()) as Box<dyn Any>),
+            (TypeId::of::<InputManager>(), Box::new(self.input_manager.clone()) as Box<dyn Any>),
+        ]
+        .into_iter()
+        .collect();
+
+        let ctx = ManagerContext::new(&managers, delta_time);
         self.world.update(&ctx);
         self.sync_spatial();
     }
@@ -83,125 +92,13 @@ impl EngineContext {
     fn sync_spatial(&mut self) {
         self.spatial_world.clear_tree();
         let updates = {
-            let mut query = self.world
+            let mut query = self
+                .world
                 .query::<(&mut TransformComponent, &mut ColliderComponent)>();
             query.iter().map(|(t, c)| (c.id, t.location)).collect::<Vec<_>>()
         };
         for (id, center) in updates {
             self.spatial_world.insert_collider(id, center);
         }
-    }
-
-    /// Returns a reference to the managers HashMap for creating ManagerContext
-    pub fn managers(&self) -> &HashMap<TypeId, Box<dyn Any>> {
-        &self.managers
-    }
-
-    /// Inserts a manager into the `EngineContext`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use core::engine_context::EngineContext;
-    ///
-    /// struct MyManager;
-    /// let mut context = EngineContext::new();
-    /// context.register_manager(MyManager);
-    /// ```
-    pub fn register_manager<T: 'static>(&mut self, manager: T) {
-        self.managers
-            .insert(manager.type_id(), Box::new(Rc::new(RefCell::new(manager))));
-    }
-
-    /// Retrieves a mutable reference to a manager.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the manager has not been registered.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use core::EngineContext;
-    ///
-    /// struct MyManager {
-    ///     value: i32,
-    /// }
-    ///
-    /// let mut context = EngineContext::new();
-    /// context.register_manager(MyManager { value: 42 });
-    ///
-    /// let mut my_manager = context.expect_manager_mut::<MyManager>();
-    /// my_manager.value += 1;
-    /// assert_eq!(my_manager.value, 43);
-    /// ```
-    pub fn expect_manager_mut<T: 'static>(&'_ self) -> RefMut<'_, T> {
-        let manager = self
-            .managers
-            .get(&TypeId::of::<T>())
-            .and_then(|manager| manager.downcast_ref::<Rc<RefCell<T>>>())
-            .unwrap_or_else(|| panic!(
-                "Manager '{}' not found in EngineContext",
-                std::any::type_name::<T>()
-            ))
-            .borrow_mut();
-
-        manager
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(Debug, PartialEq)]
-    struct TestManager {
-        value: i32,
-    }
-
-    #[test]
-    fn test_register_and_retrieve_manager() {
-        let mut context = EngineContext::new();
-        context.register_manager(TestManager { value: 10 });
-
-        let mut manager = context.expect_manager_mut::<TestManager>();
-        assert_eq!(manager.value, 10);
-
-        // Modify the manager
-        manager.value = 42;
-    }
-
-    #[test]
-    #[should_panic(expected = "MissingManager' not found in EngineContext")]
-    fn test_retrieve_nonexistent_manager_panics() {
-        #[derive(Debug)]
-        struct MissingManager;
-
-        let context = EngineContext::new();
-        let _ = context.expect_manager_mut::<MissingManager>();
-    }
-
-    #[test]
-    fn test_multiple_managers() {
-        #[derive(Debug, PartialEq)]
-        struct AnotherManager {
-            name: &'static str,
-        }
-
-        let mut context = EngineContext::new();
-        context.register_manager(TestManager { value: 7 });
-        context.register_manager(AnotherManager { name: "test" });
-
-        let mut test_manager = context.expect_manager_mut::<TestManager>();
-        let mut another_manager = context.expect_manager_mut::<AnotherManager>();
-
-        assert_eq!(test_manager.value, 7);
-        assert_eq!(another_manager.name, "test");
-
-        test_manager.value = 99;
-        another_manager.name = "changed";
-
-        assert_eq!(test_manager.value, 99);
-        assert_eq!(another_manager.name, "changed");
     }
 }

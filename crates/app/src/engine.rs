@@ -1,7 +1,4 @@
-use assets::AssetManager;
 use core::EngineContext;
-use input::InputManager;
-use material::material_manager::MaterialManager;
 use renderer::frame_data::{Resolution, ResolutionSettings};
 use renderer::render_data::RenderDataCollector;
 use renderer::renderer::{DebugBox, Renderer};
@@ -20,6 +17,7 @@ const DISPLAY_INTERVAL: f32 = 0.5;
 pub(crate) struct Engine {
     context: EngineContext,
     vulkan_backend: VulkanBackend,
+    resource_manager: ResourceManager,
     renderer: Renderer,
     window: Window,
     last_frame_time: Instant,
@@ -31,9 +29,7 @@ pub(crate) struct Engine {
 
 impl Engine {
     /// Initialises Vulkan and the renderer, then takes ownership of the pre-configured context.
-    pub fn new(window: Window, mut context: EngineContext) -> Self {
-        context.register_manager(ResourceManager::new());
-
+    pub fn new(window: Window, context: EngineContext) -> Self {
         let size = window.inner_size();
         let mut vulkan_backend =
             VulkanBackend::new(&window).expect("Failed to initialize Vulkan backend");
@@ -57,6 +53,7 @@ impl Engine {
         Self {
             context,
             vulkan_backend,
+            resource_manager: ResourceManager::new(),
             renderer,
             window,
             last_frame_time: Instant::now(),
@@ -73,7 +70,7 @@ impl Engine {
         self.last_frame_time = Instant::now();
 
         {
-            let mut input = self.context.expect_manager_mut::<InputManager>();
+            let mut input = self.context.input();
             input.update();
             if input.is_key_just_pressed(input::KeyCode::F3) {
                 self.renderer.toggle_aabb_debug();
@@ -98,9 +95,8 @@ impl Engine {
 
         let directional_light = render_data.directional_light;
 
-        let mut asset_manager = self.context.expect_manager_mut::<AssetManager>();
-        let mut material_manager = self.context.expect_manager_mut::<MaterialManager>();
-        let mut resource_manager = self.context.expect_manager_mut::<ResourceManager>();
+        let mut asset_manager = self.context.assets();
+        let mut material_manager = self.context.materials();
 
         let debug_boxes = self
             .context
@@ -114,7 +110,7 @@ impl Engine {
             &render_data.mesh_requests,
             &mut material_manager,
             &mut asset_manager,
-            &mut resource_manager,
+            &mut self.resource_manager,
             camera_ubo,
             camera_render_data,
             directional_light,
@@ -143,7 +139,7 @@ impl Engine {
 
     /// Forwards a winit device event to the input manager.
     pub fn handle_device_event(&mut self, event: DeviceEvent) {
-        let mut input = self.context.expect_manager_mut::<InputManager>();
+        let mut input = self.context.input();
 
         match event {
             DeviceEvent::MouseMotion { delta } => {
