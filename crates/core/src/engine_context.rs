@@ -1,13 +1,16 @@
 use crate::TransformComponent;
+use asset_pipeline::EmatFile;
 use assets::AssetManager;
 use ecs::systems::ManagerContext;
 use ecs::world::World;
 use input::InputManager;
-use material::material_manager::MaterialManager;
+use material::material_manager::{MaterialHandle, MaterialManager};
+use project::{AssetRegistry, Project};
 use spatial::{ColliderComponent, SpatialWorld};
 use std::any::{Any, TypeId};
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
+use std::path::Path;
 use std::rc::Rc;
 
 /// Provides simultaneous mutable access to both worlds, avoiding split-borrow issues.
@@ -16,8 +19,10 @@ pub struct WorldSetup<'a> {
     pub spatial: &'a mut SpatialWorld,
 }
 
-/// Central engine context. Owns the ECS world, spatial world, and core manager instances.
+/// Central engine context. Owns the ECS world, spatial world, project, and core manager instances.
 pub struct EngineContext {
+    project: Project,
+    registry: AssetRegistry,
     asset_manager: Rc<RefCell<AssetManager>>,
     material_manager: Rc<RefCell<MaterialManager>>,
     input_manager: Rc<RefCell<InputManager>>,
@@ -25,21 +30,30 @@ pub struct EngineContext {
     spatial_world: SpatialWorld,
 }
 
-impl Default for EngineContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl EngineContext {
-    pub fn new() -> EngineContext {
+    pub fn new(project: Project, registry: AssetRegistry) -> EngineContext {
         Self {
+            project,
+            registry,
             asset_manager: Rc::new(RefCell::new(AssetManager::default())),
             material_manager: Rc::new(RefCell::new(MaterialManager::new())),
             input_manager: Rc::new(RefCell::new(InputManager::new())),
             world: World::new(),
             spatial_world: SpatialWorld::new(),
         }
+    }
+
+    /// Loads a `.emat` file from `path`, resolves its asset references through
+    /// the project registry, and registers the result with the material manager.
+    pub fn load_material<P: AsRef<Path>>(&mut self, path: P) -> MaterialHandle {
+        let path = path.as_ref();
+        let mat = {
+            let mut assets = self.assets();
+            EmatFile::load(path)
+                .and_then(|f| f.build_material(&self.project, &self.registry, &mut assets))
+                .unwrap_or_else(|e| panic!("failed to load '{}': {}", path.display(), e))
+        };
+        self.materials().add_material_instance(mat)
     }
 
     pub fn assets(&self) -> RefMut<'_, AssetManager> {

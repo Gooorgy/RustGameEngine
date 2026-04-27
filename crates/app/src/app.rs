@@ -1,5 +1,7 @@
 use crate::app_handler::AppHandler;
 use core::EngineContext;
+use project::{AssetRegistry, Project};
+use std::path::PathBuf;
 use winit::event_loop::EventLoop;
 
 /// Entry point for the engine. Construct with `App::new`, configure the scene
@@ -16,9 +18,21 @@ impl Default for App {
 }
 
 impl App {
+    /// Discovers the `.eproj` file in the current directory, loads the project,
+    /// scans the content directory to build the asset registry, then initialises
+    /// the engine context.
     pub fn new() -> Self {
-        let engine_context = EngineContext::new();
-        let event_loop = EventLoop::new().expect("Failed to create event loop");
+        let project_path = find_project_file()
+            .expect("no .eproj file found in the current directory");
+        let project = Project::load(&project_path)
+            .unwrap_or_else(|e| panic!("failed to load '{}': {}", project_path.display(), e));
+        let registry = AssetRegistry::scan(&project, None)
+            .expect("failed to scan project content directory");
+        registry.save(&project)
+            .unwrap_or_else(|e| eprintln!("warning: could not save asset registry: {}", e));
+
+        let engine_context = EngineContext::new(project, registry);
+        let event_loop = EventLoop::new().expect("failed to create event loop");
         Self { event_loop, engine_context }
     }
 
@@ -34,4 +48,17 @@ impl App {
             .run_app(&mut handler)
             .expect("Failed to run event loop");
     }
+}
+
+fn find_project_file() -> Option<PathBuf> {
+    std::fs::read_dir(".")
+        .ok()?
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            e.path()
+                .extension()
+                .and_then(|x| x.to_str())
+                == Some("eproj")
+        })
+        .map(|e| e.path())
 }

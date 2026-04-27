@@ -1,0 +1,12 @@
+[package]
+name = "asset_pipeline"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+project = { path = "../project" }
+assets = { path = "../assets" }
+material = { path = "../material" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+nalgebra-glm = { workspace = true }

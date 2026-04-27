@@ -9,6 +9,49 @@ pub trait Material {
     fn get_shader_path(&self) -> String;
 }
 
+impl Material for Box<dyn Material> {
+    fn get_bindings(&self) -> Vec<MaterialParameterBinding> { (**self).get_bindings() }
+    fn get_push_constants(&self) -> &[u8] { (**self).get_push_constants() }
+    fn get_permutation_feature(&self) -> u32 { (**self).get_permutation_feature() }
+    fn get_shader_path(&self) -> String { (**self).get_shader_path() }
+}
+
+/// A data-driven material backed by a `.shader` manifest. Used for custom
+/// shaders without needing a Rust `Material` implementation.
+pub struct GenericMaterial {
+    pub shader_path: String,
+    bindings: Vec<MaterialParameterBinding>,
+    push_constants: Vec<u8>,
+}
+
+impl GenericMaterial {
+    pub fn new(
+        shader_path: String,
+        bindings: Vec<MaterialParameterBinding>,
+        push_constants: Vec<u8>,
+    ) -> Self {
+        Self { shader_path, bindings, push_constants }
+    }
+}
+
+impl Material for GenericMaterial {
+    fn get_bindings(&self) -> Vec<MaterialParameterBinding> {
+        self.bindings.clone()
+    }
+
+    fn get_push_constants(&self) -> &[u8] {
+        &self.push_constants
+    }
+
+    fn get_permutation_feature(&self) -> u32 {
+        0
+    }
+
+    fn get_shader_path(&self) -> String {
+        self.shader_path.clone()
+    }
+}
+
 pub struct PbrMaterial {
     pub base_color: MaterialColorParameter,
     pub normal: MaterialColorParameter,
@@ -201,17 +244,20 @@ impl MaterialColorParameter {
     }
 }
 
+#[derive(Clone)]
 pub struct MaterialParameterBinding {
     pub index: usize,
     pub data: MaterialParameterBindingData,
 }
 
+#[derive(Clone)]
 pub enum MaterialParameterBindingData {
     Texture(ImageHandle),
     PackedTexture(PackedTextureData),
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct PackedTextureData {
     channel_r: Option<ImageHandle>,
     channel_g: Option<ImageHandle>,

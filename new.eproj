@@ -1,0 +1,3 @@
+name = "new"
+engine_version = "0.1.0"
+content_dir = "resources"

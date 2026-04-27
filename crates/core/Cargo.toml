@@ -10,4 +10,6 @@ ecs = { path = "../ecs" }
 assets = { path = "../assets" }
 material = { path = "../material" }
 input = { path = "../input" }
-spatial = {path = "../spatial"}
+spatial = { path = "../spatial" }
+project = { path = "../project" }
+asset_pipeline = { path = "../asset_pipeline" }

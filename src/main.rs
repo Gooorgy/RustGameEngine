@@ -6,8 +6,7 @@ use core::components::{
 use core::types::transform::Transform;
 use ecs::systems::System;
 use input::{AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode};
-use material::{MaterialColorParameter, MaterialParameter, PbrMaterial};
-use nalgebra_glm::{vec3, vec4};
+use nalgebra_glm::vec3;
 use spatial::{ColliderComponent, Shape};
 
 fn main() {
@@ -56,18 +55,7 @@ fn main() {
 
         let floor_mesh = ctx.assets().get_mesh(".\\resources\\models\\floor.obj");
         let cube_mesh = ctx.assets().get_mesh(".\\resources\\models\\cube.obj");
-        let image = ctx
-            .assets()
-            .get_image(".\\resources\\textures\\texture.png");
-
-        let mat2 = ctx.materials().add_material_instance(PbrMaterial {
-            base_color: MaterialColorParameter::Handle(image.unwrap()),
-            normal: MaterialColorParameter::Constant(vec4(0.0, 0.0, 0.0, 0.0)),
-            ambient_occlusion: MaterialParameter::Constant(0.0),
-            roughness: MaterialParameter::Constant(0.0),
-            specular: MaterialParameter::Constant(0.0),
-            metallic: MaterialParameter::Constant(0.0),
-        });
+        let mat = ctx.load_material("resources\\materials\\brick.emat");
 
         let setup = ctx.world_setup();
 
@@ -87,7 +75,7 @@ fn main() {
                 mesh_handle: floor_mesh.unwrap(),
             },
             MaterialComponent {
-                material_handle: mat2,
+                material_handle: mat,
             },
         ));
 
@@ -101,7 +89,7 @@ fn main() {
                 mesh_handle: cube_mesh.unwrap(),
             },
             MaterialComponent {
-                material_handle: mat2,
+                material_handle: mat,
             },
             ColliderComponent { id: collider },
         ));
@@ -116,7 +104,7 @@ fn main() {
                 mesh_handle: cube_mesh.unwrap(),
             },
             MaterialComponent {
-                material_handle: mat2,
+                material_handle: mat,
             },
             ColliderComponent { id: collider2 },
         ));
@@ -131,7 +119,7 @@ fn main() {
                 mesh_handle: cube_mesh.unwrap(),
             },
             MaterialComponent {
-                material_handle: mat2,
+                material_handle: mat,
             },
             ColliderComponent { id: collider3 },
         ));
