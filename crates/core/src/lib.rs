@@ -1,3 +1,4 @@
+pub mod asset_context;
 pub mod components;
 mod engine_context;
 pub mod systems;

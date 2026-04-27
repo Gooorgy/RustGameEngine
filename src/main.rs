@@ -53,30 +53,24 @@ fn main() {
             },
         );
 
-        let floor_mesh = ctx.assets().get_mesh(".\\resources\\models\\floor.obj");
-        let cube_mesh = ctx.assets().get_mesh(".\\resources\\models\\cube.obj");
-        let mat = ctx.load_material("resources\\materials\\brick.emat");
+        let (floor_mesh, cube_mesh, mat) = {
+            let ac = ctx.asset_context();
+            let floor = ac.load_mesh("resources\\models\\floor.obj");
+            let cube = ac.load_mesh("resources\\models\\cube.obj");
+            let mat = ac.load_material("resources\\materials\\brick.emat");
+            (floor, cube, mat)
+        };
 
         let setup = ctx.world_setup();
 
-        let collider = setup
-            .spatial
-            .register_collider(Shape::Sphere { radius: 1.0 });
-        let collider2 = setup
-            .spatial
-            .register_collider(Shape::Sphere { radius: 2.0 });
-        let collider3 = setup
-            .spatial
-            .register_collider(Shape::Sphere { radius: 1.0 });
+        let collider = setup.spatial.register_collider(Shape::Sphere { radius: 1.0 });
+        let collider2 = setup.spatial.register_collider(Shape::Sphere { radius: 2.0 });
+        let collider3 = setup.spatial.register_collider(Shape::Sphere { radius: 1.0 });
 
         setup.world.create_entity((
             TransformComponent(Transform::default()),
-            MeshComponent {
-                mesh_handle: floor_mesh.unwrap(),
-            },
-            MaterialComponent {
-                material_handle: mat,
-            },
+            MeshComponent { mesh_handle: floor_mesh },
+            MaterialComponent { material_handle: mat },
         ));
 
         setup.world.create_entity((
@@ -85,12 +79,8 @@ fn main() {
                     .with_location(vec3(0.0, 1.0, 0.0))
                     .with_scale(vec3(1.0, 1.0, 1.0)),
             ),
-            MeshComponent {
-                mesh_handle: cube_mesh.unwrap(),
-            },
-            MaterialComponent {
-                material_handle: mat,
-            },
+            MeshComponent { mesh_handle: cube_mesh },
+            MaterialComponent { material_handle: mat },
             ColliderComponent { id: collider },
         ));
 
@@ -100,12 +90,8 @@ fn main() {
                     .with_location(vec3(0.0, 1.0, 5.0))
                     .with_scale(vec3(2.0, 2.0, 2.0)),
             ),
-            MeshComponent {
-                mesh_handle: cube_mesh.unwrap(),
-            },
-            MaterialComponent {
-                material_handle: mat,
-            },
+            MeshComponent { mesh_handle: cube_mesh },
+            MaterialComponent { material_handle: mat },
             ColliderComponent { id: collider2 },
         ));
 
@@ -115,12 +101,8 @@ fn main() {
                     .with_location(vec3(8.0, 12.0, 10.0))
                     .with_scale(vec3(1.0, 1.0, 1.0)),
             ),
-            MeshComponent {
-                mesh_handle: cube_mesh.unwrap(),
-            },
-            MaterialComponent {
-                material_handle: mat,
-            },
+            MeshComponent { mesh_handle: cube_mesh },
+            MaterialComponent { material_handle: mat },
             ColliderComponent { id: collider3 },
         ));
 

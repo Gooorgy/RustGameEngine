@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 /// Index of every known asset in the project content directory.
 pub struct AssetRegistry {
     records: HashMap<Guid, AssetRecord>,
+    /// Reverse index: source_path (relative to content dir) → GUID.
+    path_index: HashMap<PathBuf, Guid>,
 }
 
 pub struct AssetRecord {
@@ -160,7 +162,8 @@ impl AssetRegistry {
             );
         }
 
-        Ok(Self { records })
+        let path_index = records.iter().map(|(g, r)| (r.source_path.clone(), *g)).collect();
+        Ok(Self { records, path_index })
     }
 
     /// Loads a previously saved registry from `.cache/.assetdb`, restoring
@@ -207,6 +210,11 @@ impl AssetRegistry {
         self.records.get(guid)
     }
 
+    /// Looks up an asset by its source path (relative to the content directory).
+    pub fn find_by_source_path(&self, path: &Path) -> Option<&AssetRecord> {
+        self.path_index.get(path).and_then(|g| self.records.get(g))
+    }
+
     /// Assets that are `Dirty` or `Uncooked` — need to be (re-)cooked.
     pub fn pending(&self) -> impl Iterator<Item = &AssetRecord> {
         self.records
@@ -230,7 +238,7 @@ impl AssetRegistry {
         let content = std::fs::read_to_string(path)?;
         let file: RegistryFile = toml::from_str(&content)?;
 
-        let records = file
+        let records: HashMap<Guid, AssetRecord> = file
             .records
             .into_iter()
             .filter_map(|(guid_str, rec)| {
@@ -252,7 +260,8 @@ impl AssetRegistry {
             })
             .collect();
 
-        Ok(Self { records })
+        let path_index = records.iter().map(|(g, r)| (r.source_path.clone(), *g)).collect();
+        Ok(Self { records, path_index })
     }
 }
 

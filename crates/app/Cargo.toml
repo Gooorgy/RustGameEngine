@@ -16,3 +16,4 @@ spatial = { path = "../spatial" }
 nalgebra-glm = { workspace = true }
 winit = "0.30.9"
 project = { path = "../project" }
+asset_pipeline = { path = "../asset_pipeline" }

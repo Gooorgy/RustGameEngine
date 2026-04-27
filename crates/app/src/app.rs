@@ -1,4 +1,5 @@
 use crate::app_handler::AppHandler;
+use asset_pipeline::cook_pending;
 use core::EngineContext;
 use project::{AssetRegistry, Project};
 use std::path::PathBuf;
@@ -28,6 +29,7 @@ impl App {
             .unwrap_or_else(|e| panic!("failed to load '{}': {}", project_path.display(), e));
         let registry = AssetRegistry::scan(&project, None)
             .expect("failed to scan project content directory");
+        cook_pending(&registry, &project);
         registry.save(&project)
             .unwrap_or_else(|e| eprintln!("warning: could not save asset registry: {}", e));
 

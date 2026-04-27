@@ -7,6 +7,10 @@ edition = "2021"
 project = { path = "../project" }
 assets = { path = "../assets" }
 material = { path = "../material" }
+rendering_backend = { path = "../rendering_backend" }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
+tobj = "4.0.2"
+gltf = { version = "1", features = ["import"] }
