@@ -1,4 +1,5 @@
 use crate::emesh::read_emesh;
+use crate::etex::read_etex;
 use common::AssetId;
 use rendering_backend::backend_impl::resource_manager::Mesh;
 use std::collections::HashMap;
@@ -70,27 +71,26 @@ impl AssetManager {
         self.id_to_image.get(image_handle).map(Rc::clone)
     }
 
-    pub fn get_image<P: AsRef<Path>>(&mut self, path: P) -> Option<ImageHandle> {
-        let path_str = path.as_ref().to_str()?.to_string();
+    /// Loads a cooked `.etex` file. Returns a cached handle if the same path
+    /// was already loaded.
+    pub fn load_etex(&mut self, path: &Path) -> Option<ImageHandle> {
+        let path_str = path.to_string_lossy().into_owned();
 
-        if let Some(asset_id) = self.path_to_image_id.get(&path_str) {
-            return Some(*asset_id);
+        if let Some(&handle) = self.path_to_image_id.get(&path_str) {
+            return Some(handle);
         }
 
-        match load_image(path) {
+        match read_etex(path) {
             Ok(image_asset) => {
                 let asset_id = ImageHandle::new(self.next_id);
-                let image_asset_rc = Rc::new(Asset {
-                    data: image_asset,
-                    id: asset_id,
-                });
+                let asset = Rc::new(Asset { data: image_asset, id: asset_id });
                 self.path_to_image_id.insert(path_str, asset_id);
-                self.id_to_image.insert(asset_id, Rc::clone(&image_asset_rc));
+                self.id_to_image.insert(asset_id, asset);
                 self.next_id += 1;
                 Some(asset_id)
             }
             Err(e) => {
-                eprintln!("AssetManager: failed to load image: {}", e);
+                eprintln!("AssetManager: failed to load '{}': {}", path.display(), e);
                 None
             }
         }

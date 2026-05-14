@@ -14,3 +14,4 @@ nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
 tobj = "4.0.2"
 gltf = { version = "1", features = ["import"] }
+image = { workspace = true }

@@ -170,14 +170,14 @@ impl EmatFile {
         let guid = Guid::from_str(guid_str)
             .ok_or_else(|| EmatError::UnresolvedGuid(guid_str.to_string()))?;
 
-        let record = registry
+        registry
             .get(&guid)
             .ok_or_else(|| EmatError::UnresolvedGuid(guid_str.to_string()))?;
 
-        let abs_path = project.content_dir.join(&record.source_path);
+        let cooked_path = project.cooked_path(&guid, "etex");
 
         assets
-            .get_image(&abs_path)
-            .ok_or_else(|| EmatError::ImageLoadFailed(abs_path.to_string_lossy().into_owned()))
+            .load_etex(&cooked_path)
+            .ok_or_else(|| EmatError::ImageLoadFailed(cooked_path.to_string_lossy().into_owned()))
     }
 }
