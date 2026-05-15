@@ -1,21 +1,23 @@
-use crate::{Material, MaterialParameterBinding, MaterialParameterBindingData};
-use std::cell::RefCell;
+use crate::{Material, MaterialParameterBinding};
+use common::Handle;
 use std::collections::HashMap;
-use std::rc::Rc;
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-pub struct MaterialHandle(usize);
+/// Marker type for material handles.
+pub struct MaterialData;
+pub type MaterialHandle = Handle<MaterialData>;
 
 pub struct MaterialManager {
-    materials: Vec<Rc<RefCell<dyn Material>>>,
+    materials: HashMap<MaterialHandle, Box<dyn Material>>,
     shader_variants: HashMap<String, MaterialVariant>,
+    next_id: u64,
 }
 
 impl MaterialManager {
     pub fn new() -> Self {
         Self {
-            materials: vec![],
+            materials: HashMap::new(),
             shader_variants: HashMap::new(),
+            next_id: 0,
         }
     }
 
@@ -24,38 +26,43 @@ impl MaterialManager {
         let push_constant_size = material.get_push_constants().len();
         let shader_path = material.get_shader_path();
 
-        let shader_variant =
-            Self::create_variant(bindings, push_constant_size, shader_path.clone());
-        self.shader_variants.entry(shader_path).or_insert(shader_variant);
+        let variant = Self::create_variant(bindings, push_constant_size, shader_path.clone());
+        self.shader_variants.entry(shader_path).or_insert(variant);
 
-        let new_handle = self.materials.len();
-        self.materials.push(Rc::new(RefCell::new(material)));
-
-        MaterialHandle(new_handle)
+        let handle = Handle::new(self.next_id);
+        self.next_id += 1;
+        self.materials.insert(handle, Box::new(material));
+        handle
     }
 
     pub fn get_variants(&self) -> Vec<&MaterialVariant> {
-        self.shader_variants.values().collect::<Vec<_>>()
+        self.shader_variants.values().collect()
     }
 
-    pub fn get_material_data(
-        &self,
-        material_handle: MaterialHandle,
-    ) -> Vec<MaterialParameterBinding> {
+    pub fn get_material_data(&self, handle: MaterialHandle) -> Vec<MaterialParameterBinding> {
         self.materials
-            .get(material_handle.0)
-            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", material_handle))
-            .borrow()
+            .get(&handle)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", handle))
             .get_bindings()
     }
 
-    pub fn get_material_push_const_data(&self, material_handle: MaterialHandle) -> Vec<u8> {
+    pub fn get_material_push_const_data(&self, handle: MaterialHandle) -> Vec<u8> {
         self.materials
-            .get(material_handle.0)
-            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", material_handle))
-            .borrow()
+            .get(&handle)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", handle))
             .get_push_constants()
             .to_owned()
+    }
+
+    pub fn get_variant(&self, handle: MaterialHandle) -> &MaterialVariant {
+        let shader_path = self.materials
+            .get(&handle)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", handle))
+            .get_shader_path();
+
+        self.shader_variants
+            .get(&shader_path)
+            .expect("MaterialManager: shader variant not found")
     }
 
     fn create_variant(
@@ -70,26 +77,10 @@ impl MaterialManager {
                 .iter()
                 .map(|binding| ShaderBindingInfo {
                     index: binding.index,
-                    binding_type: match binding.data {
-                        MaterialParameterBindingData::Texture(_) => BindingType::ImageSampler,
-                        _ => BindingType::ImageSampler,
-                    },
+                    binding_type: BindingType::ImageSampler,
                 })
                 .collect(),
         }
-    }
-
-    pub fn get_variant(&self, material_handle: MaterialHandle) -> &MaterialVariant {
-        let material = self
-            .materials
-            .get(material_handle.0)
-            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", material_handle))
-            .borrow()
-            .get_shader_path();
-
-        self.shader_variants
-            .get(&material)
-            .expect("Unknown material handle")
     }
 }
 
@@ -99,20 +90,11 @@ impl Default for MaterialManager {
     }
 }
 
-pub struct MaterialData {
-    pub binding_data: Vec<MaterialParameterBinding>,
-    pub variant_name: String,
-}
-
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct MaterialVariant {
     pub name: String,
     pub push_constant_size: usize,
     pub binding_info: Vec<ShaderBindingInfo>,
-}
-
-pub struct ShaderPushConstantInfo {
-    pub size: usize,
 }
 
 #[derive(Eq, PartialEq, Hash, Clone)]

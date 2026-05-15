@@ -1,7 +1,7 @@
-use assets::MeshHandle;
+use super::AABB;
 use nalgebra_glm::Vec3;
 use std::collections::HashMap;
-use super::AABB;
+use common::MeshHandle;
 
 /// Opaque handle to a registered shape. Wraps a Vec index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -9,7 +9,9 @@ pub struct ShapeId(pub u32);
 
 impl ShapeId {
     /// Returns the raw index value. Prefer typed accessors where possible.
-    pub fn raw(self) -> u32 { self.0 }
+    pub fn raw(self) -> u32 {
+        self.0
+    }
 }
 
 /// Geometric shape used for broad-phase collision.
@@ -45,21 +47,24 @@ pub(crate) enum ShapeKey {
 impl ShapeKey {
     pub(crate) fn from_shape(shape: &Shape) -> Self {
         match shape {
-            Shape::Sphere { radius } =>
-                ShapeKey::Sphere { radius: radius.to_bits() },
-            Shape::Cuboid { half_extents } =>
-                ShapeKey::Cuboid {
-                    hx: half_extents.x.to_bits(),
-                    hy: half_extents.y.to_bits(),
-                    hz: half_extents.z.to_bits(),
-                },
-            Shape::Capsule { half_height, radius } =>
-                ShapeKey::Capsule {
-                    half_height: half_height.to_bits(),
-                    radius: radius.to_bits(),
-                },
-            Shape::Mesh { mesh_handle } =>
-                ShapeKey::Mesh { mesh_id: mesh_handle.raw() },
+            Shape::Sphere { radius } => ShapeKey::Sphere {
+                radius: radius.to_bits(),
+            },
+            Shape::Cuboid { half_extents } => ShapeKey::Cuboid {
+                hx: half_extents.x.to_bits(),
+                hy: half_extents.y.to_bits(),
+                hz: half_extents.z.to_bits(),
+            },
+            Shape::Capsule {
+                half_height,
+                radius,
+            } => ShapeKey::Capsule {
+                half_height: half_height.to_bits(),
+                radius: radius.to_bits(),
+            },
+            Shape::Mesh { mesh_handle } => ShapeKey::Mesh {
+                mesh_id: mesh_handle.raw(),
+            },
         }
     }
 }
@@ -74,7 +79,10 @@ pub struct ShapeStore {
 
 impl ShapeStore {
     pub fn new() -> Self {
-        Self { shapes: Vec::new(), key_to_id: HashMap::new() }
+        Self {
+            shapes: Vec::new(),
+            key_to_id: HashMap::new(),
+        }
     }
 
     /// Returns an existing ShapeId if an identical shape was already registered.
@@ -100,7 +108,9 @@ impl ShapeStore {
 }
 
 impl Default for ShapeStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Shape {
@@ -123,7 +133,10 @@ impl Shape {
             Shape::Cuboid { half_extents } => {
                 AABB::new(center - half_extents, center + half_extents)
             }
-            Shape::Capsule { half_height, radius } => {
+            Shape::Capsule {
+                half_height,
+                radius,
+            } => {
                 let half = Vec3::new(*radius, half_height + radius, *radius);
                 AABB::new(center - half, center + half)
             }

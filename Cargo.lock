@@ -184,6 +184,7 @@ name = "asset_pipeline"
 version = "0.1.0"
 dependencies = [
  "assets",
+ "common",
  "gltf",
  "image",
  "material",
@@ -204,7 +205,6 @@ dependencies = [
  "image",
  "nalgebra",
  "nalgebra-glm",
- "rendering_backend",
 ]
 
 [[package]]
@@ -457,6 +457,11 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "serde",
+ "uuid",
+]
 
 [[package]]
 name = "concurrent-queue"
@@ -473,9 +478,9 @@ version = "0.1.0"
 dependencies = [
  "asset_pipeline",
  "assets",
+ "common",
  "ecs",
  "input",
- "legacy_macros",
  "material",
  "nalgebra-glm",
  "project",
@@ -1254,6 +1259,7 @@ version = "0.1.0"
 dependencies = [
  "assets",
  "bitflags 2.10.0",
+ "common",
  "nalgebra-glm",
  "serde",
 ]
@@ -1964,6 +1970,7 @@ dependencies = [
 name = "project"
 version = "0.1.0"
 dependencies = [
+ "common",
  "serde",
  "toml",
  "uuid",
@@ -2203,6 +2210,7 @@ name = "renderer"
 version = "0.1.0"
 dependencies = [
  "assets",
+ "common",
  "core",
  "ecs",
  "material",
@@ -2217,6 +2225,7 @@ dependencies = [
  "ash",
  "ash-window",
  "bitflags 2.10.0",
+ "common",
  "image",
  "nalgebra",
  "nalgebra-glm",
@@ -2448,7 +2457,7 @@ dependencies = [
 name = "spatial"
 version = "0.1.0"
 dependencies = [
- "assets",
+ "common",
  "ecs",
  "nalgebra-glm",
 ]

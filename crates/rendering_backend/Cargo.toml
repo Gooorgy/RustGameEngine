@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+common = { path = "../common" }
 bitflags = "2.9.4"
 ash = "0.38.0"
 ash-window = "0.13.0"

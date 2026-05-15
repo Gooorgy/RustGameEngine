@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 nalgebra-glm = { workspace = true }
-ecs = {path = "../ecs"}
-assets = {path = "../assets"}
+ecs = { path = "../ecs" }
+common = { path = "../common" }

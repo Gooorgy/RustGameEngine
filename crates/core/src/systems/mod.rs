@@ -1,8 +1,8 @@
 use crate::components::{CameraComponent, CameraControllerComponent};
+use crate::system::Context;
 use crate::TransformComponent;
 use ecs::query::Query;
-use ecs::systems::ManagerContext;
-use input::{AxisAction, InputManager};
+use input::AxisAction;
 use nalgebra_glm::{identity, rotate_x, rotate_y, vec3, Vec4};
 
 pub fn basic_camera_system(
@@ -11,15 +11,15 @@ pub fn basic_camera_system(
         &mut TransformComponent,
         &mut CameraControllerComponent,
     )>,
-    context: &ManagerContext,
+    context: &Context,
 ) {
     for (camera, transform, controller) in &mut query.iter() {
         if camera.active {
-            let delta = context.delta_time;
-            let input_manager = context.expect_manager::<InputManager>();
+            let delta = context.dt;
+            let input = context.input;
 
-            let mouse_x = input_manager.get_axis(AxisAction::MOUSE_X);
-            let mouse_y = input_manager.get_axis(AxisAction::MOUSE_Y);
+            let mouse_x = input.get_axis(AxisAction::MOUSE_X);
+            let mouse_y = input.get_axis(AxisAction::MOUSE_Y);
 
             controller.yaw -= mouse_x * delta;
             controller.pitch -= mouse_y * delta;
@@ -31,8 +31,8 @@ pub fn basic_camera_system(
             transform.rotation.x = controller.pitch;
             transform.rotation.y = controller.yaw;
 
-            let movement_x = input_manager.get_axis("horizontal");
-            let movement_z = -input_manager.get_axis("vertical");
+            let movement_x = input.get_axis("horizontal");
+            let movement_z = -input.get_axis("vertical");
 
             let rot_x = rotate_x(&identity(), controller.pitch);
             let rot_y = rotate_y(&identity(), controller.yaw);

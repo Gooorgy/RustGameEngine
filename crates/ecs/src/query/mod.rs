@@ -41,7 +41,14 @@ pub struct Query<'a, Q: QueryParameter> {
     pub(crate) matches: Vec<Match<Q>>,
 }
 
-impl<Q: QueryParameter> Query<'_, Q> {
+impl<'a, Q: QueryParameter> Query<'a, Q> {
+    pub fn new(world: &'a mut World) -> Self {
+        Self {
+            world,
+            matches: Vec::new(),
+        }
+    }
+
     pub fn iter(&mut self) -> QueryIter<'_, Q> {
         QueryIter::new(&mut self.matches, &mut self.world.data as *mut _)
     }

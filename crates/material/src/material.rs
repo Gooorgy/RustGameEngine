@@ -1,6 +1,6 @@
-use assets::ImageHandle;
 use nalgebra_glm::{vec4, Vec4};
 use serde::Serialize;
+use common::ImageHandle;
 
 pub trait Material {
     fn get_bindings(&self) -> Vec<MaterialParameterBinding>;
@@ -65,22 +65,20 @@ impl Material for PbrMaterial {
     fn get_bindings(&self) -> Vec<MaterialParameterBinding> {
         let base_color_binding = match self.base_color {
             MaterialColorParameter::Handle(handle) => {
-                let material_parameter_binding = MaterialParameterBinding {
+                Some(MaterialParameterBinding {
                     index: 0,
                     data: MaterialParameterBindingData::Texture(handle),
-                };
-                Some(material_parameter_binding)
+                })
             }
             _ => None,
         };
 
         let normal_binding = match self.normal {
             MaterialColorParameter::Handle(handle) => {
-                let material_parameter_binding = MaterialParameterBinding {
+                Some(MaterialParameterBinding {
                     index: 1,
                     data: MaterialParameterBindingData::Texture(handle),
-                };
-                Some(material_parameter_binding)
+                })
             }
             _ => None,
         };
@@ -97,12 +95,10 @@ impl Material for PbrMaterial {
                 channel_a: self.specular.as_handle(),
             };
 
-            let material_parameter_binding = MaterialParameterBinding {
+            Some(MaterialParameterBinding {
                 index: 2,
                 data: MaterialParameterBindingData::PackedTexture(packed),
-            };
-
-            Some(material_parameter_binding)
+            })
         } else {
             None
         };
@@ -110,7 +106,7 @@ impl Material for PbrMaterial {
         [base_color_binding, normal_binding, packed_texture]
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>()
+            .collect()
     }
 
     fn get_push_constants(&self) -> &[u8] {
@@ -118,7 +114,7 @@ impl Material for PbrMaterial {
             base_color: self.base_color.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
             normal: self.normal.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
             roughness: self.roughness.as_constant(1.0),
-            specular: self.roughness.as_constant(0.0),
+            specular: self.specular.as_constant(0.0),
             metallic: self.metallic.as_constant(0.0),
             ambient_occlusion: self.ambient_occlusion.as_constant(0.0),
         };
@@ -138,27 +134,27 @@ impl Material for PbrMaterial {
 
         if self.base_color.as_handle().is_some() {
             pbr_features |= PbrFeatures::HAS_COLOR_TEXTURE
-        };
+        }
 
         if self.normal.as_handle().is_some() {
             pbr_features |= PbrFeatures::HAS_NORMAL_TEXTURE
-        };
+        }
 
         if self.ambient_occlusion.as_handle().is_some() {
             pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        };
+        }
 
         if self.metallic.as_handle().is_some() {
             pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        };
+        }
 
         if self.roughness.as_handle().is_some() {
             pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        };
+        }
 
         if self.specular.as_handle().is_some() {
             pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        };
+        }
 
         pbr_features.bits()
     }
@@ -182,12 +178,10 @@ impl Material for PbrMaterial {
         }
 
         if feature_name.is_empty() {
-            return format!("{}.{}", base_name, "base",);
+            return format!("{}.{}", base_name, "base");
         }
 
-        let combined_feature_name = feature_name.join(".");
-
-        format!("{}.{}", base_name, combined_feature_name)
+        format!("{}.{}", base_name, feature_name.join("."))
     }
 }
 

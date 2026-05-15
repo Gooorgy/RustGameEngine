@@ -1,6 +1,6 @@
 use crate::render_data::{CameraRenderData, DirectionalLightData};
 use material::material_manager::MaterialVariant;
-use rendering_backend::backend_impl::resource_manager::MeshData;
+use rendering_backend::backend_impl::resource_manager::GpuMeshData;
 use rendering_backend::descriptor::{DescriptorLayoutHandle, DescriptorSetHandle};
 
 pub struct RenderScene {
@@ -10,7 +10,7 @@ pub struct RenderScene {
 }
 
 pub struct MeshRenderData {
-    pub mesh_data: MeshData,
+    pub mesh_data: GpuMeshData,
     pub material_data: MaterialData,
 }
 

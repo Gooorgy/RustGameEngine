@@ -2,7 +2,6 @@ use crate::component::archetype::{Archetype, ColumnFactory};
 use crate::component::component_storage::ComponentInsertion;
 use crate::entity::Entity;
 use crate::query::{Query, QueryParameter};
-use crate::systems::{ManagerContext, SystemFunction};
 use std::any::TypeId;
 use std::collections::HashMap;
 
@@ -10,7 +9,6 @@ pub struct World {
     pub(crate) data: HashMap<ArchetypeKey, Archetype>,
     column_registry: ColumnRegistry,
     entities: Vec<Entity>,
-    systems: Vec<Box<dyn SystemFunction>>,
     //query_cache: HashMap<QueryKey, QueryCache>,
 }
 
@@ -61,16 +59,12 @@ impl World {
             data: HashMap::new(),
             column_registry: ColumnRegistry::new(),
             entities: vec![],
-            systems: vec![],
             //query_cache: HashMap::new(),
         }
     }
 
     pub fn query<Q: QueryParameter>(&mut self) -> Query<'_, Q> {
-        let mut query = Query {
-            world: self,
-            matches: vec![],
-        };
+        let mut query = Query::new(self);
         query.build_matches();
         query
     }
@@ -102,20 +96,6 @@ impl World {
         archetype.insert(values);
 
         Entity(index)
-    }
-
-    pub fn update(&mut self, ctx: &ManagerContext) {
-        let systems = std::mem::take(&mut self.systems);
-
-        for system in &systems {
-            system.run(self, ctx);
-        }
-
-        self.systems = systems;
-    }
-
-    pub fn register_system(&mut self, system: Box<dyn SystemFunction>) {
-        self.systems.push(system);
     }
 }
 

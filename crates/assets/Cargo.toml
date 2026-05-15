@@ -8,4 +8,3 @@ common = { path = "../common" }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
 image = { workspace = true }
-rendering_backend = { path = "../rendering_backend" }

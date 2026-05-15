@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-legacy_macros = { path = "../legacy_macros" }
+common = { path = "../common" }
 nalgebra-glm = { workspace = true }
 ecs = { path = "../ecs" }
 assets = { path = "../assets" }

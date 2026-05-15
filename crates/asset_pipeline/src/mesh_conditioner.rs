@@ -1,6 +1,6 @@
 use assets::write_emesh;
+use common::Vertex;
 use nalgebra::{Vector2, Vector3};
-use rendering_backend::vertex::Vertex;
 use std::fmt;
 use std::path::Path;
 
@@ -21,7 +21,9 @@ impl fmt::Display for MeshConditionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MeshConditionError::Io(e) => write!(f, "io: {}", e),
-            MeshConditionError::UnsupportedFormat(e) => write!(f, "unsupported mesh format '.{}'", e),
+            MeshConditionError::UnsupportedFormat(e) => {
+                write!(f, "unsupported mesh format '.{}'", e)
+            }
             MeshConditionError::Obj(e) => write!(f, "obj: {}", e),
             MeshConditionError::Gltf(e) => write!(f, "gltf: {}", e),
             MeshConditionError::NoMesh => write!(f, "no mesh found in file"),
@@ -34,16 +36,24 @@ impl fmt::Display for MeshConditionError {
 }
 
 impl From<std::io::Error> for MeshConditionError {
-    fn from(e: std::io::Error) -> Self { MeshConditionError::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        MeshConditionError::Io(e)
+    }
 }
 impl From<tobj::LoadError> for MeshConditionError {
-    fn from(e: tobj::LoadError) -> Self { MeshConditionError::Obj(e) }
+    fn from(e: tobj::LoadError) -> Self {
+        MeshConditionError::Obj(e)
+    }
 }
 impl From<gltf::Error> for MeshConditionError {
-    fn from(e: gltf::Error) -> Self { MeshConditionError::Gltf(e) }
+    fn from(e: gltf::Error) -> Self {
+        MeshConditionError::Gltf(e)
+    }
 }
 impl From<assets::EmeshError> for MeshConditionError {
-    fn from(e: assets::EmeshError) -> Self { MeshConditionError::Write(e) }
+    fn from(e: assets::EmeshError) -> Self {
+        MeshConditionError::Write(e)
+    }
 }
 
 pub struct MeshConditioner;
@@ -62,13 +72,16 @@ impl MeshConditioner {
         if let Some(parent) = dst_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        write_emesh(dst_path, &vertices, &indices)?;
+        write_emesh(dst_path, vertices.as_slice(), &indices)?;
         Ok(())
     }
 
     fn load_obj(path: &Path) -> Result<(Vec<Vertex>, Vec<u32>), MeshConditionError> {
         let (models, _) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
-        let model = models.into_iter().next().ok_or(MeshConditionError::NoMesh)?;
+        let model = models
+            .into_iter()
+            .next()
+            .ok_or(MeshConditionError::NoMesh)?;
         let mesh = &model.mesh;
 
         let vert_count = mesh.positions.len() / 3;
@@ -111,7 +124,10 @@ impl MeshConditioner {
         let (document, buffers, _) = gltf::import(path)?;
 
         let mesh = document.meshes().next().ok_or(MeshConditionError::NoMesh)?;
-        let primitive = mesh.primitives().next().ok_or(MeshConditionError::NoPrimitive)?;
+        let primitive = mesh
+            .primitives()
+            .next()
+            .ok_or(MeshConditionError::NoPrimitive)?;
         let reader = primitive.reader(|buf| Some(&buffers[buf.index()]));
 
         let positions: Vec<[f32; 3]> = reader

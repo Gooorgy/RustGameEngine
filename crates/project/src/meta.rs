@@ -1,4 +1,4 @@
-use crate::Guid;
+use common::Guid;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 

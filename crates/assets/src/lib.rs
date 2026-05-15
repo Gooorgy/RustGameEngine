@@ -1,9 +1,9 @@
-mod asset_manager;
+mod asset_store;
 pub mod emesh;
 pub mod etex;
-mod types;
+pub mod spv;
 
-pub use asset_manager::*;
+pub use asset_store::*;
 pub use emesh::{write_emesh, EmeshError};
 pub use etex::{write_etex, EtexError};
-pub use types::*;
+pub use spv::{read_spv, SpvError};

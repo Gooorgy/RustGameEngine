@@ -2,21 +2,20 @@ use crate::backend_impl::vulkan_backend::VulkanBackend;
 use crate::buffer::{BufferDesc, BufferHandle, BufferUsageFlags};
 use crate::image::{GpuImageHandle, ImageAspect, ImageDesc, ImageUsageFlags, TextureFormat};
 use crate::memory::MemoryHint;
-use crate::vertex::Vertex;
+use common::{ImageData, ImageHandle, MeshData, MeshHandle, Vertex};
 use std::collections::HashMap;
 use std::mem;
-use std::rc::Rc;
 
 #[derive(Copy, Clone)]
-pub struct MeshData {
+pub struct GpuMeshData {
     pub vertex_buffer: BufferHandle,
     pub index_buffer: BufferHandle,
     pub index_count: usize,
 }
 
 pub struct ResourceManager {
-    pub mesh_data: HashMap<u64, MeshData>,
-    pub images: HashMap<u64, GpuImageHandle>,
+    pub mesh_data: HashMap<MeshHandle, GpuMeshData>,
+    pub images: HashMap<ImageHandle, GpuImageHandle>,
 }
 
 #[derive(Clone, Debug)]
@@ -41,72 +40,26 @@ impl Default for ResourceManager {
 }
 
 impl ResourceManager {
-
-    pub fn upload_meshes(
-        &mut self,
-        vulkan_backend: &mut VulkanBackend,
-        meshes: HashMap<u64, Rc<Mesh>>,
-    ) {
-        for (asset_id, mesh) in meshes {
-            let vertices = mesh.vertices.as_slice();
-            let indices = mesh.indices.as_slice();
-
-            let vertex_buffer_size = mem::size_of_val(vertices);
-            let index_buffer_size = mem::size_of_val(indices);
-            let vertex_buffer_handle = vulkan_backend.create_buffer(
-                BufferDesc {
-                    usage: BufferUsageFlags::VERTEX_BUFFER,
-                    memory_hint: MemoryHint::GPUOnly,
-                    size: vertex_buffer_size,
-                },
-                Some(vertices),
-            );
-            let index_buffer_handle = vulkan_backend.create_buffer(
-                BufferDesc {
-                    usage: BufferUsageFlags::INDEX_BUFFER,
-                    memory_hint: MemoryHint::GPUOnly,
-                    size: index_buffer_size,
-                },
-                Some(indices),
-            );
-
-            self.mesh_data.insert(
-                asset_id,
-                MeshData {
-                    vertex_buffer: vertex_buffer_handle,
-                    index_buffer: index_buffer_handle,
-                    index_count: indices.len(),
-                },
-            );
-        }
-    }
-
-    pub fn upload_images(&mut self, _vulkan_backend: &mut VulkanBackend) {}
-
-    pub fn get_by_handle(&self, _vulkan_backend: &mut VulkanBackend, asset_id: u64) -> &MeshData {
-        self.mesh_data.get(&asset_id).unwrap()
-    }
-
     pub fn get_or_create_mesh(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
-        asset_id: u64,
-        mesh: Rc<Mesh>,
-    ) -> MeshData {
-        let mesh_data = self.mesh_data.get_mut(&asset_id);
+        handle: MeshHandle,
+        mesh: &MeshData,
+    ) -> GpuMeshData {
+        let mesh_data = self.mesh_data.get_mut(&handle);
         if let Some(mesh_data) = mesh_data {
             return *mesh_data;
         }
 
-        self.upload_mesh(vulkan_backend, mesh, asset_id)
+        self.upload_mesh(vulkan_backend, mesh, handle)
     }
 
     fn upload_mesh(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
-        mesh: Rc<Mesh>,
-        index: u64,
-    ) -> MeshData {
+        mesh: &MeshData,
+        handle: MeshHandle,
+    ) -> GpuMeshData {
         let vertices = mesh.vertices.as_slice();
         let indices = mesh.indices.as_slice();
 
@@ -129,12 +82,12 @@ impl ResourceManager {
             Some(indices),
         );
 
-        let mesh_data = MeshData {
+        let mesh_data = GpuMeshData {
             vertex_buffer: vertex_buffer_handle,
             index_buffer: index_buffer_handle,
             index_count: indices.len(),
         };
-        self.mesh_data.insert(index, mesh_data);
+        self.mesh_data.insert(handle, mesh_data);
 
         mesh_data
     }
@@ -142,19 +95,17 @@ impl ResourceManager {
     pub fn get_or_create_image(
         &mut self,
         vulkan_backend: &mut VulkanBackend,
-        asset_id: u64,
-        data: Rc<Vec<u8>>,
-        width: u32,
-        height: u32,
+        handle: ImageHandle,
+        data: &ImageData,
     ) -> GpuImageHandle {
-        let images = self.images.get_mut(&asset_id);
+        let images = self.images.get_mut(&handle);
         if let Some(images) = images {
             return *images;
         }
 
         let image_desc = ImageDesc {
-            width,
-            height,
+            width: data.width,
+            height: data.height,
             usage: ImageUsageFlags::SAMPLED | ImageUsageFlags::TRANSFER_DST,
             aspect: ImageAspect::Color,
             array_layers: 0,
@@ -166,8 +117,8 @@ impl ResourceManager {
         };
 
         let image_handle = vulkan_backend.create_image(image_desc);
-        vulkan_backend.update_image_data(image_handle, data.as_ref());
-        self.images.insert(asset_id, image_handle);
+        vulkan_backend.update_image_data(image_handle, data.pixels.as_ref());
+        self.images.insert(handle, image_handle);
 
         image_handle
     }

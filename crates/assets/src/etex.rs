@@ -1,7 +1,6 @@
-use crate::asset_manager::ImageAsset;
 use std::fmt;
 use std::path::Path;
-use std::rc::Rc;
+use common::ImageData;
 
 const MAGIC: [u8; 4] = *b"ETEX";
 const VERSION: u32 = 1;
@@ -29,18 +28,18 @@ impl fmt::Display for EtexError {
 ///
 /// Format: 4-byte magic + version u32 + width u32 + height u32 + raw RGBA8 bytes
 /// (all little-endian).
-pub fn write_etex(path: &Path, pixels: &[u8], width: u32, height: u32) -> Result<(), EtexError> {
-    let mut buf = Vec::with_capacity(16 + pixels.len());
+pub fn write_etex(path: &Path, image_data: &ImageData) -> Result<(), EtexError> {
+    let mut buf = Vec::with_capacity(16 + image_data.pixels.len());
     buf.extend_from_slice(&MAGIC);
     buf.extend_from_slice(&VERSION.to_le_bytes());
-    buf.extend_from_slice(&width.to_le_bytes());
-    buf.extend_from_slice(&height.to_le_bytes());
-    buf.extend_from_slice(pixels);
+    buf.extend_from_slice(&image_data.width.to_le_bytes());
+    buf.extend_from_slice(&image_data.height.to_le_bytes());
+    buf.extend_from_slice(&image_data.pixels);
     std::fs::write(path, buf).map_err(EtexError::Io)
 }
 
 /// Reads a `.etex` binary file and returns a ready-to-use `ImageAsset`.
-pub fn read_etex(path: &Path) -> Result<ImageAsset, EtexError> {
+pub fn read_etex(path: &Path) -> Result<ImageData, EtexError> {
     let data = std::fs::read(path).map_err(EtexError::Io)?;
 
     if data.len() < 16 {
@@ -61,8 +60,8 @@ pub fn read_etex(path: &Path) -> Result<ImageAsset, EtexError> {
         return Err(EtexError::Truncated);
     }
 
-    Ok(ImageAsset {
-        image_data: Rc::new(data[16..16 + expected].to_vec()),
+    Ok(ImageData {
+        pixels: data[16..16 + expected].to_vec(),
         width,
         height,
     })

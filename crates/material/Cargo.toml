@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+common = { path = "../common" }
 assets = { path = "../assets" }
 nalgebra-glm = { workspace = true }
 bitflags = "2.10.0"

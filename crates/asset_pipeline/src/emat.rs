@@ -1,4 +1,4 @@
-use assets::{AssetManager, ImageHandle};
+use assets::AssetStore;
 use material::{Material, MaterialColorParameter, MaterialParameter, PbrMaterial};
 use nalgebra_glm::{vec4, Vec4};
 use project::{AssetRegistry, Guid, Project};
@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
-
+use common::ImageHandle;
 // ── File format types ──────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -14,8 +14,8 @@ pub struct EmatFile {
     /// "pbr" for the built-in PBR material path.
     #[serde(rename = "type")]
     pub mat_type: Option<String>,
-    /// GUID string referencing a `.shader` manifest for custom shader materials.
-    pub shader: Option<String>,
+    /// GUID referencing a `.eshader` manifest for custom shader materials.
+    pub shader: Option<Guid>,
     #[serde(default)]
     pub params: HashMap<String, ParamValue>,
 }
@@ -25,7 +25,7 @@ pub struct EmatFile {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum ParamValue {
-    Texture { texture: String },
+    Texture { texture: Guid },
     Vec4 { value: [f32; 4] },
     Float { value: f32 },
 }
@@ -40,10 +40,10 @@ pub enum EmatError {
     UnknownType(String),
     /// The file has neither `type` nor `shader` set.
     MissingTypeOrShader,
-    /// A texture GUID could not be resolved in the registry.
-    UnresolvedGuid(String),
+    /// A GUID could not be resolved in the registry.
+    UnresolvedGuid(Guid),
     /// The asset manager failed to load the image for a texture param.
-    ImageLoadFailed(String),
+    ImageLoadFailed(Guid),
     /// Custom shader manifest loading is not yet implemented.
     NotYetImplemented(String),
 }
@@ -56,17 +56,21 @@ impl fmt::Display for EmatError {
             EmatError::UnknownType(t) => write!(f, "unknown material type '{}'", t),
             EmatError::MissingTypeOrShader => write!(f, "emat must have 'type' or 'shader'"),
             EmatError::UnresolvedGuid(g) => write!(f, "unresolved guid '{}'", g),
-            EmatError::ImageLoadFailed(p) => write!(f, "failed to load image at '{}'", p),
+            EmatError::ImageLoadFailed(g) => write!(f, "failed to load image for guid '{}'", g),
             EmatError::NotYetImplemented(s) => write!(f, "not yet implemented: {}", s),
         }
     }
 }
 
 impl From<std::io::Error> for EmatError {
-    fn from(e: std::io::Error) -> Self { EmatError::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        EmatError::Io(e)
+    }
 }
 impl From<toml::de::Error> for EmatError {
-    fn from(e: toml::de::Error) -> Self { EmatError::Parse(e) }
+    fn from(e: toml::de::Error) -> Self {
+        EmatError::Parse(e)
+    }
 }
 
 // ── EmatFile methods ───────────────────────────────────────────────────────
@@ -84,19 +88,17 @@ impl EmatFile {
         &self,
         project: &Project,
         registry: &AssetRegistry,
-        assets: &mut AssetManager,
+        assets: &mut AssetStore,
     ) -> Result<Box<dyn Material>, EmatError> {
-        match (self.mat_type.as_deref(), self.shader.as_deref()) {
+        match (self.mat_type.as_deref(), self.shader) {
             (Some("pbr"), _) => {
                 let pbr = self.build_pbr(project, registry, assets)?;
                 Ok(Box::new(pbr))
             }
             (Some(other), _) => Err(EmatError::UnknownType(other.to_string())),
-            (None, Some(_shader_guid)) => {
-                Err(EmatError::NotYetImplemented(
-                    "custom shader materials (.shader manifest loading) are not yet implemented".to_string(),
-                ))
-            }
+            (None, Some(_)) => Err(EmatError::NotYetImplemented(
+                "custom shader materials are not yet implemented".to_string(),
+            )),
             (None, None) => Err(EmatError::MissingTypeOrShader),
         }
     }
@@ -105,7 +107,7 @@ impl EmatFile {
         &self,
         project: &Project,
         registry: &AssetRegistry,
-        assets: &mut AssetManager,
+        assets: &mut AssetStore,
     ) -> Result<PbrMaterial, EmatError> {
         Ok(PbrMaterial {
             base_color: self.color_param("base_color", project, registry, assets)?,
@@ -122,16 +124,16 @@ impl EmatFile {
         name: &str,
         project: &Project,
         registry: &AssetRegistry,
-        assets: &mut AssetManager,
+        assets: &mut AssetStore,
     ) -> Result<MaterialColorParameter, EmatError> {
         match self.params.get(name) {
             Some(ParamValue::Texture { texture }) => {
                 let handle = self.resolve_texture(texture, project, registry, assets)?;
                 Ok(MaterialColorParameter::Handle(handle))
             }
-            Some(ParamValue::Vec4 { value: v }) => {
-                Ok(MaterialColorParameter::Constant(vec4(v[0], v[1], v[2], v[3])))
-            }
+            Some(ParamValue::Vec4 { value: v }) => Ok(MaterialColorParameter::Constant(vec4(
+                v[0], v[1], v[2], v[3],
+            ))),
             Some(ParamValue::Float { value: v }) => {
                 Ok(MaterialColorParameter::Constant(vec4(*v, *v, *v, 1.0)))
             }
@@ -144,7 +146,7 @@ impl EmatFile {
         name: &str,
         project: &Project,
         registry: &AssetRegistry,
-        assets: &mut AssetManager,
+        assets: &mut AssetStore,
     ) -> Result<MaterialParameter, EmatError> {
         match self.params.get(name) {
             Some(ParamValue::Texture { texture }) => {
@@ -162,22 +164,17 @@ impl EmatFile {
 
     fn resolve_texture(
         &self,
-        guid_str: &str,
+        guid: &Guid,
         project: &Project,
         registry: &AssetRegistry,
-        assets: &mut AssetManager,
+        assets: &mut AssetStore,
     ) -> Result<ImageHandle, EmatError> {
-        let guid = Guid::from_str(guid_str)
-            .ok_or_else(|| EmatError::UnresolvedGuid(guid_str.to_string()))?;
+        registry.get(guid).ok_or(EmatError::UnresolvedGuid(*guid))?;
 
-        registry
-            .get(&guid)
-            .ok_or_else(|| EmatError::UnresolvedGuid(guid_str.to_string()))?;
-
-        let cooked_path = project.cooked_path(&guid, "etex");
+        let cooked_path = project.cooked_path(guid, "etex");
 
         assets
-            .load_etex(&cooked_path)
-            .ok_or_else(|| EmatError::ImageLoadFailed(cooked_path.to_string_lossy().into_owned()))
+            .load_texture(&cooked_path, *guid)
+            .ok_or(EmatError::ImageLoadFailed(*guid))
     }
 }

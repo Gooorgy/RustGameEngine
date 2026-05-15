@@ -1,4 +1,4 @@
-use assets::AssetManager;
+use assets::AssetStore;
 use material::material_manager::MaterialHandle;
 use material::{MaterialParameterBinding, MaterialParameterBindingData};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
@@ -39,10 +39,12 @@ impl MaterialGpuCache {
         bindings: Vec<MaterialParameterBinding>,
         shader_path: &str,
         resource_manager: &mut ResourceManager,
-        asset_manager: &mut AssetManager,
+        asset_store: &AssetStore,
         basic_sampler: SamplerHandle,
     ) -> (DescriptorSetHandle, DescriptorLayoutHandle) {
-        let layout_key = LayoutKey { shader_path: shader_path.to_owned() };
+        let layout_key = LayoutKey {
+            shader_path: shader_path.to_owned(),
+        };
         let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings, layout_key);
 
         // Return the cached set without any allocation if this material was seen before.
@@ -58,17 +60,13 @@ impl MaterialGpuCache {
             .map(|binding| {
                 let gpu_image = match binding.data {
                     MaterialParameterBindingData::Texture(image_handle) => {
-                        let image_asset = asset_manager
-                            .get_image_by_handle(&image_handle)
-                            .unwrap_or_else(|| {
-                                panic!("No asset found for image_handle: {}", image_handle.raw())
-                            });
+                        let image_asset = asset_store.get(image_handle).unwrap_or_else(|| {
+                            panic!("No asset found for image_handle: {}", image_handle.raw())
+                        });
                         resource_manager.get_or_create_image(
                             vulkan_backend,
-                            image_asset.id.raw(),
-                            image_asset.data.image_data.clone(),
-                            image_asset.data.width,
-                            image_asset.data.height,
+                            image_handle,
+                            image_asset,
                         )
                     }
                     MaterialParameterBindingData::PackedTexture(_) => {

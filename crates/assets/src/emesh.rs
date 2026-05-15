@@ -1,8 +1,6 @@
-use rendering_backend::backend_impl::resource_manager::Mesh;
-use rendering_backend::vertex::Vertex;
+use common::{MeshData, Vertex};
 use std::fmt;
 use std::path::Path;
-use std::rc::Rc;
 
 const MAGIC: [u8; 4] = *b"EMSH";
 const VERSION: u32 = 1;
@@ -45,16 +43,15 @@ pub fn write_emesh(path: &Path, vertices: &[Vertex], indices: &[u32]) -> Result<
     };
     buf.extend_from_slice(vert_bytes);
 
-    let idx_bytes = unsafe {
-        std::slice::from_raw_parts(indices.as_ptr() as *const u8, indices.len() * 4)
-    };
+    let idx_bytes =
+        unsafe { std::slice::from_raw_parts(indices.as_ptr() as *const u8, indices.len() * 4) };
     buf.extend_from_slice(idx_bytes);
 
     std::fs::write(path, buf).map_err(EmeshError::Io)
 }
 
 /// Reads a `.emesh` binary file and returns a ready-to-use `Mesh`.
-pub fn read_emesh(path: &Path) -> Result<Rc<Mesh>, EmeshError> {
+pub fn read_emesh(path: &Path) -> Result<MeshData, EmeshError> {
     let data = std::fs::read(path).map_err(EmeshError::Io)?;
 
     if data.len() < 16 {
@@ -89,5 +86,9 @@ pub fn read_emesh(path: &Path) -> Result<Rc<Mesh>, EmeshError> {
         std::slice::from_raw_parts(ptr, index_count).to_vec()
     };
 
-    Ok(Rc::new(Mesh { vertices, indices }))
+    Ok(MeshData {
+        vertices,
+        indices,
+        submeshes: Vec::new(),
+    })
 }

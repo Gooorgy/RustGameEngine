@@ -5,9 +5,10 @@ use crate::passes::geometry_renderer::GeometryRenderer;
 use crate::passes::lighting_renderer::LightingRenderer;
 use crate::render_data::{CameraRenderData, DirectionalLightData, MeshRenderRequest};
 use crate::render_scene::{MaterialData, MeshRenderData, RenderScene};
-use assets::AssetManager;
+use assets::AssetStore;
+use common::MeshData;
 use material::material_manager::MaterialManager;
-use rendering_backend::backend_impl::resource_manager::ResourceManager;
+use rendering_backend::backend_impl::resource_manager::{ResourceManager};
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
 
@@ -49,7 +50,7 @@ impl Renderer {
         vulkan_backend: &mut VulkanBackend,
         mesh_requests: &[MeshRenderRequest],
         material_manager: &mut MaterialManager,
-        asset_manager: &mut AssetManager,
+        asset_store: &AssetStore,
         resource_manager: &mut ResourceManager,
         camera: CameraMvpUbo,
         camera_render_data: Option<CameraRenderData>,
@@ -60,7 +61,7 @@ impl Renderer {
             vulkan_backend,
             mesh_requests,
             material_manager,
-            asset_manager,
+            asset_store,
             resource_manager,
             camera,
             camera_render_data,
@@ -86,7 +87,7 @@ impl Renderer {
         vulkan_backend: &mut VulkanBackend,
         mesh_requests: &[MeshRenderRequest],
         material_manager: &mut MaterialManager,
-        asset_manager: &mut AssetManager,
+        asset_store: &AssetStore,
         resource_manager: &mut ResourceManager,
         camera: CameraMvpUbo,
         camera_render_data: Option<CameraRenderData>,
@@ -98,18 +99,21 @@ impl Renderer {
         let basic_sampler = self.frame_data.basic_sampler;
 
         for request in mesh_requests {
-            let mesh_asset = asset_manager
-                .get_mesh_by_handle(&request.mesh_handle)
+            let mesh_data = asset_store
+                .get::<MeshData>(request.mesh_handle)
                 .unwrap_or_else(|| {
-                    panic!("No asset found for mesh_handle: {}", request.mesh_handle.raw())
+                    panic!(
+                        "No asset found for mesh_handle: {}",
+                        request.mesh_handle
+                    )
                 });
 
             model_matrices.push(request.transform.get_model_matrix());
 
             let gpu_mesh_data = resource_manager.get_or_create_mesh(
                 vulkan_backend,
-                mesh_asset.id.raw(),
-                mesh_asset.data.mesh.clone(),
+                request.mesh_handle,
+                mesh_data,
             );
 
             let material_bindings = material_manager.get_material_data(request.material_handle);
@@ -121,7 +125,7 @@ impl Renderer {
                 material_bindings,
                 &shader_variant.name,
                 resource_manager,
-                asset_manager,
+                asset_store,
                 basic_sampler,
             );
 

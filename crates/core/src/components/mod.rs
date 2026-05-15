@@ -1,5 +1,5 @@
 use crate::types::transform::Transform;
-use assets::MeshHandle;
+use common::MeshHandle;
 use ecs::component::Component;
 use material::material_manager::MaterialHandle;
 use nalgebra_glm::Vec3;
@@ -32,7 +32,7 @@ impl MeshComponent {
     }
 }
 
-#[derive(Clone, Component)]
+#[derive(Clone, Debug, Component)]
 pub struct MaterialComponent {
     pub material_handle: MaterialHandle,
 }

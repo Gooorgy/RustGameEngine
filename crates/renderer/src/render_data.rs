@@ -1,4 +1,3 @@
-use assets::MeshHandle;
 use core::types::transform::Transform;
 use core::{
     CameraComponent, DirectionalLightComponent, MaterialComponent, MeshComponent,
@@ -7,6 +6,7 @@ use core::{
 use ecs::world::World;
 use material::material_manager::MaterialHandle;
 use nalgebra_glm::{Mat4, Vec3};
+use common::MeshHandle;
 
 /// A request to render a mesh with a specific transform and material.
 #[derive(Clone)]

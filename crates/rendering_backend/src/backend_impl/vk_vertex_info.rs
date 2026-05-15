@@ -1,6 +1,6 @@
-use crate::vertex::Vertex;
 use ash::vk;
 use std::mem::offset_of;
+use common::Vertex;
 
 pub struct VulkanVertexInfo;
 

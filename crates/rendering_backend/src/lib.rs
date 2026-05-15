@@ -7,4 +7,3 @@ pub mod memory;
 pub mod pipeline;
 pub mod sampler;
 pub mod transform;
-pub mod vertex;

@@ -1,4 +1,5 @@
-use crate::{AssetMeta, Guid, Project};
+use crate::{AssetMeta, Project};
+use common::Guid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;

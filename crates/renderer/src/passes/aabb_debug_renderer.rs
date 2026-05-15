@@ -13,7 +13,7 @@ use rendering_backend::pipeline::{
     DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology,
     RasterizationStateDesc, VertexInputDesc,
 };
-use rendering_backend::vertex::Vertex;
+use common::Vertex;
 
 /// Axis-aligned bounding box passed to the debug renderer for wireframe drawing.
 pub struct DebugBox {

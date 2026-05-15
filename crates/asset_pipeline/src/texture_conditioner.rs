@@ -1,4 +1,5 @@
-use assets::{load_image, write_etex};
+use assets::write_etex;
+use common::ImageData;
 use std::fmt;
 use std::path::Path;
 
@@ -24,13 +25,19 @@ impl fmt::Display for TextureConditionError {
 }
 
 impl From<std::io::Error> for TextureConditionError {
-    fn from(e: std::io::Error) -> Self { TextureConditionError::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        TextureConditionError::Io(e)
+    }
 }
 impl From<image::ImageError> for TextureConditionError {
-    fn from(e: image::ImageError) -> Self { TextureConditionError::Image(e) }
+    fn from(e: image::ImageError) -> Self {
+        TextureConditionError::Image(e)
+    }
 }
 impl From<assets::EtexError> for TextureConditionError {
-    fn from(e: assets::EtexError) -> Self { TextureConditionError::Write(e) }
+    fn from(e: assets::EtexError) -> Self {
+        TextureConditionError::Write(e)
+    }
 }
 
 pub struct TextureConditioner;
@@ -43,14 +50,34 @@ impl TextureConditioner {
         match src_path.extension().and_then(|e| e.to_str()) {
             Some("png" | "jpg" | "jpeg" | "hdr" | "exr" | "bmp" | "tga") => {}
             Some(ext) => return Err(TextureConditionError::UnsupportedFormat(ext.to_string())),
-            None => return Err(TextureConditionError::UnsupportedFormat("(none)".to_string())),
+            None => {
+                return Err(TextureConditionError::UnsupportedFormat(
+                    "(none)".to_string(),
+                ))
+            }
         }
 
-        let image = load_image(src_path)?;
+        let image = Self::load_image(src_path)?;
         if let Some(parent) = dst_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        write_etex(dst_path, &image.image_data, image.width, image.height)?;
+        write_etex(dst_path, &image)?;
         Ok(())
+    }
+
+    fn load_image<P>(path: P) -> Result<ImageData, image::ImageError>
+    where
+        P: AsRef<Path>,
+    {
+        let dyn_image = image::open(path)?;
+        let image_width = dyn_image.width();
+        let image_height = dyn_image.height();
+        let image_data = dyn_image.to_rgba8().into_raw();
+
+        Ok(ImageData {
+            pixels: image_data,
+            width: image_width,
+            height: image_height,
+        })
     }
 }

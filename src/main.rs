@@ -4,7 +4,7 @@ use core::components::{
     MeshComponent, TransformComponent,
 };
 use core::types::transform::Transform;
-use ecs::systems::System;
+use core::system::System;
 use input::{AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode};
 use nalgebra_glm::vec3;
 use spatial::{ColliderComponent, Shape};
@@ -15,37 +15,37 @@ fn main() {
     {
         let ctx = app.engine_context_mut();
 
-        ctx.input()
+        ctx.input_mut()
             .bind_action("move_forward", vec![InputBinding::Key(KeyCode::W)]);
-        ctx.input()
+        ctx.input_mut()
             .bind_action("move_backward", vec![InputBinding::Key(KeyCode::S)]);
-        ctx.input()
+        ctx.input_mut()
             .bind_action("move_left", vec![InputBinding::Key(KeyCode::A)]);
-        ctx.input()
+        ctx.input_mut()
             .bind_action("move_right", vec![InputBinding::Key(KeyCode::D)]);
 
-        ctx.input().bind_axis(
+        ctx.input_mut().bind_axis(
             AxisAction::HORIZONTAL,
             AxisBinding::Composite {
                 positive: InputAction::from("move_right"),
                 negative: InputAction::from("move_left"),
             },
         );
-        ctx.input().bind_axis(
+        ctx.input_mut().bind_axis(
             AxisAction::VERTICAL,
             AxisBinding::Composite {
                 positive: InputAction::from("move_forward"),
                 negative: InputAction::from("move_backward"),
             },
         );
-        ctx.input().bind_axis(
+        ctx.input_mut().bind_axis(
             AxisAction::MOUSE_X,
             AxisBinding::Analog {
                 source: AnalogSource::MouseX,
                 sensitivity: 5.0,
             },
         );
-        ctx.input().bind_axis(
+        ctx.input_mut().bind_axis(
             AxisAction::MOUSE_Y,
             AxisBinding::Analog {
                 source: AnalogSource::MouseY,
@@ -54,10 +54,9 @@ fn main() {
         );
 
         let (floor_mesh, cube_mesh, mat) = {
-            let ac = ctx.asset_context();
-            let floor = ac.load_mesh("resources\\models\\floor.obj");
-            let cube = ac.load_mesh("resources\\models\\cube.obj");
-            let mat = ac.load_material("resources\\materials\\brick.emat");
+            let floor = ctx.asset_context().load_mesh("resources\\models\\floor.obj");
+            let cube = ctx.asset_context().load_mesh("resources\\models\\cube.obj");
+            let mat = ctx.load_material("resources\\materials\\brick.emat");
             (floor, cube, mat)
         };
 
@@ -129,9 +128,7 @@ fn main() {
             },
         ));
 
-        setup
-            .world
-            .register_system(Box::new(System::new(core::systems::basic_camera_system)));
+        ctx.register_system(Box::new(System::new(core::systems::basic_camera_system)));
     }
 
     app.run();

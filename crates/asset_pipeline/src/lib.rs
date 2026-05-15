@@ -1,5 +1,6 @@
 pub mod emat;
 pub mod mesh_conditioner;
+mod shader;
 pub mod texture_conditioner;
 
 pub use emat::{EmatError, EmatFile};

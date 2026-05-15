@@ -70,7 +70,7 @@ impl Engine {
         self.last_frame_time = Instant::now();
 
         {
-            let mut input = self.context.input();
+            let input = self.context.input_mut();
             input.update();
             if input.is_key_just_pressed(input::KeyCode::F3) {
                 self.renderer.toggle_aabb_debug();
@@ -95,9 +95,6 @@ impl Engine {
 
         let directional_light = render_data.directional_light;
 
-        let mut asset_manager = self.context.assets();
-        let mut material_manager = self.context.materials();
-
         let debug_boxes = self
             .context
             .get_spatial_world()
@@ -105,11 +102,13 @@ impl Engine {
             .map(|aabb| DebugBox { max: aabb.upper, min: aabb.lower })
             .collect::<Vec<_>>();
 
+        let (asset_store, material_manager) = self.context.render_resources_mut();
+
         self.renderer.draw_frame(
             &mut self.vulkan_backend,
             &render_data.mesh_requests,
-            &mut material_manager,
-            &mut asset_manager,
+            material_manager,
+            asset_store,
             &mut self.resource_manager,
             camera_ubo,
             camera_render_data,
@@ -139,7 +138,7 @@ impl Engine {
 
     /// Forwards a winit device event to the input manager.
     pub fn handle_device_event(&mut self, event: DeviceEvent) {
-        let mut input = self.context.input();
+        let input = self.context.input_mut();
 
         match event {
             DeviceEvent::MouseMotion { delta } => {
