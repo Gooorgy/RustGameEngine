@@ -1,10 +1,12 @@
 pub mod emat;
 pub mod mesh_conditioner;
 mod shader;
+pub mod shader_conditioner;
 pub mod texture_conditioner;
 
 pub use emat::{EmatError, EmatFile};
 pub use mesh_conditioner::{MeshConditionError, MeshConditioner};
+pub use shader_conditioner::{ShaderConditionError, ShaderConditioner};
 pub use texture_conditioner::{TextureConditionError, TextureConditioner};
 
 use project::{AssetRegistry, AssetType, Project};
@@ -31,6 +33,17 @@ pub fn cook_pending(registry: &AssetRegistry, project: &Project) {
                 let dst = project.cooked_path(&record.guid, "etex");
                 match TextureConditioner::condition(&src, &dst) {
                     Ok(()) => println!("cooked texture: {}", record.source_path.display()),
+                    Err(e) => eprintln!(
+                        "warning: failed to cook '{}': {}",
+                        record.source_path.display(),
+                        e
+                    ),
+                }
+            }
+            AssetType::Shader => {
+                let src = project.content_dir.join(&record.source_path);
+                match ShaderConditioner::condition(&src, record.guid, &project.cache_dir) {
+                    Ok(()) => println!("cooked shader: {}", record.source_path.display()),
                     Err(e) => eprintln!(
                         "warning: failed to cook '{}': {}",
                         record.source_path.display(),

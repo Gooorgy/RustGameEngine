@@ -16,3 +16,4 @@ nalgebra-glm = { workspace = true }
 tobj = "4.0.2"
 gltf = { version = "1", features = ["import"] }
 image = { workspace = true }
+spirq = "1.2.2"
