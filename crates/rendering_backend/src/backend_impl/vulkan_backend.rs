@@ -290,7 +290,6 @@ impl VulkanBackend {
             .flush_pending(&self.device_info.logical_device);
 
         unsafe {
-
             let (swapchain_image_index, _) = self
                 .swapchain_info
                 .swapchain_device
@@ -397,6 +396,7 @@ impl VulkanBackend {
             .wait_semaphore_infos(&wait_info)
             .signal_semaphore_infos(&signal_info);
 
+        //let t = Instant::now();
         unsafe {
             self.device_info
                 .logical_device
@@ -730,13 +730,9 @@ impl VulkanBackend {
 
     pub fn draw(&self, vertex_count: u32) {
         unsafe {
-            self.device_info.logical_device.cmd_draw(
-                self.command_buffer,
-                vertex_count,
-                1,
-                0,
-                0,
-            );
+            self.device_info
+                .logical_device
+                .cmd_draw(self.command_buffer, vertex_count, 1, 0, 0);
         }
     }
 

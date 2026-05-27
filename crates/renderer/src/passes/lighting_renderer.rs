@@ -1,15 +1,21 @@
 use crate::frame_data::FrameData;
 use crate::render_data::CameraRenderData;
 use crate::render_scene::RenderScene;
+use crate::shader_loader::ShaderCache;
+use material::ShaderRef;
 use nalgebra_glm::{self as glm, Mat4, Vec3, Vec4};
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
+use rendering_backend::buffer::{BufferDesc, BufferHandle, BufferUsageFlags};
 use rendering_backend::descriptor::{
-    DescriptorValue, DescriptorWriteDesc, SampledImageInfo, ShaderStage,
+    DescriptorBinding, DescriptorLayoutDesc, DescriptorSetHandle,
+    DescriptorType, DescriptorValue, DescriptorWriteDesc, SampledImageInfo, ShaderStage,
 };
+use rendering_backend::memory::MemoryHint;
 use rendering_backend::pipeline::{
     CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode,
     PrimitiveTopology, PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
 };
+use rendering_backend::sampler::{Filter, SamplerAddressMode, SamplerDesc, SamplerHandle};
 
 const CASCADE_COUNT: usize = 4;
 const CASCADE_RESOLUTIONS: [u32; CASCADE_COUNT] = [2048, 2048, 1024, 1024];
@@ -40,19 +46,164 @@ struct ShadowPushConstants {
 pub struct LightingRenderer {
     shadow_pipeline: PipelineHandle,
     lighting_pipeline: PipelineHandle,
+    cascade_buffer: BufferHandle,
+    lighting_buffer: BufferHandle,
+    shadow_sampler: SamplerHandle,
+    shadow_descriptor_set: DescriptorSetHandle,
+    lighting_descriptor_set: DescriptorSetHandle,
 }
 
 impl LightingRenderer {
-    pub fn new(vulkan_backend: &mut VulkanBackend, frame_data: &FrameData) -> Self {
-        let shadow_pipeline_desc = PipelineDesc {
-            vertex_shader: String::from("shadow"),
+    pub fn new(
+        vulkan_backend: &mut VulkanBackend,
+        frame_data: &FrameData,
+        shader_cache: &mut ShaderCache,
+    ) -> Self {
+        let cascade_buffer = vulkan_backend.create_buffer::<Mat4>(
+            BufferDesc {
+                size: size_of::<Mat4>() * CASCADE_COUNT,
+                usage: BufferUsageFlags::UNIFORM,
+                memory_hint: MemoryHint::CPUWritable,
+            },
+            None,
+        );
+
+        let lighting_buffer = vulkan_backend.create_buffer::<LightingUbo>(
+            BufferDesc {
+                size: size_of::<LightingUbo>(),
+                usage: BufferUsageFlags::UNIFORM,
+                memory_hint: MemoryHint::CPUWritable,
+            },
+            None,
+        );
+
+        let shadow_sampler = vulkan_backend.create_sampler(SamplerDesc {
+            mag_filter: Filter::Linear,
+            min_filter: Filter::Linear,
+            address_u: SamplerAddressMode::ClampToEdge,
+            address_v: SamplerAddressMode::ClampToEdge,
+            address_w: SamplerAddressMode::ClampToEdge,
+            compare_enable: true,
+            compare_op: Some(CompareOp::Less),
+        });
+
+        let shadow_descriptor_layout =
+            vulkan_backend.create_descriptor_layout(DescriptorLayoutDesc {
+                bindings: vec![
+                    DescriptorBinding {
+                        binding: 0,
+                        descriptor_type: DescriptorType::UniformBuffer,
+                        count: 1,
+                        stages: ShaderStage::VERTEX,
+                    },
+                    DescriptorBinding {
+                        binding: 1,
+                        descriptor_type: DescriptorType::StorageBuffer,
+                        count: 1,
+                        stages: ShaderStage::VERTEX,
+                    },
+                ],
+            });
+
+        let shadow_descriptor_set =
+            vulkan_backend.allocate_descriptor_set(shadow_descriptor_layout);
+
+        vulkan_backend.update_descriptor_set(
+            shadow_descriptor_set,
+            &[
+                DescriptorWriteDesc {
+                    binding: 0,
+                    value: DescriptorValue::UniformBuffer(cascade_buffer),
+                },
+                DescriptorWriteDesc {
+                    binding: 1,
+                    value: DescriptorValue::StorageBuffer(frame_data.model_storage_buffer),
+                },
+            ],
+        );
+
+        let lighting_descriptor_layout =
+            vulkan_backend.create_descriptor_layout(DescriptorLayoutDesc {
+                bindings: vec![
+                    DescriptorBinding {
+                        binding: 0,
+                        descriptor_type: DescriptorType::UniformBuffer,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 1,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 2,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 3,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 4,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 5,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 6,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 7,
+                        descriptor_type: DescriptorType::UniformBuffer,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 8,
+                        descriptor_type: DescriptorType::UniformBuffer,
+                        count: 1,
+                        stages: ShaderStage::VERTEX | ShaderStage::FRAGMENT,
+                    },
+                    DescriptorBinding {
+                        binding: 9,
+                        descriptor_type: DescriptorType::CombinedImageSampler,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
+                ],
+            });
+
+        let lighting_descriptor_set =
+            vulkan_backend.allocate_descriptor_set(lighting_descriptor_layout);
+
+        let shadow_vert = shader_cache.load(&ShaderRef::BuiltIn("shadow".into()), &[]);
+        let quad_vert = shader_cache.load(&ShaderRef::BuiltIn("quad".into()), &[]);
+        let lighting_frag = shader_cache.load(&ShaderRef::BuiltIn("lighting".into()), &[]);
+
+        let shadow_pipeline = vulkan_backend.create_graphics_pipeline(PipelineDesc {
+            vertex_shader: shadow_vert,
             fragment_shader: None,
             push_constant_ranges: vec![PushConstantDesc {
                 stages: ShaderStage::VERTEX,
                 offset: 0,
                 size: size_of::<ShadowPushConstants>(),
             }],
-            layout: vec![frame_data.shadow_descriptor_layout],
+            layout: vec![shadow_descriptor_layout],
             color_attachments: vec![],
             depth_attachment: Some(
                 *frame_data
@@ -82,15 +233,13 @@ impl LightingRenderer {
                 attributes: vec![],
             },
             topology: PrimitiveTopology::TriangleList,
-        };
+        });
 
-        let shadow_pipeline = vulkan_backend.create_graphics_pipeline(shadow_pipeline_desc);
-
-        let lighting_pipeline_desc = PipelineDesc {
-            vertex_shader: String::from("quad"),
-            fragment_shader: Some(String::from("lighting")),
+        let lighting_pipeline = vulkan_backend.create_graphics_pipeline(PipelineDesc {
+            vertex_shader: quad_vert,
+            fragment_shader: Some(lighting_frag),
             push_constant_ranges: vec![],
-            layout: vec![frame_data.lighting_descriptor_layout],
+            layout: vec![lighting_descriptor_layout],
             color_attachments: vec![frame_data.frame_images.draw_image],
             depth_attachment: None,
             blend: None,
@@ -114,14 +263,20 @@ impl LightingRenderer {
                 attributes: vec![],
             },
             topology: PrimitiveTopology::TriangleList,
-        };
+        });
 
-        let lighting_pipeline = vulkan_backend.create_graphics_pipeline(lighting_pipeline_desc);
-
-        Self {
+        let renderer = Self {
             shadow_pipeline,
             lighting_pipeline,
-        }
+            cascade_buffer,
+            lighting_buffer,
+            shadow_sampler,
+            shadow_descriptor_set,
+            lighting_descriptor_set,
+        };
+
+        renderer.update_lighting_descriptors(vulkan_backend, frame_data);
+        renderer
     }
 
     pub fn draw_frame(
@@ -138,11 +293,11 @@ impl LightingRenderer {
             Some(c) => c,
             None => return,
         };
-        
+
         let cascades = self.compute_cascades(camera, &light.direction);
 
         let cascade_matrices: Vec<Mat4> = cascades.iter().map(|c| c.view_proj).collect();
-        vulkan_backend.update_buffer(frame_data.cascade_buffer, cascade_matrices.as_slice());
+        vulkan_backend.update_buffer(self.cascade_buffer, cascade_matrices.as_slice());
 
         let lighting_ubo = LightingUbo {
             light_direction: Vec4::new(
@@ -165,24 +320,17 @@ impl LightingRenderer {
                 cascades.get(3).map_or(0.0, |c| c.depth),
             ),
         };
-        vulkan_backend.update_buffer(frame_data.lighting_buffer, &[lighting_ubo]);
-
-        self.update_lighting_descriptors(vulkan_backend, frame_data);
+        vulkan_backend.update_buffer(self.lighting_buffer, &[lighting_ubo]);
 
         #[allow(clippy::needless_range_loop)]
         for cascade_idx in 0..CASCADE_COUNT {
             let shadow_image = &frame_data.frame_images.shadow_cascades[cascade_idx];
             let res = CASCADE_RESOLUTIONS[cascade_idx];
-            vulkan_backend.begin_rendering_with_extent(
-                &[],
-                Some(shadow_image),
-                res,
-                res,
-            );
+            vulkan_backend.begin_rendering_with_extent(&[], Some(shadow_image), res, res);
 
             vulkan_backend.bind_pipeline(self.shadow_pipeline);
             vulkan_backend
-                .bind_descriptor_sets(&[frame_data.shadow_descriptor_set], self.shadow_pipeline);
+                .bind_descriptor_sets(&[self.shadow_descriptor_set], self.shadow_pipeline);
 
             for (object_index, mesh_data) in render_scene.meshes.iter().enumerate() {
                 let push = ShadowPushConstants {
@@ -213,14 +361,10 @@ impl LightingRenderer {
         vulkan_backend.transition_image(frame_data.frame_images.gbuffer_depth, true);
 
         vulkan_backend.begin_rendering(&[frame_data.frame_images.draw_image], None);
-
         vulkan_backend.bind_pipeline(self.lighting_pipeline);
-        vulkan_backend.bind_descriptor_sets(
-            &[frame_data.lighting_descriptor_set],
-            self.lighting_pipeline,
-        );
+        vulkan_backend
+            .bind_descriptor_sets(&[self.lighting_descriptor_set], self.lighting_pipeline);
         vulkan_backend.draw(3);
-
         vulkan_backend.end_rendering();
     }
 
@@ -232,7 +376,7 @@ impl LightingRenderer {
         let writes = vec![
             DescriptorWriteDesc {
                 binding: 0,
-                value: DescriptorValue::UniformBuffer(frame_data.lighting_buffer),
+                value: DescriptorValue::UniformBuffer(self.lighting_buffer),
             },
             DescriptorWriteDesc {
                 binding: 1,
@@ -259,26 +403,26 @@ impl LightingRenderer {
                 binding: 4,
                 value: DescriptorValue::SampledImage(SampledImageInfo {
                     image: frame_data.frame_images.shadow_cascades[0],
-                    sampler: frame_data.shadow_sampler,
+                    sampler: self.shadow_sampler,
                 }),
             },
             DescriptorWriteDesc {
                 binding: 5,
                 value: DescriptorValue::SampledImage(SampledImageInfo {
                     image: frame_data.frame_images.shadow_cascades[1],
-                    sampler: frame_data.shadow_sampler,
+                    sampler: self.shadow_sampler,
                 }),
             },
             DescriptorWriteDesc {
                 binding: 6,
                 value: DescriptorValue::SampledImage(SampledImageInfo {
                     image: frame_data.frame_images.shadow_cascades[2],
-                    sampler: frame_data.shadow_sampler,
+                    sampler: self.shadow_sampler,
                 }),
             },
             DescriptorWriteDesc {
                 binding: 7,
-                value: DescriptorValue::UniformBuffer(frame_data.cascade_buffer),
+                value: DescriptorValue::UniformBuffer(self.cascade_buffer),
             },
             DescriptorWriteDesc {
                 binding: 8,
@@ -288,12 +432,12 @@ impl LightingRenderer {
                 binding: 9,
                 value: DescriptorValue::SampledImage(SampledImageInfo {
                     image: frame_data.frame_images.shadow_cascades[3],
-                    sampler: frame_data.shadow_sampler,
+                    sampler: self.shadow_sampler,
                 }),
             },
         ];
 
-        vulkan_backend.update_descriptor_set(frame_data.lighting_descriptor_set, &writes);
+        vulkan_backend.update_descriptor_set(self.lighting_descriptor_set, &writes);
     }
 
     fn compute_cascades(&self, camera: &CameraRenderData, light_dir: &Vec3) -> Vec<Cascade> {
@@ -319,7 +463,6 @@ impl LightingRenderer {
             let split_near = splits[i];
             let split_far = splits[i + 1];
 
-            // Build sub-frustum projection
             let sub_proj = glm::perspective_rh_zo(
                 camera.aspect_ratio,
                 camera.fov.to_radians(),
@@ -329,7 +472,6 @@ impl LightingRenderer {
 
             let sub_inv_vp = glm::inverse(&(sub_proj * camera.view));
 
-            // NDC corners of the frustum
             let ndc_corners = [
                 Vec4::new(-1.0, -1.0, 0.0, 1.0),
                 Vec4::new(1.0, -1.0, 0.0, 1.0),
@@ -341,26 +483,24 @@ impl LightingRenderer {
                 Vec4::new(-1.0, 1.0, 1.0, 1.0),
             ];
 
-            // Frustum to world space
             let mut world_corners = [Vec3::zeros(); 8];
             for (j, ndc) in ndc_corners.iter().enumerate() {
                 let world = sub_inv_vp * ndc;
                 world_corners[j] =
                     Vec3::new(world.x / world.w, world.y / world.w, world.z / world.w);
             }
-            
+
             let mut center = Vec3::zeros();
             for corner in &world_corners {
                 center += corner;
             }
             center /= 8.0;
-            
+
             let mut radius = 0.0f32;
             for corner in &world_corners {
                 let dist = glm::length(&(corner - center));
                 radius = radius.max(dist);
             }
-            // Round texel size
             radius = (radius * 16.0).ceil() / 16.0;
 
             let light_dir_norm = glm::normalize(light_dir);
@@ -373,7 +513,6 @@ impl LightingRenderer {
 
             let mut shadow_vp = light_proj * light_view;
 
-            // Texel snapping
             let snap_res = CASCADE_RESOLUTIONS[i] as f32;
             let shadow_origin = shadow_vp * Vec4::new(0.0, 0.0, 0.0, 1.0);
             let shadow_origin_snapped = Vec4::new(

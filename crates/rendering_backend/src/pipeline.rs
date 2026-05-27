@@ -13,8 +13,8 @@ pub enum PrimitiveTopology {
 
 #[derive(Clone, Debug)]
 pub struct PipelineDesc {
-    pub vertex_shader: String,
-    pub fragment_shader: Option<String>,
+    pub vertex_shader: Vec<u8>,
+    pub fragment_shader: Option<Vec<u8>>,
     pub layout: Vec<DescriptorLayoutHandle>,
     pub vertex_input: VertexInputDesc,
     pub rasterization: RasterizationStateDesc,

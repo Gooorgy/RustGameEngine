@@ -291,6 +291,10 @@ impl AssetType {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+fn shader_cooked_path(project: &Project, guid: &Guid) -> std::path::PathBuf {
+    project.cache_dir.join("shaders").join(format!("{}.spv", guid))
+}
+
 fn resolve_status(
     project: &Project,
     guid: &Guid,
@@ -299,11 +303,14 @@ fn resolve_status(
     import_hash: u64,
     previous: Option<&AssetRegistry>,
 ) -> AssetStatus {
-    let Some(ext) = asset_type.cooked_extension() else {
-        return AssetStatus::Fresh; // not a cooked asset type
+    let cooked_exists = if asset_type == AssetType::Shader {
+        shader_cooked_path(project, guid).exists()
+    } else {
+        let Some(ext) = asset_type.cooked_extension() else {
+            return AssetStatus::Fresh;
+        };
+        project.cooked_path(guid, ext).exists()
     };
-
-    let cooked_exists = project.cooked_path(guid, ext).exists();
 
     if let Some(prev) = previous.and_then(|r| r.records.get(guid)) {
         if source_hash != prev.source_hash || import_hash != prev.import_hash {
@@ -325,14 +332,15 @@ fn resolve_status(
 /// Status used when loading from `.assetdb` — trusts stored hashes, only
 /// checks whether cooked output still exists on disk.
 fn cooked_status(project: &Project, guid: &Guid, asset_type: AssetType) -> AssetStatus {
-    let Some(ext) = asset_type.cooked_extension() else {
-        return AssetStatus::Fresh;
-    };
-    if project.cooked_path(guid, ext).exists() {
-        AssetStatus::Fresh
+    let exists = if asset_type == AssetType::Shader {
+        shader_cooked_path(project, guid).exists()
     } else {
-        AssetStatus::Uncooked
-    }
+        let Some(ext) = asset_type.cooked_extension() else {
+            return AssetStatus::Fresh;
+        };
+        project.cooked_path(guid, ext).exists()
+    };
+    if exists { AssetStatus::Fresh } else { AssetStatus::Uncooked }
 }
 
 fn parse_hash(s: &str) -> u64 {

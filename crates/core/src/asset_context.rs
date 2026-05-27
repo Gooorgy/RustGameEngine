@@ -63,14 +63,19 @@ impl AssetContext {
     pub fn build_material<P: AsRef<Path>>(
         &mut self,
         path: P,
-    ) -> (Box<dyn Material>, Option<Guid>) {
+    ) -> (Material, Option<Guid>) {
         let path = path.as_ref();
+        let abs = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.project.root.join(path)
+        };
         let rel = self.to_rel(path);
         let guid = self.registry.find_by_source_path(&rel).map(|r| r.guid);
 
-        let mat = EmatFile::load(path)
+        let mat = EmatFile::load(&abs)
             .and_then(|f| f.build_material(&self.project, &self.registry, &mut self.asset_store))
-            .unwrap_or_else(|e| panic!("failed to load material '{}': {}", path.display(), e));
+            .unwrap_or_else(|e| panic!("failed to load material '{}': {}", abs.display(), e));
 
         (mat, guid)
     }

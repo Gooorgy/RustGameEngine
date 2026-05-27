@@ -1,0 +1,7 @@
+type = "pbr"
+
+[params]
+base_color = { texture = "10000000-0000-0000-0000-000000000001" }
+roughness  = { value = 0.8 }
+metallic   = { value = 0.0 }
+specular   = { value = 0.0 }

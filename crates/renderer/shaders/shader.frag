@@ -12,15 +12,15 @@ layout(location = 1) in vec2 fragTexCoord;
 layout(location = 3) in vec3 inNormal;
 layout(location = 2) in vec3 inPos;
 
-#ifdef HAS_BASE_COLOR
+#ifdef HAS_COLOR_TEXTURE
 layout(set = 1, binding = 0) uniform sampler2D baseColor;
 #endif
 
-#ifdef HAS_NORMAL
+#ifdef HAS_NORMAL_TEXTURE
 layout(set = 1, binding = 1) uniform sampler2D normal;
 #endif
 
-#ifdef HAS_ORM
+#ifdef HAS_ORM_TEXTURE
 layout(set = 1, binding = 2) uniform sampler2D orm;
 #endif
 
@@ -36,19 +36,19 @@ layout(push_constant) uniform MaterialConstants {
 
 
 void main() {
-    #ifdef HAS_BASE_COLOR
+    #ifdef HAS_COLOR_TEXTURE
     outColor = texture(baseColor, fragTexCoord);
     #else
     outColor = pc.baseColor;
     #endif
 
-    #ifdef HAS_NORMAL
+    #ifdef HAS_NORMAL_TEXTURE
     outNormal = texture(normal, fragTexCoord);
     #else
     outNormal = vec4(inNormal, 0);
     #endif
 
-    #ifdef HAS_ORM
+    #ifdef HAS_ORM_TEXTURE
     outOrm = texture(orm, fragTexCoord);
     #else
     outOrm = vec4(pc.roughness, pc.metallic, pc.occlusion, pc.speccular);

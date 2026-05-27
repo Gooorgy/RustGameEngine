@@ -4,3 +4,4 @@ mod passes;
 pub mod render_data;
 mod render_scene;
 pub mod renderer;
+mod shader_loader;

@@ -1,7 +1,7 @@
 use core::EngineContext;
 use renderer::frame_data::{Resolution, ResolutionSettings};
 use renderer::render_data::RenderDataCollector;
-use renderer::renderer::{DebugBox, Renderer};
+use renderer::renderer::{DebugBox, Renderer, RendererConfig};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
@@ -36,17 +36,20 @@ impl Engine {
 
         let renderer = Renderer::new(
             &mut vulkan_backend,
-            ResolutionSettings {
-                window_resolution: Resolution {
-                    width: size.width,
-                    height: size.height,
+            RendererConfig {
+                resolution_settings: ResolutionSettings {
+                    window_resolution: Resolution {
+                        width: size.width,
+                        height: size.height,
+                    },
+                    shadow_resolutions: vec![
+                        Resolution { width: 2048, height: 2048 },
+                        Resolution { width: 2048, height: 2048 },
+                        Resolution { width: 1024, height: 1024 },
+                        Resolution { width: 1024, height: 1024 },
+                    ],
                 },
-                shadow_resolutions: vec![
-                    Resolution { width: 2048, height: 2048 },
-                    Resolution { width: 2048, height: 2048 },
-                    Resolution { width: 1024, height: 1024 },
-                    Resolution { width: 1024, height: 1024 },
-                ],
+                asset_cache_dir: context.shader_cache_dir(),
             },
         );
 

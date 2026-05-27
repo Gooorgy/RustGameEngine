@@ -25,8 +25,16 @@ impl App {
     pub fn new() -> Self {
         let project_path = find_project_file()
             .expect("no .eproj file found in the current directory");
-        let project = Project::load(&project_path)
-            .unwrap_or_else(|e| panic!("failed to load '{}': {}", project_path.display(), e));
+        Self::with_project(project_path)
+    }
+
+    /// Loads a project from an explicit `.eproj` path. Useful when the binary is
+    /// not run from the project root directory, or when the workspace contains
+    /// multiple projects.
+    pub fn with_project(path: impl AsRef<std::path::Path>) -> Self {
+        let path = path.as_ref();
+        let project = Project::load(path)
+            .unwrap_or_else(|e| panic!("failed to load '{}': {}", path.display(), e));
         let registry = AssetRegistry::scan(&project, None)
             .expect("failed to scan project content directory");
         cook_pending(&registry, &project);

@@ -42,7 +42,9 @@ pub fn cook_pending(registry: &AssetRegistry, project: &Project) {
             }
             AssetType::Shader => {
                 let src = project.content_dir.join(&record.source_path);
-                match ShaderConditioner::condition(&src, record.guid, &project.cache_dir) {
+                let shader_cache_dir = project.cache_dir.join("shaders");
+                let _ = std::fs::create_dir_all(&shader_cache_dir);
+                match ShaderConditioner::condition(&src, record.guid, &shader_cache_dir) {
                     Ok(()) => println!("cooked shader: {}", record.source_path.display()),
                     Err(e) => eprintln!(
                         "warning: failed to cook '{}': {}",

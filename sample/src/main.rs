@@ -3,14 +3,12 @@ use core::components::{
     CameraComponent, CameraControllerComponent, DirectionalLightComponent, MaterialComponent,
     MeshComponent, TransformComponent,
 };
-use core::types::transform::Transform;
 use core::system::System;
+use core::types::transform::Transform;
 use input::{AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode};
 use nalgebra_glm::vec3;
-use spatial::{ColliderComponent, Shape};
-
 fn main() {
-    let mut app = App::new();
+    let mut app = App::with_project("sample/sample.eproj");
 
     {
         let ctx = app.engine_context_mut();
@@ -53,57 +51,53 @@ fn main() {
             },
         );
 
-        let (floor_mesh, cube_mesh, mat) = {
-            let floor = ctx.asset_context().load_mesh("resources\\models\\floor.obj");
+        let (floor_mesh, cube_mesh, mat, mat2) = {
+            let floor = ctx
+                .asset_context()
+                .load_mesh("resources\\models\\floor.obj");
             let cube = ctx.asset_context().load_mesh("resources\\models\\cube.obj");
             let mat = ctx.load_material("resources\\materials\\brick.emat");
-            (floor, cube, mat)
+            let mat2 = ctx.load_material("resources\\materials\\scroll.emat");
+            (floor, cube, mat, mat2)
         };
 
         let setup = ctx.world_setup();
 
-        let collider = setup.spatial.register_collider(Shape::Sphere { radius: 1.0 });
-        let collider2 = setup.spatial.register_collider(Shape::Sphere { radius: 2.0 });
-        let collider3 = setup.spatial.register_collider(Shape::Sphere { radius: 1.0 });
-
         setup.world.create_entity((
             TransformComponent(Transform::default()),
-            MeshComponent { mesh_handle: floor_mesh },
-            MaterialComponent { material_handle: mat },
+            MeshComponent {
+                mesh_handle: floor_mesh,
+            },
+            MaterialComponent {
+                material_handle: mat,
+            },
         ));
 
-        setup.world.create_entity((
-            TransformComponent(
-                Transform::default()
-                    .with_location(vec3(0.0, 1.0, 0.0))
-                    .with_scale(vec3(1.0, 1.0, 1.0)),
-            ),
-            MeshComponent { mesh_handle: cube_mesh },
-            MaterialComponent { material_handle: mat },
-            ColliderComponent { id: collider },
-        ));
+        let mut iteration = 0;
+        // 10x10x10 grid = 1000 cubes, 3-unit spacing
+        for x in 0..2i32 {
+            for y in 0..2i32 {
+                for z in 0..2i32 {
+                    let selected = if iteration % 2 == 0 { mat } else { mat2 };
 
-        setup.world.create_entity((
-            TransformComponent(
-                Transform::default()
-                    .with_location(vec3(0.0, 1.0, 5.0))
-                    .with_scale(vec3(2.0, 2.0, 2.0)),
-            ),
-            MeshComponent { mesh_handle: cube_mesh },
-            MaterialComponent { material_handle: mat },
-            ColliderComponent { id: collider2 },
-        ));
+                    setup.world.create_entity((
+                        TransformComponent(Transform::default().with_location(vec3(
+                            x as f32 * 3.0,
+                            1.0 + y as f32 * 3.0,
+                            z as f32 * 3.0,
+                        ))),
+                        MeshComponent {
+                            mesh_handle: cube_mesh,
+                        },
+                        MaterialComponent {
+                            material_handle: selected,
+                        },
+                    ));
 
-        setup.world.create_entity((
-            TransformComponent(
-                Transform::default()
-                    .with_location(vec3(8.0, 12.0, 10.0))
-                    .with_scale(vec3(1.0, 1.0, 1.0)),
-            ),
-            MeshComponent { mesh_handle: cube_mesh },
-            MaterialComponent { material_handle: mat },
-            ColliderComponent { id: collider3 },
-        ));
+                    iteration += 1;
+                }
+            }
+        }
 
         setup.world.create_entity((
             TransformComponent(Transform::default()),

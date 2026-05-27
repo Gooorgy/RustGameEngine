@@ -5,10 +5,7 @@ use crate::backend_impl::vk_vertex_info::VulkanVertexInfo;
 use crate::pipeline::{PipelineDesc, PrimitiveTopology};
 use ash::vk;
 use ash::vk::{DynamicState, PipelineDynamicStateCreateInfo};
-use std::{ffi::CString, fs, io, path::Path, ptr};
-
-const SHADER_PATH: &str = ".\\resources\\shaders";
-const SHADER_EXTENSION: &str = ".spv";
+use std::{ffi::CString, ptr};
 
 #[derive(Clone)]
 
@@ -23,11 +20,8 @@ impl PipelineInfo {
         desc: PipelineDesc,
         resource_registry: &ResourceRegistry,
     ) -> Self {
-        let vert_shader_code =
-            Self::read_shader_file(&desc.vertex_shader).expect("Unable to read vertex file");
-
         let vert_shader_module =
-            Self::create_shader_module(&vert_shader_code, &device.logical_device);
+            Self::create_shader_module(&desc.vertex_shader, &device.logical_device);
 
         let shader_name = CString::new("main").unwrap();
 
@@ -37,17 +31,15 @@ impl PipelineInfo {
             .name(&shader_name);
 
         let mut shader_stages = vec![vert_shader_stage_create_info];
+        let mut frag_shader_module = None;
 
         if let Some(fragment_shader) = desc.fragment_shader {
-            let frag_shader_code =
-                Self::read_shader_file(&fragment_shader).expect("Unable to read fragment shader");
-
-            let frag_shader_module =
-                Self::create_shader_module(&frag_shader_code, &device.logical_device);
+            let module = Self::create_shader_module(&fragment_shader, &device.logical_device);
+            frag_shader_module = Some(module);
 
             let frag_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::default()
                 .stage(vk::ShaderStageFlags::FRAGMENT)
-                .module(frag_shader_module)
+                .module(module)
                 .name(&shader_name);
 
             shader_stages.push(frag_shader_stage_create_info);
@@ -201,12 +193,10 @@ impl PipelineInfo {
         };
 
         unsafe {
-            device
-                .logical_device
-                .destroy_shader_module(vert_shader_module, None);
-            // device
-            //     .logical_device
-            //     .destroy_shader_module(frag_shader_module, None);
+            device.logical_device.destroy_shader_module(vert_shader_module, None);
+            if let Some(module) = frag_shader_module {
+                device.logical_device.destroy_shader_module(module, None);
+            }
         };
 
         Self {
@@ -896,14 +886,7 @@ impl PipelineInfo {
     //         pipeline_layout,
     //     }
     // }
-
-    fn read_shader_file(shader_name: &str) -> Result<Vec<u8>, io::Error> {
-        let path = Path::new(SHADER_PATH).join(format!("{}{}", shader_name, SHADER_EXTENSION));
-
-        println!("{:?}", path);
-        fs::read(path)
-    }
-
+    
     fn create_shader_module(code: &[u8], device: &ash::Device) -> vk::ShaderModule {
         unsafe {
             let (_prefix, shorts, _suffix) = code.align_to::<u32>();

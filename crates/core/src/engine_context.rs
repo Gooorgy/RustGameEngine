@@ -8,7 +8,7 @@ use material::material_manager::{MaterialHandle, MaterialManager};
 use project::{AssetRegistry, Guid, Project};
 use spatial::{ColliderComponent, SpatialWorld};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Provides simultaneous mutable access to both worlds, avoiding split-borrow issues.
 pub struct WorldSetup<'a> {
@@ -71,6 +71,12 @@ impl EngineContext {
     }
 
     // ── Renderer-facing accessors ──────────────────────────────────────────
+
+    /// Returns the directory where the shader conditioner writes compiled asset shaders.
+    /// Pass this to `RendererConfig::asset_cache_dir` when constructing the renderer.
+    pub fn shader_cache_dir(&self) -> PathBuf {
+        self.assets.project.cache_dir.join("shaders")
+    }
 
     pub fn asset_store(&self) -> &AssetStore {
         self.assets.store()

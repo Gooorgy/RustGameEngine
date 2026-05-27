@@ -1,58 +1,34 @@
+use common::{Guid, ImageHandle};
 use nalgebra_glm::{vec4, Vec4};
 use serde::Serialize;
-use common::ImageHandle;
 
-pub trait Material {
-    fn get_bindings(&self) -> Vec<MaterialParameterBinding>;
-    fn get_push_constants(&self) -> &[u8];
-    fn get_permutation_feature(&self) -> u32;
-    fn get_shader_path(&self) -> String;
+/// Identifies a shader for one stage of a material pass.
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum ShaderRef {
+    /// Engine built-in, loaded by name from the engine shader directory. No GUID, no asset registry.
+    BuiltIn(String),
+    /// User shader asset cooked by the conditioner. GUID identifies the manifest; active defines select the variant.
+    Asset(Guid),
 }
 
-impl Material for Box<dyn Material> {
-    fn get_bindings(&self) -> Vec<MaterialParameterBinding> { (**self).get_bindings() }
-    fn get_push_constants(&self) -> &[u8] { (**self).get_push_constants() }
-    fn get_permutation_feature(&self) -> u32 { (**self).get_permutation_feature() }
-    fn get_shader_path(&self) -> String { (**self).get_shader_path() }
+/// The runtime representation of a material instance.
+///
+/// All material types (PBR, custom) reduce to this struct after build time.
+/// The renderer uses `vertex_shader`, `fragment_shader`, and `active_defines` to
+/// select and cache the right pipeline, and `bindings` + `push_constants` for per-draw data.
+pub struct Material {
+    pub vertex_shader: ShaderRef,
+    pub fragment_shader: ShaderRef,
+    /// Permutation defines active for this instance. Matched against the shader manifest to select the compiled variant.
+    pub active_defines: Vec<String>,
+    pub bindings: Vec<MaterialParameterBinding>,
+    pub push_constants: Vec<u8>,
 }
 
-/// A data-driven material backed by a `.shader` manifest. Used for custom
-/// shaders without needing a Rust `Material` implementation.
-pub struct GenericMaterial {
-    pub shader_path: String,
-    bindings: Vec<MaterialParameterBinding>,
-    push_constants: Vec<u8>,
-}
-
-impl GenericMaterial {
-    pub fn new(
-        shader_path: String,
-        bindings: Vec<MaterialParameterBinding>,
-        push_constants: Vec<u8>,
-    ) -> Self {
-        Self { shader_path, bindings, push_constants }
-    }
-}
-
-impl Material for GenericMaterial {
-    fn get_bindings(&self) -> Vec<MaterialParameterBinding> {
-        self.bindings.clone()
-    }
-
-    fn get_push_constants(&self) -> &[u8] {
-        &self.push_constants
-    }
-
-    fn get_permutation_feature(&self) -> u32 {
-        0
-    }
-
-    fn get_shader_path(&self) -> String {
-        self.shader_path.clone()
-    }
-}
-
+/// A PBR material builder. Holds typed, named parameters and assembles them into a flat `Material`.
 pub struct PbrMaterial {
+    pub vertex_shader: ShaderRef,
+    pub fragment_shader: ShaderRef,
     pub base_color: MaterialColorParameter,
     pub normal: MaterialColorParameter,
     pub ambient_occlusion: MaterialParameter,
@@ -61,31 +37,59 @@ pub struct PbrMaterial {
     pub specular: MaterialParameter,
 }
 
-impl Material for PbrMaterial {
-    fn get_bindings(&self) -> Vec<MaterialParameterBinding> {
+impl PbrMaterial {
+    /// Consumes the builder and produces the flat runtime `Material`.
+    pub fn build(self) -> Material {
+        let active_defines = self.compute_defines();
+        let bindings = self.compute_bindings();
+        let push_constants = self.compute_push_constants();
+        Material {
+            vertex_shader: self.vertex_shader,
+            fragment_shader: self.fragment_shader,
+            active_defines,
+            bindings,
+            push_constants,
+        }
+    }
+
+    fn compute_defines(&self) -> Vec<String> {
+        let mut d = Vec::new();
+        if self.base_color.as_handle().is_some() {
+            d.push("HAS_COLOR_TEXTURE".into());
+        }
+        if self.normal.as_handle().is_some() {
+            d.push("HAS_NORMAL_TEXTURE".into());
+        }
+        if self.ambient_occlusion.as_handle().is_some()
+            || self.metallic.as_handle().is_some()
+            || self.roughness.as_handle().is_some()
+            || self.specular.as_handle().is_some()
+        {
+            d.push("HAS_ORM_TEXTURE".into());
+        }
+        d
+    }
+
+    fn compute_bindings(&self) -> Vec<MaterialParameterBinding> {
         let base_color_binding = match self.base_color {
-            MaterialColorParameter::Handle(handle) => {
-                Some(MaterialParameterBinding {
-                    index: 0,
-                    data: MaterialParameterBindingData::Texture(handle),
-                })
-            }
+            MaterialColorParameter::Handle(handle) => Some(MaterialParameterBinding {
+                index: 0,
+                data: MaterialParameterBindingData::Texture(handle),
+            }),
             _ => None,
         };
 
         let normal_binding = match self.normal {
-            MaterialColorParameter::Handle(handle) => {
-                Some(MaterialParameterBinding {
-                    index: 1,
-                    data: MaterialParameterBindingData::Texture(handle),
-                })
-            }
+            MaterialColorParameter::Handle(handle) => Some(MaterialParameterBinding {
+                index: 1,
+                data: MaterialParameterBindingData::Texture(handle),
+            }),
             _ => None,
         };
 
-        let packed_texture = if self.metallic.as_handle().is_some()
+        let packed_texture = if self.ambient_occlusion.as_handle().is_some()
+            || self.metallic.as_handle().is_some()
             || self.roughness.as_handle().is_some()
-            || self.ambient_occlusion.as_handle().is_some()
             || self.specular.as_handle().is_some()
         {
             let packed = PackedTextureData {
@@ -94,7 +98,6 @@ impl Material for PbrMaterial {
                 channel_b: self.roughness.as_handle(),
                 channel_a: self.specular.as_handle(),
             };
-
             Some(MaterialParameterBinding {
                 index: 2,
                 data: MaterialParameterBindingData::PackedTexture(packed),
@@ -109,7 +112,7 @@ impl Material for PbrMaterial {
             .collect()
     }
 
-    fn get_push_constants(&self) -> &[u8] {
+    fn compute_push_constants(&self) -> Vec<u8> {
         let data = PbrPushConstants {
             base_color: self.base_color.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
             normal: self.normal.as_constant(vec4(0.0, 0.0, 0.0, 0.0)),
@@ -126,62 +129,7 @@ impl Material for PbrMaterial {
             )
         };
 
-        bytes
-    }
-
-    fn get_permutation_feature(&self) -> u32 {
-        let mut pbr_features = PbrFeatures::NONE;
-
-        if self.base_color.as_handle().is_some() {
-            pbr_features |= PbrFeatures::HAS_COLOR_TEXTURE
-        }
-
-        if self.normal.as_handle().is_some() {
-            pbr_features |= PbrFeatures::HAS_NORMAL_TEXTURE
-        }
-
-        if self.ambient_occlusion.as_handle().is_some() {
-            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        }
-
-        if self.metallic.as_handle().is_some() {
-            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        }
-
-        if self.roughness.as_handle().is_some() {
-            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        }
-
-        if self.specular.as_handle().is_some() {
-            pbr_features |= PbrFeatures::HAS_ORM_TEXTURE
-        }
-
-        pbr_features.bits()
-    }
-
-    fn get_shader_path(&self) -> String {
-        let base_name = "pbr.frag";
-        let mut feature_name = vec![];
-        let features = PbrFeatures::from_bits(self.get_permutation_feature())
-            .expect("Failed to get permutation feature");
-
-        if features.contains(PbrFeatures::HAS_ORM_TEXTURE) {
-            feature_name.push("orm");
-        }
-
-        if features.contains(PbrFeatures::HAS_NORMAL_TEXTURE) {
-            feature_name.push("normal");
-        }
-
-        if features.contains(PbrFeatures::HAS_COLOR_TEXTURE) {
-            feature_name.push("color");
-        }
-
-        if feature_name.is_empty() {
-            return format!("{}.{}", base_name, "base");
-        }
-
-        format!("{}.{}", base_name, feature_name.join("."))
+        bytes.to_vec()
     }
 }
 
@@ -202,16 +150,16 @@ pub enum MaterialParameter {
 }
 
 impl MaterialParameter {
-    fn as_handle(&self) -> Option<ImageHandle> {
+    pub fn as_handle(&self) -> Option<ImageHandle> {
         match self {
             MaterialParameter::Handle(handle) => Some(*handle),
             _ => None,
         }
     }
 
-    fn as_constant(&self, default: f32) -> f32 {
+    pub fn as_constant(&self, default: f32) -> f32 {
         match self {
-            MaterialParameter::Constant(constant) => *constant,
+            MaterialParameter::Constant(c) => *c,
             _ => default,
         }
     }
@@ -223,16 +171,16 @@ pub enum MaterialColorParameter {
 }
 
 impl MaterialColorParameter {
-    fn as_handle(&self) -> Option<ImageHandle> {
+    pub fn as_handle(&self) -> Option<ImageHandle> {
         match self {
             MaterialColorParameter::Handle(handle) => Some(*handle),
             _ => None,
         }
     }
 
-    fn as_constant(&self, default: Vec4) -> Vec4 {
+    pub fn as_constant(&self, default: Vec4) -> Vec4 {
         match self {
-            MaterialColorParameter::Constant(constant) => *constant,
+            MaterialColorParameter::Constant(c) => *c,
             _ => default,
         }
     }
@@ -247,24 +195,15 @@ pub struct MaterialParameterBinding {
 #[derive(Clone)]
 pub enum MaterialParameterBindingData {
     Texture(ImageHandle),
+    /// Four individual texture handles to be channel-packed into a single RGBA texture at cook time
+    /// by the material conditioner. The renderer receives a single packed handle after conditioning.
     PackedTexture(PackedTextureData),
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct PackedTextureData {
-    channel_r: Option<ImageHandle>,
-    channel_g: Option<ImageHandle>,
-    channel_b: Option<ImageHandle>,
-    channel_a: Option<ImageHandle>,
-}
-
-bitflags::bitflags! {
-    #[derive(Clone, Copy, Debug)]
-    pub struct PbrFeatures: u32 {
-        const NONE = 0;
-        const HAS_COLOR_TEXTURE = 1 << 0;
-        const HAS_NORMAL_TEXTURE = 1 << 1;
-        const HAS_ORM_TEXTURE = 1 << 2;
-    }
+    pub channel_r: Option<ImageHandle>,
+    pub channel_g: Option<ImageHandle>,
+    pub channel_b: Option<ImageHandle>,
+    pub channel_a: Option<ImageHandle>,
 }

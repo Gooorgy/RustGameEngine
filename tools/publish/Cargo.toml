@@ -1,0 +1,9 @@
+[package]
+name = "publish"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+project = { path = "../../crates/project" }
+asset_pipeline = { path = "../../crates/asset_pipeline" }
+walkdir = "2.5.0"

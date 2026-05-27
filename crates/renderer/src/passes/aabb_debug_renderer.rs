@@ -1,4 +1,6 @@
 use crate::frame_data::FrameData;
+use crate::shader_loader::ShaderCache;
+use material::ShaderRef;
 use nalgebra_glm::{Mat4, Vec2, Vec3};
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::buffer::{BufferDesc, BufferHandle, BufferUsageFlags};
@@ -42,7 +44,7 @@ impl AabbDebugRenderer {
     pub fn new(vulkan_backend: &mut VulkanBackend) -> Self {
         let camera_buffer = vulkan_backend.create_buffer::<CameraMvpUbo>(
             BufferDesc {
-                size: std::mem::size_of::<CameraMvpUbo>(),
+                size: size_of::<CameraMvpUbo>(),
                 usage: BufferUsageFlags::UNIFORM,
                 memory_hint: MemoryHint::CPUWritable,
             },
@@ -52,7 +54,7 @@ impl AabbDebugRenderer {
         let identity = Mat4::identity();
         let model_buffer = vulkan_backend.create_buffer::<Mat4>(
             BufferDesc {
-                size: std::mem::size_of::<Mat4>(),
+                size: size_of::<Mat4>(),
                 usage: BufferUsageFlags::UNIFORM,
                 memory_hint: MemoryHint::CPUWritable,
             },
@@ -83,6 +85,7 @@ impl AabbDebugRenderer {
         aabbs: &[DebugBox],
         frame_data: &FrameData,
         camera: CameraMvpUbo,
+        shader_cache: &mut ShaderCache,
     ) {
         if !self.enabled || aabbs.is_empty() {
             return;
@@ -90,16 +93,15 @@ impl AabbDebugRenderer {
 
         vulkan_backend.update_buffer(self.camera_buffer, &[camera]);
 
-        let (pipeline, descriptor_set) = self.get_or_create_pipeline(vulkan_backend, frame_data);
+        let (pipeline, descriptor_set) =
+            self.get_or_create_pipeline(vulkan_backend, frame_data, shader_cache);
 
         let vertices = aabb_to_line_vertices(aabbs);
         let vertex_count = vertices.len() as u32;
 
-        let needed_size = std::mem::size_of::<Vertex>() * vertices.len();
+        let needed_size = size_of::<Vertex>() * vertices.len();
         let needs_new_buffer = self.vertex_buffer.is_none()
-            || vulkan_backend
-                .buffer_size(self.vertex_buffer.unwrap())
-                < needed_size;
+            || vulkan_backend.buffer_size(self.vertex_buffer.unwrap()) < needed_size;
 
         if needs_new_buffer {
             let vb = vulkan_backend.create_buffer::<Vertex>(
@@ -127,6 +129,7 @@ impl AabbDebugRenderer {
         &mut self,
         vulkan_backend: &mut VulkanBackend,
         frame_data: &FrameData,
+        shader_cache: &mut ShaderCache,
     ) -> (PipelineHandle, DescriptorSetHandle) {
         if let (Some(pipeline), Some(descriptor_set)) = (self.pipeline, self.descriptor_set) {
             return (pipeline, descriptor_set);
@@ -164,9 +167,12 @@ impl AabbDebugRenderer {
             ],
         );
 
+        let vert_bytes = shader_cache.load(&ShaderRef::BuiltIn("line_debug_vert".into()), &[]);
+        let frag_bytes = shader_cache.load(&ShaderRef::BuiltIn("line_debug_frag".into()), &[]);
+
         let pipeline_desc = PipelineDesc {
-            vertex_shader: String::from("line_debug_vert"),
-            fragment_shader: Some(String::from("line_debug_frag")),
+            vertex_shader: vert_bytes,
+            fragment_shader: Some(frag_bytes),
             topology: PrimitiveTopology::LineList,
             color_attachments: vec![frame_data.frame_images.draw_image],
             depth_attachment: None,
@@ -226,40 +232,26 @@ fn aabb_to_line_vertices(aabbs: &[DebugBox]) -> Vec<Vertex> {
         let bounds_min = aabb.min;
         let bounds_max = aabb.max;
 
-        // 8 corners
         let c = [
-            Vec3::new(bounds_min.x, bounds_min.y, bounds_min.z), // 0 bottom-front-left
-            Vec3::new(bounds_max.x, bounds_min.y, bounds_min.z), // 1 bottom-front-right
-            Vec3::new(bounds_max.x, bounds_min.y, bounds_max.z), // 2 bottom-back-right
-            Vec3::new(bounds_min.x, bounds_min.y, bounds_max.z), // 3 bottom-back-left
-            Vec3::new(bounds_min.x, bounds_max.y, bounds_min.z), // 4 top-front-left
-            Vec3::new(bounds_max.x, bounds_max.y, bounds_min.z), // 5 top-front-right
-            Vec3::new(bounds_max.x, bounds_max.y, bounds_max.z), // 6 top-back-right
-            Vec3::new(bounds_min.x, bounds_max.y, bounds_max.z), // 7 top-back-left
+            Vec3::new(bounds_min.x, bounds_min.y, bounds_min.z),
+            Vec3::new(bounds_max.x, bounds_min.y, bounds_min.z),
+            Vec3::new(bounds_max.x, bounds_min.y, bounds_max.z),
+            Vec3::new(bounds_min.x, bounds_min.y, bounds_max.z),
+            Vec3::new(bounds_min.x, bounds_max.y, bounds_min.z),
+            Vec3::new(bounds_max.x, bounds_max.y, bounds_min.z),
+            Vec3::new(bounds_max.x, bounds_max.y, bounds_max.z),
+            Vec3::new(bounds_min.x, bounds_max.y, bounds_max.z),
         ];
 
-        // 12 edges: 4 bottom, 4 top, 4 pillars
         let edges: [(usize, usize); 12] = [
-            (0, 1), (1, 2), (2, 3), (3, 0), // bottom face
-            (4, 5), (5, 6), (6, 7), (7, 4), // top face
-            (0, 4), (1, 5), (2, 6), (3, 7), // pillars
+            (0, 1), (1, 2), (2, 3), (3, 0),
+            (4, 5), (5, 6), (6, 7), (7, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7),
         ];
 
         for (a, b) in edges {
-            vertices.push(Vertex {
-                pos: c[a],
-                color: green,
-                tex_coord: tex,
-                normal,
-                texture_index: 0,
-            });
-            vertices.push(Vertex {
-                pos: c[b],
-                color: green,
-                tex_coord: tex,
-                normal,
-                texture_index: 0,
-            });
+            vertices.push(Vertex { pos: c[a], color: green, tex_coord: tex, normal, texture_index: 0 });
+            vertices.push(Vertex { pos: c[b], color: green, tex_coord: tex, normal, texture_index: 0 });
         }
     }
 

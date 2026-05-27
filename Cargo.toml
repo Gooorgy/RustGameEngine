@@ -1,33 +1,9 @@
-[package]
-name = "new"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-winit = "0.30.9"
-serde = { version = "1.0.204", features = ["derive"] }
-typed-arena = "2.0.2"
-image = { workspace = true }
-nalgebra = { workspace = true }
-nalgebra-glm = { workspace = true }
-rendering_backend = { path = "crates/rendering_backend" }
-app = { path = "crates/app" }
-assets = { path = "crates/assets" }
-material = { path = "crates/material" }
-core = { path = "crates/core" }
-ecs = { path = "crates/ecs" }
-input = { path = "crates/input" }
-spatial = { path = "crates/spatial" }
-project = { path = "crates/project" }
-asset_pipeline = { path = "crates/asset_pipeline" }
-noise = "0.9.0"
-
-[build-dependencies]
-walkdir = "2.5.0"
-
 [workspace]
+resolver = "3"
 members = [
-    "crates/*"
+    "crates/*",
+    "sample",
+    "tools/publish",
 ]
 
 [workspace.dependencies]

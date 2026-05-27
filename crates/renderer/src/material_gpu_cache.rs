@@ -1,5 +1,5 @@
 use assets::AssetStore;
-use material::material_manager::MaterialHandle;
+use material::material_manager::{MaterialHandle, MaterialVariant};
 use material::{MaterialParameterBinding, MaterialParameterBindingData};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
@@ -10,15 +10,10 @@ use rendering_backend::descriptor::{
 use rendering_backend::sampler::SamplerHandle;
 use std::collections::HashMap;
 
-#[derive(Eq, PartialEq, Hash)]
-struct LayoutKey {
-    shader_path: String,
-}
-
 /// Maps material handles to their GPU descriptor sets and layouts.
 /// Allocates GPU resources exactly once per material and caches them for subsequent frames.
 pub struct MaterialGpuCache {
-    layout_cache: HashMap<LayoutKey, DescriptorLayoutHandle>,
+    layout_cache: HashMap<MaterialVariant, DescriptorLayoutHandle>,
     descriptor_cache: HashMap<MaterialHandle, DescriptorSetHandle>,
 }
 
@@ -37,15 +32,12 @@ impl MaterialGpuCache {
         vulkan_backend: &mut VulkanBackend,
         material_handle: MaterialHandle,
         bindings: Vec<MaterialParameterBinding>,
-        shader_path: &str,
+        variant: &MaterialVariant,
         resource_manager: &mut ResourceManager,
         asset_store: &AssetStore,
         basic_sampler: SamplerHandle,
     ) -> (DescriptorSetHandle, DescriptorLayoutHandle) {
-        let layout_key = LayoutKey {
-            shader_path: shader_path.to_owned(),
-        };
-        let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings, layout_key);
+        let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings, variant);
 
         // Return the cached set without any allocation if this material was seen before.
         if let Some(&set_handle) = self.descriptor_cache.get(&material_handle) {
@@ -93,9 +85,9 @@ impl MaterialGpuCache {
         &mut self,
         vulkan_backend: &mut VulkanBackend,
         bindings: &[MaterialParameterBinding],
-        layout_key: LayoutKey,
+        variant: &MaterialVariant,
     ) -> DescriptorLayoutHandle {
-        if let Some(&handle) = self.layout_cache.get(&layout_key) {
+        if let Some(&handle) = self.layout_cache.get(variant) {
             return handle;
         }
 
@@ -113,7 +105,7 @@ impl MaterialGpuCache {
             bindings: descriptor_bindings,
         });
 
-        self.layout_cache.insert(layout_key, handle);
+        self.layout_cache.insert(variant.clone(), handle);
         handle
     }
 }

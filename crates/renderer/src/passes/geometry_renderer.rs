@@ -1,5 +1,6 @@
 use crate::frame_data::FrameData;
 use crate::render_scene::{MaterialData, RenderScene};
+use crate::shader_loader::ShaderCache;
 use material::material_manager::MaterialVariant;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::descriptor::ShaderStage;
@@ -17,8 +18,6 @@ const FRAGMENT_PUSH_CONSTANT_OFFSET: u32 = 16;
 
 pub struct GeometryRenderer {
     pub pipeline_cache: HashMap<MaterialVariant, PipelineHandle>,
-    // pub bound_pipeline_handle: Option<PipelineHandle>,
-    // pub bound_descriptor_sets: Vec<DescriptorSetHandle>,
 }
 
 impl GeometryRenderer {
@@ -33,6 +32,7 @@ impl GeometryRenderer {
         vulkan_backend: &mut VulkanBackend,
         render_scene: &RenderScene,
         frame_data: &FrameData,
+        shader_cache: &mut ShaderCache,
     ) {
         vulkan_backend.begin_rendering(
             &[frame_data.frame_images.gbuffer_albedo, frame_data.frame_images.gbuffer_normal],
@@ -40,8 +40,12 @@ impl GeometryRenderer {
         );
 
         for (index, mesh_data) in render_scene.meshes.iter().enumerate() {
-            let pipeline =
-                self.get_or_create_pipeline(vulkan_backend, frame_data, &mesh_data.material_data);
+            let pipeline = self.get_or_create_pipeline(
+                vulkan_backend,
+                frame_data,
+                &mesh_data.material_data,
+                shader_cache,
+            );
 
             vulkan_backend.bind_pipeline(pipeline);
             vulkan_backend.bind_descriptor_sets(
@@ -53,16 +57,18 @@ impl GeometryRenderer {
             );
 
             vulkan_backend.update_push_constants(pipeline, ShaderStage::VERTEX, &[index]);
-            vulkan_backend.update_push_constants_raw(
-                pipeline,
-                ShaderStage::FRAGMENT,
-                mesh_data.material_data.push_constant_data.as_slice(),
-                FRAGMENT_PUSH_CONSTANT_OFFSET,
-            );
+
+            if !mesh_data.material_data.push_constant_data.is_empty() {
+                vulkan_backend.update_push_constants_raw(
+                    pipeline,
+                    ShaderStage::FRAGMENT,
+                    mesh_data.material_data.push_constant_data.as_slice(),
+                    FRAGMENT_PUSH_CONSTANT_OFFSET,
+                );
+            }
 
             vulkan_backend.bind_vertex_buffer(mesh_data.mesh_data.vertex_buffer);
             vulkan_backend.bind_index_buffer(mesh_data.mesh_data.index_buffer);
-
             vulkan_backend.draw_indexed(mesh_data.mesh_data.index_count as u32, 0);
         }
 
@@ -74,16 +80,41 @@ impl GeometryRenderer {
         vulkan_backend: &mut VulkanBackend,
         frame_data: &FrameData,
         material_data: &MaterialData,
+        shader_cache: &mut ShaderCache,
     ) -> PipelineHandle {
-        let descriptors = self.pipeline_cache.get(&material_data.shader_variant);
-        if let Some(pipeline) = descriptors {
-            return *pipeline;
+        if let Some(&pipeline) = self.pipeline_cache.get(&material_data.shader_variant) {
+            return pipeline;
+        }
+
+        let vert_bytes = shader_cache.load(
+            &material_data.shader_variant.vertex_shader,
+            &[], // vertex shader permutations are encoded in the name for built-ins
+        );
+        let frag_bytes = shader_cache.load(
+            &material_data.shader_variant.fragment_shader,
+            &material_data.shader_variant.active_defines,
+        );
+
+        let mut push_constant_ranges = vec![PushConstantDesc {
+            offset: 0,
+            stages: ShaderStage::VERTEX,
+            size: size_of::<u64>(),
+        }];
+        if material_data.shader_variant.push_constant_size > 0 {
+            push_constant_ranges.push(PushConstantDesc {
+                offset: FRAGMENT_PUSH_CONSTANT_OFFSET,
+                stages: ShaderStage::FRAGMENT,
+                size: material_data.shader_variant.push_constant_size,
+            });
         }
 
         let pipeline_desc = PipelineDesc {
-            vertex_shader: "vert".into(),
-            fragment_shader: Some(material_data.shader_variant.name.clone()),
-            color_attachments: vec![frame_data.frame_images.gbuffer_albedo, frame_data.frame_images.gbuffer_normal],
+            vertex_shader: vert_bytes,
+            fragment_shader: Some(frag_bytes),
+            color_attachments: vec![
+                frame_data.frame_images.gbuffer_albedo,
+                frame_data.frame_images.gbuffer_normal,
+            ],
             depth_attachment: Some(frame_data.frame_images.gbuffer_depth),
             layout: vec![
                 frame_data.descriptor_layout_handle,
@@ -96,40 +127,31 @@ impl GeometryRenderer {
                 depth_bounds_test_enable: false,
                 stencil_test_enable: false,
             },
-            push_constant_ranges: vec![
-                PushConstantDesc {
-                    offset: 0,
-                    stages: ShaderStage::VERTEX,
-                    size: size_of::<u64>(),
-                },
-                PushConstantDesc {
-                    offset: FRAGMENT_PUSH_CONSTANT_OFFSET,
-                    stages: ShaderStage::FRAGMENT,
-                    size: material_data.push_constant_data.len(),
-                },
-            ],
+            push_constant_ranges,
             blend: Some(BlendStateDesc {
                 logic_op_enable: false,
-                attachments: vec![BlendAttachmentDesc {
-                    color_write_mask: ColorWriteMask::ALL,
-                    blend_enable: false,
-                    src_color_blend: BlendFactor::One,
-                    dst_color_blend: BlendFactor::Zero,
-                    color_blend_op: BlendOp::Add,
-                    src_alpha_blend: BlendFactor::One,
-                    dst_alpha_blend: BlendFactor::Zero,
-                    alpha_blend_op: BlendOp::Add,
-                },
-                                  BlendAttachmentDesc {
-                                      color_write_mask: ColorWriteMask::ALL,
-                                      blend_enable: false,
-                                      src_color_blend: BlendFactor::One,
-                                      dst_color_blend: BlendFactor::Zero,
-                                      color_blend_op: BlendOp::Add,
-                                      src_alpha_blend: BlendFactor::One,
-                                      dst_alpha_blend: BlendFactor::Zero,
-                                      alpha_blend_op: BlendOp::Add,
-                                  }],
+                attachments: vec![
+                    BlendAttachmentDesc {
+                        color_write_mask: ColorWriteMask::ALL,
+                        blend_enable: false,
+                        src_color_blend: BlendFactor::One,
+                        dst_color_blend: BlendFactor::Zero,
+                        color_blend_op: BlendOp::Add,
+                        src_alpha_blend: BlendFactor::One,
+                        dst_alpha_blend: BlendFactor::Zero,
+                        alpha_blend_op: BlendOp::Add,
+                    },
+                    BlendAttachmentDesc {
+                        color_write_mask: ColorWriteMask::ALL,
+                        blend_enable: false,
+                        src_color_blend: BlendFactor::One,
+                        dst_color_blend: BlendFactor::Zero,
+                        color_blend_op: BlendOp::Add,
+                        src_alpha_blend: BlendFactor::One,
+                        dst_alpha_blend: BlendFactor::Zero,
+                        alpha_blend_op: BlendOp::Add,
+                    },
+                ],
             }),
             rasterization: RasterizationStateDesc {
                 depth_clamp_enable: false,
