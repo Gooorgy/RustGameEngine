@@ -1,14 +1,11 @@
 use crate::engine::Engine;
+use config::config::WindowMode;
 use core::EngineContext;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::window::{Window, WindowId};
-
-const WINDOW_TITLE: &str = "Vulkan Test";
-const WINDOW_WIDTH: u32 = 800;
-const WINDOW_HEIGHT: u32 = 600;
+use winit::window::{Fullscreen, Window, WindowId};
 
 /// Winit `ApplicationHandler` implementation. Thin OS/event-loop adapter.
 /// Holds the pre-configured `EngineContext` until the window is ready, then
@@ -27,9 +24,20 @@ impl AppHandler {
     }
 
     fn create_window(&self, event_loop: &ActiveEventLoop) -> Window {
-        let attrs = Window::default_attributes()
-            .with_title(WINDOW_TITLE)
-            .with_inner_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT));
+        let ctx = self.context.as_ref().expect("context must be present before window creation");
+        let res = &ctx.config.window_resolution;
+
+        let mut attrs = Window::default_attributes()
+            .with_title(&ctx.config.name)
+            .with_inner_size(LogicalSize::new(res.width, res.height));
+
+        match ctx.config.window_mode {
+            WindowMode::BorderlessFullscreen =>
+                attrs = attrs.with_fullscreen(Some(Fullscreen::Borderless(None))),
+            // TODO: exclusive fullscreen requires a MonitorHandle from winit
+            WindowMode::Windowed | WindowMode::Fullscreen => {}
+        }
+
         event_loop.create_window(attrs).expect("Failed to create window")
     }
 }

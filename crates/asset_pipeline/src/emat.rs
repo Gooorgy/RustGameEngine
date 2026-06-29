@@ -5,7 +5,7 @@ use material::{
     MaterialParameterBindingData, PbrMaterial, ShaderRef,
 };
 use nalgebra_glm::{vec4, Vec4};
-use project::{AssetRegistry, Project};
+use project::{resolve_cooked_path, AssetRegistry};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -93,44 +93,44 @@ impl EmatFile {
     /// registration with `MaterialManager::add_material_instance`.
     pub fn build_material(
         &self,
-        project: &Project,
+        cache_dir: &Path,
         registry: &AssetRegistry,
         assets: &mut AssetStore,
     ) -> Result<Material, EmatError> {
         match self.mat_type.as_deref() {
-            Some("pbr") => self.build_pbr(project, registry, assets),
+            Some("pbr") => self.build_pbr(cache_dir, registry, assets),
             Some(other) => Err(EmatError::UnknownType(other.to_string())),
             None => {
                 self.fragment_shader
                     .as_deref()
                     .ok_or(EmatError::MissingTypeOrShader)?;
-                self.build_custom(project, registry, assets)
+                self.build_custom(cache_dir, registry, assets)
             }
         }
     }
 
     fn build_pbr(
         &self,
-        project: &Project,
+        cache_dir: &Path,
         registry: &AssetRegistry,
         assets: &mut AssetStore,
     ) -> Result<Material, EmatError> {
         Ok(PbrMaterial {
             vertex_shader: parse_shader_ref(self.vertex_shader.as_deref(), "vert"),
             fragment_shader: parse_shader_ref(self.fragment_shader.as_deref(), "pbr.frag"),
-            base_color: self.color_param("base_color", project, registry, assets)?,
-            normal: self.color_param("normal", project, registry, assets)?,
-            ambient_occlusion: self.scalar_param("ambient_occlusion", project, registry, assets)?,
-            metallic: self.scalar_param("metallic", project, registry, assets)?,
-            roughness: self.scalar_param("roughness", project, registry, assets)?,
-            specular: self.scalar_param("specular", project, registry, assets)?,
+            base_color: self.color_param("base_color", cache_dir, registry, assets)?,
+            normal: self.color_param("normal", cache_dir, registry, assets)?,
+            ambient_occlusion: self.scalar_param("ambient_occlusion", cache_dir, registry, assets)?,
+            metallic: self.scalar_param("metallic", cache_dir, registry, assets)?,
+            roughness: self.scalar_param("roughness", cache_dir, registry, assets)?,
+            specular: self.scalar_param("specular", cache_dir, registry, assets)?,
         }
         .build())
     }
 
     fn build_custom(
         &self,
-        project: &Project,
+        cache_dir: &Path,
         registry: &AssetRegistry,
         assets: &mut AssetStore,
     ) -> Result<Material, EmatError> {
@@ -143,7 +143,7 @@ impl EmatFile {
         let mut bindings = Vec::new();
         for (index, key) in sorted_keys.iter().enumerate() {
             if let Some(ParamValue::Texture { texture }) = self.params.get(*key) {
-                let handle = self.resolve_texture(texture, project, registry, assets)?;
+                let handle = self.resolve_texture(texture, cache_dir, registry, assets)?;
                 bindings.push(MaterialParameterBinding {
                     index,
                     data: MaterialParameterBindingData::Texture(handle),
@@ -163,13 +163,13 @@ impl EmatFile {
     fn color_param(
         &self,
         name: &str,
-        project: &Project,
+        cache_dir: &Path,
         registry: &AssetRegistry,
         assets: &mut AssetStore,
     ) -> Result<MaterialColorParameter, EmatError> {
         match self.params.get(name) {
             Some(ParamValue::Texture { texture }) => {
-                let handle = self.resolve_texture(texture, project, registry, assets)?;
+                let handle = self.resolve_texture(texture, cache_dir, registry, assets)?;
                 Ok(MaterialColorParameter::Handle(handle))
             }
             Some(ParamValue::Vec4 { value: v }) => {
@@ -185,13 +185,13 @@ impl EmatFile {
     fn scalar_param(
         &self,
         name: &str,
-        project: &Project,
+        cache_dir: &Path,
         registry: &AssetRegistry,
         assets: &mut AssetStore,
     ) -> Result<MaterialParameter, EmatError> {
         match self.params.get(name) {
             Some(ParamValue::Texture { texture }) => {
-                let handle = self.resolve_texture(texture, project, registry, assets)?;
+                let handle = self.resolve_texture(texture, cache_dir, registry, assets)?;
                 Ok(MaterialParameter::Handle(handle))
             }
             Some(ParamValue::Float { value: v }) => Ok(MaterialParameter::Constant(*v)),
@@ -206,12 +206,12 @@ impl EmatFile {
     fn resolve_texture(
         &self,
         guid: &Guid,
-        project: &Project,
+        cache_dir: &Path,
         registry: &AssetRegistry,
         assets: &mut AssetStore,
     ) -> Result<ImageHandle, EmatError> {
         registry.get(guid).ok_or(EmatError::UnresolvedGuid(*guid))?;
-        let cooked_path = project.cooked_path(guid, "etex");
+        let cooked_path = resolve_cooked_path(cache_dir, guid, "etex");
         assets
             .load_texture(&cooked_path, *guid)
             .ok_or(EmatError::ImageLoadFailed(*guid))

@@ -7,6 +7,13 @@ use core::system::System;
 use core::types::transform::Transform;
 use input::{AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode};
 use nalgebra_glm::vec3;
+
+#[allow(dead_code)]
+mod assets {
+    use common::{guid, Guid};
+    include!(concat!(env!("OUT_DIR"), "/assets.rs"));
+}
+
 fn main() {
     let mut app = App::with_project("sample/sample.eproj");
 
@@ -51,30 +58,20 @@ fn main() {
             },
         );
 
-        let (floor_mesh, cube_mesh, mat, mat2) = {
-            let floor = ctx
-                .asset_context()
-                .load_mesh("resources\\models\\floor.obj");
-            let cube = ctx.asset_context().load_mesh("resources\\models\\cube.obj");
-            let mat = ctx.load_material("resources\\materials\\brick.emat");
-            let mat2 = ctx.load_material("resources\\materials\\scroll.emat");
-            (floor, cube, mat, mat2)
-        };
+        let floor_mesh = ctx.load_mesh(assets::FLOOR_OBJ);
+        let cube_mesh = ctx.load_mesh(assets::CUBE_OBJ);
+        let mat = ctx.load_material(assets::BRICK_EMAT);
+        let mat2 = ctx.load_material(assets::SCROLL_EMAT);
 
         let setup = ctx.world_setup();
 
         setup.world.create_entity((
             TransformComponent(Transform::default()),
-            MeshComponent {
-                mesh_handle: floor_mesh,
-            },
-            MaterialComponent {
-                material_handle: mat,
-            },
+            MeshComponent { mesh_handle: floor_mesh },
+            MaterialComponent { material_handle: mat },
         ));
 
         let mut iteration = 0;
-        // 10x10x10 grid = 1000 cubes, 3-unit spacing
         for x in 0..2i32 {
             for y in 0..2i32 {
                 for z in 0..2i32 {
@@ -86,12 +83,8 @@ fn main() {
                             1.0 + y as f32 * 3.0,
                             z as f32 * 3.0,
                         ))),
-                        MeshComponent {
-                            mesh_handle: cube_mesh,
-                        },
-                        MaterialComponent {
-                            material_handle: selected,
-                        },
+                        MeshComponent { mesh_handle: cube_mesh },
+                        MaterialComponent { material_handle: selected },
                     ));
 
                     iteration += 1;

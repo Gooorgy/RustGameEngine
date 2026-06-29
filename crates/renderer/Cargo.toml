@@ -10,4 +10,5 @@ material = { path = "../material" }
 assets = { path = "../assets" }
 core = { path = "../core" }
 ecs = { path = "../ecs" }
+config = { path = "../config" }
 nalgebra-glm = { workspace = true }

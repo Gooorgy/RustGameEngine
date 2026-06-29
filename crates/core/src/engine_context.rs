@@ -2,13 +2,14 @@ use crate::asset_context::AssetContext;
 use crate::system::{Context, SystemFunction};
 use crate::TransformComponent;
 use assets::AssetStore;
+use config::config::{WindowMode, WindowResolution};
 use ecs::world::World;
 use input::InputManager;
 use material::material_manager::{MaterialHandle, MaterialManager};
-use project::{AssetRegistry, Guid, Project};
+use project::Guid;
 use spatial::{ColliderComponent, SpatialWorld};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Provides simultaneous mutable access to both worlds, avoiding split-borrow issues.
 pub struct WorldSetup<'a> {
@@ -16,12 +17,19 @@ pub struct WorldSetup<'a> {
     pub spatial: &'a mut SpatialWorld,
 }
 
-/// Central engine context. Owns the asset context, ECS world, spatial world, input, and materials.
+pub struct EngineConfig {
+    pub name: String,
+    pub content_dir: PathBuf,
+    pub cache_dir: PathBuf,
+    pub window_resolution: WindowResolution,
+    pub window_mode: WindowMode,
+}
+
+/// Central engine context. Owns engine config, asset context, ECS world, spatial world, input, and materials.
 pub struct EngineContext {
+    pub config: EngineConfig,
     assets: AssetContext,
     material_manager: MaterialManager,
-    guid_to_material: HashMap<Guid, MaterialHandle>,
-    material_to_guid: HashMap<MaterialHandle, Guid>,
     input_manager: InputManager,
     world: World,
     spatial_world: SpatialWorld,
@@ -29,12 +37,11 @@ pub struct EngineContext {
 }
 
 impl EngineContext {
-    pub fn new(project: Project, registry: AssetRegistry) -> EngineContext {
+    pub fn new(config: EngineConfig, assets: AssetContext) -> EngineContext {
         Self {
-            assets: AssetContext::new(project, registry),
+            config,
+            assets,
             material_manager: MaterialManager::new(),
-            guid_to_material: HashMap::new(),
-            material_to_guid: HashMap::new(),
             input_manager: InputManager::new(),
             world: World::new(),
             spatial_world: SpatialWorld::new(),
@@ -42,40 +49,21 @@ impl EngineContext {
         }
     }
 
-    /// Returns the asset context for raw asset loading and GUID lookups.
-    pub fn asset_context(&mut self) -> &mut AssetContext {
-        &mut self.assets
-    }
-
     // ── Asset loading ──────────────────────────────────────────────────────
 
-    /// Development convenience: loads a material from a `.emat` source path,
-    /// registers it with the material manager, and returns a stable handle.
-    ///
-    /// This exists because game code currently has no editor to assign materials
-    /// by GUID. Once a level system exists, materials will be referenced by GUID
-    /// directly in level files and this path-based API will no longer be needed.
-    pub fn load_material<P: AsRef<Path>>(&mut self, path: P) -> MaterialHandle {
-        let (mat, guid) = self.assets.build_material(path);
-        let handle = self.material_manager.add_material_instance(mat);
-        if let Some(guid) = guid {
-            self.guid_to_material.insert(guid, handle);
-            self.material_to_guid.insert(handle, guid);
-        }
-        handle
+    pub fn load_mesh(&mut self, guid: Guid) -> common::MeshHandle {
+        self.assets.load_mesh(guid)
     }
 
-    /// Returns the stable GUID for a material handle loaded via `load_material`.
-    pub fn material_guid(&self, handle: MaterialHandle) -> Option<Guid> {
-        self.material_to_guid.get(&handle).copied()
+    pub fn load_material(&mut self, guid: Guid) -> MaterialHandle {
+        let assets = &mut self.assets;
+        self.material_manager.get_or_insert(guid, || assets.build_material(guid))
     }
 
     // ── Renderer-facing accessors ──────────────────────────────────────────
 
-    /// Returns the directory where the shader conditioner writes compiled asset shaders.
-    /// Pass this to `RendererConfig::asset_cache_dir` when constructing the renderer.
     pub fn shader_cache_dir(&self) -> PathBuf {
-        self.assets.project.cache_dir.join("shaders")
+        self.config.cache_dir.join("shaders")
     }
 
     pub fn asset_store(&self) -> &AssetStore {
@@ -90,9 +78,6 @@ impl EngineContext {
         &mut self.material_manager
     }
 
-    /// Returns the asset store and material manager together from one borrow.
-    /// Needed because Rust cannot split-borrow through method call boundaries,
-    /// even when the fields are genuinely independent.
     pub fn render_resources_mut(&mut self) -> (&AssetStore, &mut MaterialManager) {
         (&self.assets.asset_store, &mut self.material_manager)
     }

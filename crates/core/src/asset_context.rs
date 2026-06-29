@@ -1,99 +1,60 @@
 use asset_pipeline::EmatFile;
 use assets::AssetStore;
-use common::MeshHandle;
+use common::{Guid, MeshHandle};
 use material::Material;
-use project::{AssetRegistry, Guid, Project};
+use project::{resolve_cooked_path, AssetRegistry};
 use std::path::{Path, PathBuf};
 
-/// Owns the project, asset registry, and runtime CPU-side asset caches.
-/// All asset loading that needs to survive into level serialization goes through here.
-/// New raw asset types (meshes, textures, shaders) add methods here.
 pub struct AssetContext {
-    pub(crate) project: Project,
+    pub(crate) cache_dir: PathBuf,
+    pub(crate) content_dir: PathBuf,
     pub(crate) registry: AssetRegistry,
     pub(crate) asset_store: AssetStore,
 }
 
 impl AssetContext {
-    pub fn new(project: Project, registry: AssetRegistry) -> Self {
+    pub fn new(cache_dir: PathBuf, content_dir: PathBuf, registry: AssetRegistry) -> Self {
         Self {
-            project,
+            cache_dir,
+            content_dir,
             registry,
             asset_store: AssetStore::new(),
         }
     }
 
-    /// Development convenience: resolves a source path to its GUID via the
-    /// registry, then loads the cooked `.emesh` from the cache.
-    ///
-    /// This exists because game code currently has no editor to assign assets
-    /// by GUID. Once a level system exists, assets will be referenced by GUID
-    /// directly in level files and this path-based API will no longer be needed.
-    pub fn load_mesh<P: AsRef<Path>>(&mut self, path: P) -> MeshHandle {
-        let path = path.as_ref();
-        let rel = self.to_rel(path);
-
-        let record = self.registry.find_by_source_path(&rel).unwrap_or_else(|| {
-            panic!(
-                "mesh not in registry: {} (rel: {})",
-                path.display(),
-                rel.display()
-            )
-        });
-
-        let guid = record.guid;
-        let cooked = self.project.cooked_path(&guid, "emesh");
+    pub fn load_mesh(&mut self, guid: Guid) -> MeshHandle {
+        let cooked = resolve_cooked_path(&self.cache_dir, &guid, "emesh");
         self.asset_store
             .load_mesh(&cooked, guid)
             .unwrap_or_else(|| {
                 panic!(
-                    "cooked mesh missing for '{}' — was cook_pending called at startup? (expected: {})",
-                    rel.display(),
+                    "cooked mesh missing for '{}' (expected: {})",
+                    guid,
                     cooked.display()
                 )
             })
     }
 
-    /// Development convenience: resolves a source path to its GUID, builds the
-    /// material from the `.emat` file, and returns the built material with its GUID.
-    ///
-    /// This exists because game code currently has no editor to assign materials
-    /// by GUID. Once a level system exists, materials will be referenced by GUID
-    /// directly in level files and this path-based API will no longer be needed.
-    pub fn build_material<P: AsRef<Path>>(
-        &mut self,
-        path: P,
-    ) -> (Material, Option<Guid>) {
-        let path = path.as_ref();
-        let abs = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.project.root.join(path)
-        };
-        let rel = self.to_rel(path);
-        let guid = self.registry.find_by_source_path(&rel).map(|r| r.guid);
+    /// Builds a `Material` from the `.emat` source file for the given GUID.
+    /// Looks up the source path in the registry, then loads and builds the material.
+    pub fn build_material(&mut self, guid: Guid) -> Material {
+        let record = self
+            .registry
+            .get(&guid)
+            .unwrap_or_else(|| panic!("no asset record for guid '{}'", guid));
 
-        let mat = EmatFile::load(&abs)
-            .and_then(|f| f.build_material(&self.project, &self.registry, &mut self.asset_store))
-            .unwrap_or_else(|e| panic!("failed to load material '{}': {}", abs.display(), e));
+        let abs = self.content_dir.join(&record.source_path);
 
-        (mat, guid)
+        EmatFile::load(&abs)
+            .and_then(|f| f.build_material(&self.cache_dir, &self.registry, &mut self.asset_store))
+            .unwrap_or_else(|e| panic!("failed to load material '{}': {}", abs.display(), e))
     }
 
     pub(crate) fn store(&self) -> &AssetStore {
         &self.asset_store
     }
 
-    // ── Path helpers ───────────────────────────────────────────────────────
-
-    fn to_rel(&self, path: &Path) -> PathBuf {
-        let abs = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.project.root.join(path)
-        };
-        abs.strip_prefix(&self.project.content_dir)
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|_| path.to_path_buf())
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
     }
 }

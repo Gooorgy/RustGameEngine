@@ -3,13 +3,18 @@ name = "core"
 version = "0.1.0"
 edition = "2021"
 
+# crates/core/Cargo.toml
+[features]
+dev = ["dep:project", "dep:asset_pipeline"]
+
 [dependencies]
 common = { path = "../common" }
+config = { path = "../config" }
 nalgebra-glm = { workspace = true }
 ecs = { path = "../ecs" }
 assets = { path = "../assets" }
 material = { path = "../material" }
 input = { path = "../input" }
 spatial = { path = "../spatial" }
-project = { path = "../project" }
-asset_pipeline = { path = "../asset_pipeline" }
+project = { path = "../project", optional = true }
+asset_pipeline = { path = "../asset_pipeline", optional = true }

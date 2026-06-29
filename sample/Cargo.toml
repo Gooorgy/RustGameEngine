@@ -3,6 +3,10 @@ name = "sample"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["dev"]
+dev = ["core/dev"]  # propagates down the chain
+
 [dependencies]
 winit = "0.30.9"
 serde = { version = "1.0.204", features = ["derive"] }
@@ -20,3 +24,7 @@ spatial = { path = "../crates/spatial" }
 project = { path = "../crates/project" }
 asset_pipeline = { path = "../crates/asset_pipeline" }
 noise = "0.9.0"
+common = { path = "../crates/common" }
+
+[build-dependencies]
+asset_pipeline = { path = "../crates/asset_pipeline" }

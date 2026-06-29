@@ -1,5 +1,5 @@
 use crate::{Material, MaterialParameterBinding, ShaderRef};
-use common::Handle;
+use common::{Guid, Handle};
 use std::collections::HashMap;
 
 /// Marker type for material handles.
@@ -9,6 +9,7 @@ pub type MaterialHandle = Handle<MaterialData>;
 pub struct MaterialManager {
     materials: HashMap<MaterialHandle, Material>,
     shader_variants: HashMap<String, MaterialVariant>,
+    guid_index: HashMap<Guid, MaterialHandle>,
     next_id: u64,
 }
 
@@ -17,11 +18,23 @@ impl MaterialManager {
         Self {
             materials: HashMap::new(),
             shader_variants: HashMap::new(),
+            guid_index: HashMap::new(),
             next_id: 0,
         }
     }
 
-    pub fn add_material_instance(&mut self, material: Material) -> MaterialHandle {
+    /// Returns the cached handle if this GUID was already loaded, otherwise
+    /// calls `f` to build the material, registers it, and caches the handle.
+    pub fn get_or_insert(&mut self, guid: Guid, f: impl FnOnce() -> Material) -> MaterialHandle {
+        if let Some(&handle) = self.guid_index.get(&guid) {
+            return handle;
+        }
+        let handle = self.insert(f());
+        self.guid_index.insert(guid, handle);
+        handle
+    }
+
+    fn insert(&mut self, material: Material) -> MaterialHandle {
         let key = variant_key(
             &material.vertex_shader,
             &material.fragment_shader,

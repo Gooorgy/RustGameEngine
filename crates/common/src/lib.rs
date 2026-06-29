@@ -7,6 +7,8 @@ mod typed_store;
 mod types;
 
 pub use guid::Guid;
+#[doc(hidden)]
+pub use uuid;
 pub use handle::Handle;
 pub use image_data::{ImageData, ImageHandle};
 pub use mesh::{MeshData, MeshHandle, SubMesh, Vertex};

@@ -11,11 +11,11 @@ fn main() {
     let project = Project::load(&project_path)
         .unwrap_or_else(|e| panic!("failed to load '{}': {}", project_path.display(), e));
 
-    let registry = AssetRegistry::scan(&project, None)
+    let registry = AssetRegistry::load_or_scan(&project.cache_dir, &project.content_dir)
         .expect("failed to scan project content directory");
 
-    cook_pending(&registry, &project);
-    registry.save(&project)
+    cook_pending(&registry, &project.cache_dir, &project.content_dir);
+    registry.save(&project.cache_dir)
         .unwrap_or_else(|e| eprintln!("warning: could not save asset registry: {}", e));
 
     let project_name = &project.name;

@@ -1,4 +1,4 @@
-use crate::{AssetMeta, Project};
+use crate::AssetMeta;
 use common::Guid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -86,19 +86,29 @@ impl fmt::Display for RegistryError {
 }
 
 impl From<std::io::Error> for RegistryError {
-    fn from(e: std::io::Error) -> Self { RegistryError::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        RegistryError::Io(e)
+    }
 }
 impl From<toml::de::Error> for RegistryError {
-    fn from(e: toml::de::Error) -> Self { RegistryError::Parse(e) }
+    fn from(e: toml::de::Error) -> Self {
+        RegistryError::Parse(e)
+    }
 }
 impl From<toml::ser::Error> for RegistryError {
-    fn from(e: toml::ser::Error) -> Self { RegistryError::Serialize(e) }
+    fn from(e: toml::ser::Error) -> Self {
+        RegistryError::Serialize(e)
+    }
 }
 impl From<crate::MetaError> for RegistryError {
-    fn from(e: crate::MetaError) -> Self { RegistryError::Meta(e) }
+    fn from(e: crate::MetaError) -> Self {
+        RegistryError::Meta(e)
+    }
 }
 impl From<walkdir::Error> for RegistryError {
-    fn from(e: walkdir::Error) -> Self { RegistryError::Walk(e) }
+    fn from(e: walkdir::Error) -> Self {
+        RegistryError::Walk(e)
+    }
 }
 
 // ── Implementation ─────────────────────────────────────────────────────────
@@ -110,12 +120,13 @@ impl AssetRegistry {
     /// Pass a previously loaded registry as `previous` to detect dirty assets
     /// whose source has changed since the last scan.
     pub fn scan(
-        project: &Project,
+        cache_dir: &Path,
+        content_dir: &Path,
         previous: Option<&AssetRegistry>,
     ) -> Result<Self, RegistryError> {
         let mut records = HashMap::new();
 
-        for entry in walkdir::WalkDir::new(&project.content_dir)
+        for entry in walkdir::WalkDir::new(content_dir)
             .follow_links(false)
             .into_iter()
             .filter_entry(|e| !is_hidden(e))
@@ -130,19 +141,15 @@ impl AssetRegistry {
             }
 
             let meta = AssetMeta::load_or_create(path)?;
-            let asset_type = AssetType::from_extension(
-                path.extension().and_then(|e| e.to_str()).unwrap_or(""),
-            );
+            let asset_type =
+                AssetType::from_extension(path.extension().and_then(|e| e.to_str()).unwrap_or(""));
             let source_hash = hash_file(path).unwrap_or(0);
             let import_hash = hash_table(&meta.import);
 
-            let source_path = path
-                .strip_prefix(&project.content_dir)
-                .unwrap_or(path)
-                .to_path_buf();
+            let source_path = path.strip_prefix(content_dir).unwrap_or(path).to_path_buf();
 
             let status = resolve_status(
-                project,
+                cache_dir,
                 &meta.guid,
                 asset_type,
                 source_hash,
@@ -163,27 +170,28 @@ impl AssetRegistry {
             );
         }
 
-        let path_index = records.iter().map(|(g, r)| (r.source_path.clone(), *g)).collect();
-        Ok(Self { records, path_index })
+        let path_index = records
+            .iter()
+            .map(|(g, r)| (r.source_path.clone(), *g))
+            .collect();
+        Ok(Self {
+            records,
+            path_index,
+        })
     }
 
     /// Loads a previously saved registry from `.cache/.assetdb`, restoring
     /// status based on whether cooked outputs still exist on disk.
     /// Falls back to a full scan if the file is absent or unparseable.
-    pub fn load_or_scan(project: &Project) -> Result<Self, RegistryError> {
-        let db_path = project.cache_dir.join(".assetdb");
-        if db_path.exists() {
-            if let Ok(registry) = Self::load(&db_path, project) {
-                return Ok(registry);
-            }
-        }
-        Self::scan(project, None)
+    pub fn load_or_scan(cache_dir: &Path, content_dir: &Path) -> Result<Self, RegistryError> {
+        let previous = Self::load(&cache_dir.join(".assetdb"), cache_dir).ok();
+        Self::scan(cache_dir, content_dir, previous.as_ref())
     }
 
     /// Saves the registry index to `.cache/.assetdb`.
-    pub fn save(&self, project: &Project) -> Result<(), RegistryError> {
-        std::fs::create_dir_all(&project.cache_dir)?;
-        let db_path = project.cache_dir.join(".assetdb");
+    pub fn save(&self, cache_dir: &Path) -> Result<(), RegistryError> {
+        std::fs::create_dir_all(cache_dir)?;
+        let db_path = cache_dir.join(".assetdb");
 
         let file = RegistryFile {
             records: self
@@ -235,7 +243,7 @@ impl AssetRegistry {
         self.records.is_empty()
     }
 
-    fn load(path: &Path, project: &Project) -> Result<Self, RegistryError> {
+    fn load(path: &Path, cache_dir: &Path) -> Result<Self, RegistryError> {
         let content = std::fs::read_to_string(path)?;
         let file: RegistryFile = toml::from_str(&content)?;
 
@@ -244,7 +252,7 @@ impl AssetRegistry {
             .into_iter()
             .filter_map(|(guid_str, rec)| {
                 let guid = Guid::from_str(&guid_str)?;
-                let status = cooked_status(project, &guid, rec.asset_type);
+                let status = cooked_status(cache_dir, &guid, rec.asset_type);
                 let source_hash = parse_hash(&rec.source_hash);
                 let import_hash = parse_hash(&rec.import_hash);
                 Some((
@@ -261,8 +269,14 @@ impl AssetRegistry {
             })
             .collect();
 
-        let path_index = records.iter().map(|(g, r)| (r.source_path.clone(), *g)).collect();
-        Ok(Self { records, path_index })
+        let path_index = records
+            .iter()
+            .map(|(g, r)| (r.source_path.clone(), *g))
+            .collect();
+        Ok(Self {
+            records,
+            path_index,
+        })
     }
 }
 
@@ -291,12 +305,12 @@ impl AssetType {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn shader_cooked_path(project: &Project, guid: &Guid) -> std::path::PathBuf {
-    project.cache_dir.join("shaders").join(format!("{}.spv", guid))
+fn shader_cooked_path(cache_dir: &Path, guid: &Guid) -> std::path::PathBuf {
+    cache_dir.join("shaders").join(format!("{}.spv", guid))
 }
 
 fn resolve_status(
-    project: &Project,
+    cache_dir: &Path,
     guid: &Guid,
     asset_type: AssetType,
     source_hash: u64,
@@ -304,12 +318,12 @@ fn resolve_status(
     previous: Option<&AssetRegistry>,
 ) -> AssetStatus {
     let cooked_exists = if asset_type == AssetType::Shader {
-        shader_cooked_path(project, guid).exists()
+        shader_cooked_path(cache_dir, guid).exists()
     } else {
         let Some(ext) = asset_type.cooked_extension() else {
             return AssetStatus::Fresh;
         };
-        project.cooked_path(guid, ext).exists()
+        resolve_cooked_path(cache_dir, guid, ext).exists()
     };
 
     if let Some(prev) = previous.and_then(|r| r.records.get(guid)) {
@@ -331,16 +345,20 @@ fn resolve_status(
 
 /// Status used when loading from `.assetdb` — trusts stored hashes, only
 /// checks whether cooked output still exists on disk.
-fn cooked_status(project: &Project, guid: &Guid, asset_type: AssetType) -> AssetStatus {
+fn cooked_status(cache_dir: &Path, guid: &Guid, asset_type: AssetType) -> AssetStatus {
     let exists = if asset_type == AssetType::Shader {
-        shader_cooked_path(project, guid).exists()
+        shader_cooked_path(cache_dir, guid).exists()
     } else {
         let Some(ext) = asset_type.cooked_extension() else {
             return AssetStatus::Fresh;
         };
-        project.cooked_path(guid, ext).exists()
+        resolve_cooked_path(cache_dir, guid, ext).exists()
     };
-    if exists { AssetStatus::Fresh } else { AssetStatus::Uncooked }
+    if exists {
+        AssetStatus::Fresh
+    } else {
+        AssetStatus::Uncooked
+    }
 }
 
 fn parse_hash(s: &str) -> u64 {
@@ -375,6 +393,12 @@ fn fnv1a(data: &[u8]) -> u64 {
         .fold(OFFSET, |acc, &b| (acc ^ b as u64).wrapping_mul(PRIME))
 }
 
+pub fn resolve_cooked_path(cache_dir: &Path, guid: &Guid, extension: &str) -> PathBuf {
+    cache_dir
+        .join("cooked")
+        .join(format!("{}.{}", guid, extension))
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -388,7 +412,10 @@ mod tests {
         assert_eq!(AssetType::from_extension("obj"), AssetType::Mesh);
         assert_eq!(AssetType::from_extension("emat"), AssetType::Material);
         assert_eq!(AssetType::from_extension("glsl"), AssetType::Shader);
-        assert_eq!(AssetType::from_extension("shader"), AssetType::ShaderManifest);
+        assert_eq!(
+            AssetType::from_extension("shader"),
+            AssetType::ShaderManifest
+        );
         assert_eq!(AssetType::from_extension("xyz"), AssetType::Unknown);
     }
 
@@ -416,7 +443,7 @@ mod tests {
             cache_dir: dir.join(".cache"),
         };
 
-        let registry = AssetRegistry::scan(&project, None).unwrap();
+        let registry = AssetRegistry::scan(&project.cache_dir, &project.content_dir, None).unwrap();
         assert_eq!(registry.len(), 2);
 
         // .meta sidecars should have been created
@@ -440,10 +467,10 @@ mod tests {
             cache_dir: dir.join(".cache"),
         };
 
-        let registry = AssetRegistry::scan(&project, None).unwrap();
-        registry.save(&project).unwrap();
+        let registry = AssetRegistry::scan(&project.cache_dir, &project.content_dir, None).unwrap();
+        registry.save(&project.cache_dir).unwrap();
 
-        let loaded = AssetRegistry::load_or_scan(&project).unwrap();
+        let loaded = AssetRegistry::load_or_scan(&project.cache_dir, &project.content_dir).unwrap();
         assert_eq!(loaded.len(), registry.len());
 
         let original_guid = registry.all().next().unwrap().guid;
