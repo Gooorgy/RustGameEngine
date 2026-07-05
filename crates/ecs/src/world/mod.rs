@@ -6,11 +6,16 @@ use std::any::TypeId;
 use std::collections::HashMap;
 
 pub struct World {
-    pub(crate) data: HashMap<ArchetypeKey, Archetype>,
+    pub(crate) archetypes: Vec<Archetype>,
+    pub(crate) archetype_index: HashMap<ArchetypeKey, ArchetypeId>,
     column_registry: ColumnRegistry,
-    entities: Vec<Entity>,
+    entity_meta: Vec<Option<EntityStorageData>>,
+    free_list: Vec<usize>,
     //query_cache: HashMap<QueryKey, QueryCache>,
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct ArchetypeId(pub(crate) usize);
 
 struct ColumnRegistry {
     factories: HashMap<TypeId, ColumnFactory>,
@@ -42,9 +47,8 @@ impl ColumnRegistry {
     }
 }
 
-#[allow(dead_code)]
 pub struct EntityStorageData {
-    pub archetype_key: ArchetypeKey,
+    pub archetype_id: ArchetypeId,
     pub row: usize,
 }
 
@@ -56,9 +60,11 @@ pub struct ArchetypeKey {
 impl World {
     pub fn new() -> Self {
         Self {
-            data: HashMap::new(),
+            archetypes: vec![],
+            archetype_index: HashMap::new(),
             column_registry: ColumnRegistry::new(),
-            entities: vec![],
+            entity_meta: vec![],
+            free_list: vec![],
             //query_cache: HashMap::new(),
         }
     }
@@ -71,31 +77,51 @@ impl World {
 
     #[allow(private_bounds)]
     pub fn create_entity(&mut self, components: impl ComponentInsertion) -> Entity {
-        // this works until Entities are removable. leave this for now...
-        let index = self.entities.len();
-        self.entities.push(Entity(index));
+        let id = self.free_list.pop().unwrap_or_else(|| {
+            self.entity_meta.push(None);
+            self.entity_meta.len() - 1
+        });
 
         let mut values = vec![];
         let mut type_ids = vec![];
         components.for_each_component(|type_id, component_value, column_factory| {
             self.column_registry.ensure(type_id, column_factory);
-
             values.push(component_value);
             type_ids.push(type_id);
         });
 
-        let key = ArchetypeKey {
-            type_ids: type_ids.clone(),
+        type_ids.sort_unstable();
+        let key = ArchetypeKey { type_ids };
+
+        let archetype_id = if let Some(&existing_index) = self.archetype_index.get(&key) {
+            existing_index
+        } else {
+            let factories = self.column_registry.get(&key.type_ids);
+            let archetype = Archetype::new(factories);
+            let new_id = ArchetypeId(self.archetypes.len());
+            self.archetypes.push(archetype);
+            self.archetype_index.insert(key, new_id);
+            new_id
         };
+        let entity = Entity(id);
+        let row = self.archetypes[archetype_id.0].insert(entity, values);
+        self.entity_meta[id] = Some(EntityStorageData { archetype_id, row });
 
-        let archetype = self
-            .data
-            .entry(key)
-            .or_insert_with(|| Archetype::new(self.column_registry.get(type_ids.as_slice())));
+        entity
+    }
 
-        archetype.insert(values);
+    pub fn remove_entity(&mut self, entity: Entity) {
+        let meta = self.entity_meta[entity.0].as_mut().unwrap();
+        let archetype_id = meta.archetype_id;
+        let row = meta.row;
 
-        Entity(index)
+        let archetype = &mut self.archetypes[archetype_id.0];
+        if let Some(swapped) = archetype.remove(row) {
+            self.entity_meta[swapped.0].as_mut().unwrap().row = row;
+        }
+        
+        self.entity_meta[entity.0] = None;
+        self.free_list.push(entity.0);
     }
 }
 

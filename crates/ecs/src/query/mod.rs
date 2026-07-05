@@ -1,9 +1,8 @@
 mod impls;
 
 use crate::component::archetype::{Archetype, Column};
-use crate::world::{ArchetypeKey, World};
+use crate::world::{ArchetypeId, World};
 use std::any::TypeId;
-use std::collections::HashMap;
 use std::marker::PhantomData;
 
 pub trait QueryParameter {
@@ -32,7 +31,7 @@ pub trait QueryParameter {
 }
 
 pub struct Match<Q: QueryParameter> {
-    archetype_key: ArchetypeKey,
+    archetype_id: ArchetypeId,
     match_key: Q::MatchKey,
 }
 
@@ -50,30 +49,30 @@ impl<'a, Q: QueryParameter> Query<'a, Q> {
     }
 
     pub fn iter(&mut self) -> QueryIter<'_, Q> {
-        QueryIter::new(&mut self.matches, &mut self.world.data as *mut _)
+        QueryIter::new(&mut self.matches, &mut self.world.archetypes as *mut _)
     }
 
     pub fn build_matches(&mut self) {
         self.matches.clear();
 
-        for (archetype_key, archetype) in &self.world.data {
+        for (index, archetype) in self.world.archetypes.iter().enumerate() {
             if let Some(match_key) = Q::check_match(archetype) {
                 self.matches.push(Match {
+                    archetype_id: ArchetypeId(index),
                     match_key,
-                    archetype_key: archetype_key.clone(),
-                })
+                });
             }
         }
     }
-    pub fn refresh(&mut self, archetype: &Archetype) {
+
+    pub(crate) fn refresh(&mut self, archetype_id: ArchetypeId) {
         self.matches.clear();
 
+        let archetype = &self.world.archetypes[archetype_id.0];
         if let Some(match_key) = Q::check_match(archetype) {
             self.matches.push(Match {
+                archetype_id,
                 match_key,
-                archetype_key: ArchetypeKey {
-                    type_ids: Q::component_type(),
-                },
             });
         }
     }
@@ -82,19 +81,16 @@ impl<'a, Q: QueryParameter> Query<'a, Q> {
 pub struct QueryIter<'w, Q: QueryParameter> {
     matches_iter: std::slice::IterMut<'w, Match<Q>>,
     current_archetype: Option<ArchetypeIter<'w, Q>>,
-    world_data: *mut HashMap<ArchetypeKey, Archetype>,
+    world_archetypes: *mut Vec<Archetype>,
     _phantom: PhantomData<Q>,
 }
 
 impl<'w, Q: QueryParameter> QueryIter<'w, Q> {
-    pub fn new(
-        matches: &'w mut [Match<Q>],
-        world_data: *mut HashMap<ArchetypeKey, Archetype>,
-    ) -> Self {
+    pub fn new(matches: &'w mut [Match<Q>], world_archetypes: *mut Vec<Archetype>) -> Self {
         Self {
             matches_iter: matches.iter_mut(),
             current_archetype: None,
-            world_data,
+            world_archetypes,
             _phantom: PhantomData,
         }
     }
@@ -129,8 +125,10 @@ impl<'w, Q: QueryParameter> Iterator for QueryIter<'w, Q> {
             unsafe {
                 let column_match = self.matches_iter.next()?;
 
-                let archetype = (*self.world_data)
-                    .get_mut(&column_match.archetype_key)
+                let archetype = self.world_archetypes
+                    .as_mut()
+                    .expect("null archetypes pointer")
+                    .get_mut(column_match.archetype_id.0)
                     .expect("Archetype not registered");
 
                 let total_rows = if archetype.columns.is_empty() {

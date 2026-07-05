@@ -1,12 +1,13 @@
 use crate::component::Component;
+use crate::entity::Entity;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::error::Error;
 
 pub struct Archetype {
     pub components: HashMap<TypeId, usize>,
-    current_row: usize,
     pub(crate) columns: Vec<Column>,
+    entities: Vec<Entity>,
 }
 
 impl Archetype {
@@ -21,21 +22,30 @@ impl Archetype {
 
         Self {
             components,
-            current_row: 0,
             columns,
+            entities: vec![],
         }
     }
 
-    pub fn insert(&mut self, components: Vec<ComponentValue>) -> Option<usize> {
+    pub fn insert(&mut self, entity: Entity, components: Vec<ComponentValue>) -> usize {
         for value in components {
             let type_id = value.type_id();
             let column = self.components[&type_id];
-            self.columns[column].data.push_erased(value).ok()?;
+            self.columns[column]
+                .data
+                .push_erased(value)
+                .expect("type mismatch on insert! archetype key is wrong");
         }
-        let new_row = self.current_row;
-        self.current_row += 1;
+        self.entities.push(entity);
+        self.entities.len() - 1
+    }
 
-        Some(new_row)
+    pub fn remove(&mut self, row: usize) -> Option<Entity> {
+        for column in &mut self.columns {
+            column.data.swap_remove_erased(row);
+        }
+        self.entities.swap_remove(row);
+        (row < self.entities.len()).then(|| self.entities[row])
     }
 }
 
@@ -67,6 +77,7 @@ pub struct Column {
 
 pub(crate) trait ColumnData: Any {
     fn push_erased(&mut self, value: ComponentValue) -> Result<(), Box<dyn Error>>;
+    fn swap_remove_erased(&mut self, row: usize);
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn len(&self) -> usize;
 }
@@ -77,6 +88,10 @@ impl<T: Component + 'static> ColumnData for Vec<T> {
         self.push(x);
 
         Ok(())
+    }
+
+    fn swap_remove_erased(&mut self, row: usize) {
+        self.swap_remove(row);
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
