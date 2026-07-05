@@ -18,7 +18,7 @@ mod assets {
 }
 
 fn spawn_cube_system(
-    mut query: Query<(&mut MeshComponent, &mut MaterialComponent)>,
+    _query: Query<(&mut MeshComponent, &mut MaterialComponent)>,
     ctx: &mut Context,
     commands: &mut Commands,
 ) {
@@ -26,26 +26,18 @@ fn spawn_cube_system(
         return;
     }
 
-    let cube_mesh_handle = ctx.load_mesh(assets::CUBE_OBJ);
-    let brick_material_handle = ctx.load_material(assets::BRICK_EMAT);
-    
-    
-    if let Some((mesh, material)) = query.iter().next() {
-        let mesh_handle = mesh.mesh_handle;
-        let mat_handle = material.material_handle;
+    let mesh_handle = ctx.load_mesh(assets::CUBE_OBJ);
+    let material_handle = ctx.load_material(assets::BRICK_EMAT);
 
-        let x = rand::random::<f32>() * 20.0 - 10.0;
-        let y = rand::random::<f32>() * 20.0 - 10.0;
-        let z = rand::random::<f32>() * 20.0 - 10.0;
+    let x = rand::random::<f32>() * 20.0 - 10.0;
+    let y = rand::random::<f32>() * 20.0 - 10.0;
+    let z = rand::random::<f32>() * 20.0 - 10.0;
 
-        commands.spawn_entity((
-            TransformComponent(Transform::default().with_location(vec3(x, y, z))),
-            MeshComponent { mesh_handle: cube_mesh_handle },
-            MaterialComponent {
-                material_handle: brick_material_handle,
-            },
-        ));
-    }
+    commands.spawn_entity((
+        TransformComponent(Transform::default().with_location(vec3(x, y, z))),
+        MeshComponent { mesh_handle },
+        MaterialComponent { material_handle },
+    ));
 }
 
 fn main() {

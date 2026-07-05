@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::emat::ParamValue;
 use project::Guid;
 use serde::Deserialize;

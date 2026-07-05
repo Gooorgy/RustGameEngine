@@ -13,7 +13,7 @@ pub fn basic_camera_system(
         &mut CameraControllerComponent,
     )>,
     context: &mut Context,
-    commands: &mut Commands,
+    _commands: &mut Commands,
 ) {
     for (camera, transform, controller) in &mut query.iter() {
         if camera.active {
