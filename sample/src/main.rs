@@ -3,15 +3,49 @@ use core::components::{
     CameraComponent, CameraControllerComponent, DirectionalLightComponent, MaterialComponent,
     MeshComponent, TransformComponent,
 };
-use core::system::System;
+use core::system::{Context, System};
 use core::types::transform::Transform;
+use ecs::command_buffer::Commands;
+use ecs::query::Query;
 use input::{AnalogSource, AxisAction, AxisBinding, InputAction, InputBinding, KeyCode};
 use nalgebra_glm::vec3;
 
 #[allow(dead_code)]
 mod assets {
+    #[allow(unused_imports)]
     use common::{guid, Guid};
     include!(concat!(env!("OUT_DIR"), "/assets.rs"));
+}
+
+fn spawn_cube_system(
+    mut query: Query<(&mut MeshComponent, &mut MaterialComponent)>,
+    ctx: &mut Context,
+    commands: &mut Commands,
+) {
+    if !ctx.input.is_action_just_pressed("spawn_cube") {
+        return;
+    }
+
+    let cube_mesh_handle = ctx.load_mesh(assets::CUBE_OBJ);
+    let brick_material_handle = ctx.load_material(assets::BRICK_EMAT);
+    
+    
+    if let Some((mesh, material)) = query.iter().next() {
+        let mesh_handle = mesh.mesh_handle;
+        let mat_handle = material.material_handle;
+
+        let x = rand::random::<f32>() * 20.0 - 10.0;
+        let y = rand::random::<f32>() * 20.0 - 10.0;
+        let z = rand::random::<f32>() * 20.0 - 10.0;
+
+        commands.spawn_entity((
+            TransformComponent(Transform::default().with_location(vec3(x, y, z))),
+            MeshComponent { mesh_handle: cube_mesh_handle },
+            MaterialComponent {
+                material_handle: brick_material_handle,
+            },
+        ));
+    }
 }
 
 fn main() {
@@ -20,6 +54,8 @@ fn main() {
     {
         let ctx = app.engine_context_mut();
 
+        ctx.input_mut()
+            .bind_action("spawn_cube", vec![InputBinding::Key(KeyCode::Space)]);
         ctx.input_mut()
             .bind_action("move_forward", vec![InputBinding::Key(KeyCode::W)]);
         ctx.input_mut()
@@ -67,8 +103,12 @@ fn main() {
 
         setup.world.create_entity((
             TransformComponent(Transform::default()),
-            MeshComponent { mesh_handle: floor_mesh },
-            MaterialComponent { material_handle: mat },
+            MeshComponent {
+                mesh_handle: floor_mesh,
+            },
+            MaterialComponent {
+                material_handle: mat,
+            },
         ));
 
         let mut iteration = 0;
@@ -83,8 +123,12 @@ fn main() {
                             1.0 + y as f32 * 3.0,
                             z as f32 * 3.0,
                         ))),
-                        MeshComponent { mesh_handle: cube_mesh },
-                        MaterialComponent { material_handle: selected },
+                        MeshComponent {
+                            mesh_handle: cube_mesh,
+                        },
+                        MaterialComponent {
+                            material_handle: selected,
+                        },
                     ));
 
                     iteration += 1;
@@ -116,6 +160,7 @@ fn main() {
         ));
 
         ctx.register_system(Box::new(System::new(core::systems::basic_camera_system)));
+        ctx.register_system(Box::new(System::new(spawn_cube_system)));
     }
 
     app.run();

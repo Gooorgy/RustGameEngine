@@ -4,3 +4,4 @@ pub mod query;
 pub mod systems;
 pub mod world;
 
+pub mod command_buffer;

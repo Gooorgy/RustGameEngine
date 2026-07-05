@@ -117,15 +117,22 @@ impl EngineContext {
         let systems = std::mem::take(&mut self.systems);
         let custom = HashMap::new();
 
-        for system in &systems {
-            let mut ctx = Context {
-                dt: delta_time,
-                assets: &mut self.assets,
-                input: &self.input_manager,
-                custom: &custom,
-            };
-            system.run(&mut self.world, &mut ctx);
-        }
+        let queue = {
+            let mut access = self.world.system_access();
+            for system in &systems {
+                let mut ctx = Context {
+                    dt: delta_time,
+                    assets: &mut self.assets,
+                    material_manager: &mut self.material_manager,
+                    input: &self.input_manager,
+                    custom: &custom,
+                };
+                system.run(&mut access.archetypes, &mut ctx, &mut access.commands);
+            }
+            access.into_queue()
+        };
+
+        self.world.flush_queue(queue);
 
         self.systems = systems;
         self.sync_spatial();

@@ -24,6 +24,7 @@ spatial = { path = "../crates/spatial" }
 project = { path = "../crates/project" }
 asset_pipeline = { path = "../crates/asset_pipeline" }
 noise = "0.9.0"
+rand = "0.9"
 common = { path = "../crates/common" }
 
 [build-dependencies]

@@ -4,6 +4,7 @@ use crate::TransformComponent;
 use ecs::query::Query;
 use input::AxisAction;
 use nalgebra_glm::{identity, rotate_x, rotate_y, vec3, Vec4};
+use ecs::command_buffer::Commands;
 
 pub fn basic_camera_system(
     mut query: Query<(
@@ -11,7 +12,8 @@ pub fn basic_camera_system(
         &mut TransformComponent,
         &mut CameraControllerComponent,
     )>,
-    context: &Context,
+    context: &mut Context,
+    commands: &mut Commands,
 ) {
     for (camera, transform, controller) in &mut query.iter() {
         if camera.active {

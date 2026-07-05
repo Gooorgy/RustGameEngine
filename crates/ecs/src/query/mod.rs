@@ -1,7 +1,7 @@
 mod impls;
 
 use crate::component::archetype::{Archetype, Column};
-use crate::world::{ArchetypeId, World};
+use crate::world::ArchetypeId;
 use std::any::TypeId;
 use std::marker::PhantomData;
 
@@ -36,26 +36,26 @@ pub struct Match<Q: QueryParameter> {
 }
 
 pub struct Query<'a, Q: QueryParameter> {
-    pub(crate) world: &'a mut World,
+    pub(crate) archetypes: &'a mut Vec<Archetype>,
     pub(crate) matches: Vec<Match<Q>>,
 }
 
 impl<'a, Q: QueryParameter> Query<'a, Q> {
-    pub fn new(world: &'a mut World) -> Self {
+    pub fn new(archetypes: &'a mut Vec<Archetype>) -> Self {
         Self {
-            world,
+            archetypes,
             matches: Vec::new(),
         }
     }
 
     pub fn iter(&mut self) -> QueryIter<'_, Q> {
-        QueryIter::new(&mut self.matches, &mut self.world.archetypes as *mut _)
+        QueryIter::new(&mut self.matches, self.archetypes)
     }
 
     pub fn build_matches(&mut self) {
         self.matches.clear();
 
-        for (index, archetype) in self.world.archetypes.iter().enumerate() {
+        for (index, archetype) in self.archetypes.iter().enumerate() {
             if let Some(match_key) = Q::check_match(archetype) {
                 self.matches.push(Match {
                     archetype_id: ArchetypeId(index),
@@ -65,10 +65,11 @@ impl<'a, Q: QueryParameter> Query<'a, Q> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn refresh(&mut self, archetype_id: ArchetypeId) {
         self.matches.clear();
 
-        let archetype = &self.world.archetypes[archetype_id.0];
+        let archetype = &self.archetypes[archetype_id.0];
         if let Some(match_key) = Q::check_match(archetype) {
             self.matches.push(Match {
                 archetype_id,
