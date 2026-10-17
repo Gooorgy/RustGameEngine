@@ -1,11 +1,11 @@
 use crate::backend_impl::destroyable::Destroyable;
 use crate::backend_impl::device::DeviceInfo;
 use crate::backend_impl::resource_registry::ResourceRegistry;
-use crate::backend_impl::vk_vertex_info::VulkanVertexInfo;
 use crate::pipeline::{PipelineDesc, PrimitiveTopology};
 use ash::vk;
 use ash::vk::{DynamicState, PipelineDynamicStateCreateInfo};
 use std::{ffi::CString, ptr};
+use crate::backend_impl::conversions::VkVertexInput;
 
 #[derive(Clone)]
 
@@ -50,12 +50,10 @@ impl PipelineInfo {
         let dynamic_state_create_info =
             PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let vertex_binding_description = [VulkanVertexInfo::binding_description()];
-        let vertex_attribute_description = VulkanVertexInfo::attribute_descriptions();
-
+        let vertex_input = VkVertexInput::from(&desc.vertex_input);
         let vertex_input_info_create_info = vk::PipelineVertexInputStateCreateInfo::default()
-            .vertex_attribute_descriptions(&vertex_attribute_description)
-            .vertex_binding_descriptions(&vertex_binding_description);
+            .vertex_attribute_descriptions(&vertex_input.attributes)
+            .vertex_binding_descriptions(&vertex_input.bindings);
 
         let input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::default()
             .topology(match desc.topology {

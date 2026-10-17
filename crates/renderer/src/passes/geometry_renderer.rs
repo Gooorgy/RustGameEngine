@@ -4,11 +4,7 @@ use crate::shader_loader::ShaderCache;
 use material::material_manager::MaterialVariant;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::descriptor::ShaderStage;
-use rendering_backend::pipeline::{
-    BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode,
-    DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology,
-    PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
-};
+use rendering_backend::pipeline::{get_mesh_vertex_info, BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology, PushConstantDesc, RasterizationStateDesc, VertexInputDesc};
 use std::collections::HashMap;
 
 /// Byte offset of the fragment push constant block. The vertex block occupies
@@ -69,7 +65,7 @@ impl GeometryRenderer {
 
             vulkan_backend.bind_vertex_buffer(mesh_data.mesh_data.vertex_buffer);
             vulkan_backend.bind_index_buffer(mesh_data.mesh_data.index_buffer);
-            vulkan_backend.draw_indexed(mesh_data.mesh_data.index_count as u32, 0);
+            vulkan_backend.draw_indexed(mesh_data.mesh_data.index_count as u32, 0, 0);
         }
 
         vulkan_backend.end_rendering();
@@ -161,10 +157,7 @@ impl GeometryRenderer {
                 cull_mode: CullMode::Back,
                 front_face: FrontFace::CounterClockwise,
             },
-            vertex_input: VertexInputDesc {
-                bindings: vec![],
-                attributes: vec![],
-            },
+            vertex_input: get_mesh_vertex_info(),
             topology: PrimitiveTopology::TriangleList,
         };
 

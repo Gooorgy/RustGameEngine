@@ -1,7 +1,5 @@
 use crate::descriptor::ShaderStage;
-use crate::pipeline::{
-    BlendFactor, BlendOp, ColorWriteMask, CompareOp, CullMode, FrontFace, PolygonMode, VertexFormat,
-};
+use crate::pipeline::{BlendFactor, BlendOp, ColorWriteMask, CompareOp, CullMode, FrontFace, PolygonMode, VertexAttributeDesc, VertexBindingDesc, VertexFormat, VertexInputDesc, VertexInputRate};
 use crate::sampler::{Filter, SamplerAddressMode};
 use ash::vk;
 
@@ -17,6 +15,7 @@ impl From<VertexFormat> for vk::Format {
             VertexFormat::Uint32x2 => vk::Format::R32G32_UINT,
             VertexFormat::Uint32x3 => vk::Format::R32G32B32_UINT,
             VertexFormat::Uint32x4 => vk::Format::R32G32B32A32_UINT,
+            VertexFormat::Unorm8x4 => vk::Format::R8G8B8A8_UNORM,
         }
     }
 }
@@ -153,3 +152,48 @@ impl From<ShaderStage> for vk::ShaderStageFlags {
         flags
     }
 }
+
+impl From<VertexInputRate> for vk::VertexInputRate {
+    fn from(op: VertexInputRate) -> Self {
+        match op {
+            VertexInputRate::Vertex => vk::VertexInputRate::VERTEX,
+            VertexInputRate::Instance => vk::VertexInputRate::INSTANCE,
+        }
+    }
+}
+
+impl From<&VertexBindingDesc> for vk::VertexInputBindingDescription {
+    fn from(b: &VertexBindingDesc) -> Self {
+        vk::VertexInputBindingDescription {
+            binding: b.binding,
+            stride: b.stride,
+            input_rate: b.input_rate.into(),
+        }
+    }
+}
+
+impl From<&VertexAttributeDesc> for vk::VertexInputAttributeDescription {
+    fn from(a: &VertexAttributeDesc) -> Self {
+        vk::VertexInputAttributeDescription {
+            location: a.location,
+            binding: a.binding,
+            format: a.format.into(),
+            offset: a.offset,
+        }
+    }
+}
+
+pub(crate) struct VkVertexInput {
+    pub bindings: Vec<vk::VertexInputBindingDescription>,
+    pub attributes: Vec<vk::VertexInputAttributeDescription>,
+}
+
+impl From<&VertexInputDesc> for VkVertexInput {
+    fn from(d: &VertexInputDesc) -> Self {
+        Self {
+            bindings: d.bindings.iter().map(Into::into).collect(),
+            attributes: d.attributes.iter().map(Into::into).collect(),
+        }
+    }
+}
+

@@ -14,5 +14,4 @@ mod structs;
 mod surface;
 mod swapchain;
 mod utils;
-mod vk_vertex_info;
 pub mod vulkan_backend;

@@ -9,6 +9,7 @@ use std::time::Instant;
 use winit::event::{DeviceEvent, ElementState};
 use winit::keyboard::KeyCode as WinitKeyCode;
 use winit::window::Window;
+use config::config::WindowResolution;
 
 const WINDOW_TITLE: &str = "Vulkan Test";
 /// How often the title bar FPS/frametime counters are refreshed (seconds).
@@ -117,6 +118,11 @@ impl Engine {
             camera_render_data,
             directional_light,
             &debug_boxes,
+            delta_time,
+            WindowResolution {
+                width: self.window.inner_size().width,
+                height: self.window.inner_size().height,
+            }
         );
 
         // Accumulate frame time; update the displayed values every DISPLAY_INTERVAL seconds

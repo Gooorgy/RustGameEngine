@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 imgui = "0.12.0"
+config = { path = "../config" }
+rendering_backend = { path = "../rendering_backend" }

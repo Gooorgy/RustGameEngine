@@ -11,10 +11,7 @@ use rendering_backend::descriptor::{
     DescriptorType, DescriptorValue, DescriptorWriteDesc, SampledImageInfo, ShaderStage,
 };
 use rendering_backend::memory::MemoryHint;
-use rendering_backend::pipeline::{
-    CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode,
-    PrimitiveTopology, PushConstantDesc, RasterizationStateDesc, VertexInputDesc,
-};
+use rendering_backend::pipeline::{get_mesh_vertex_info, CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology, PushConstantDesc, RasterizationStateDesc, VertexInputDesc};
 use rendering_backend::sampler::{Filter, SamplerAddressMode, SamplerDesc, SamplerHandle};
 
 const CASCADE_COUNT: usize = 4;
@@ -228,10 +225,7 @@ impl LightingRenderer {
                 front_face: FrontFace::CounterClockwise,
                 polygon_mode: PolygonMode::Fill,
             },
-            vertex_input: VertexInputDesc {
-                bindings: vec![],
-                attributes: vec![],
-            },
+            vertex_input: get_mesh_vertex_info(),
             topology: PrimitiveTopology::TriangleList,
         });
 
@@ -258,10 +252,7 @@ impl LightingRenderer {
                 front_face: FrontFace::CounterClockwise,
                 polygon_mode: PolygonMode::Fill,
             },
-            vertex_input: VertexInputDesc {
-                bindings: vec![],
-                attributes: vec![],
-            },
+            vertex_input: get_mesh_vertex_info(),
             topology: PrimitiveTopology::TriangleList,
         });
 
@@ -345,7 +336,7 @@ impl LightingRenderer {
 
                 vulkan_backend.bind_vertex_buffer(mesh_data.mesh_data.vertex_buffer);
                 vulkan_backend.bind_index_buffer(mesh_data.mesh_data.index_buffer);
-                vulkan_backend.draw_indexed(mesh_data.mesh_data.index_count as u32, 0);
+                vulkan_backend.draw_indexed(mesh_data.mesh_data.index_count as u32, 0, 0);
             }
 
             vulkan_backend.end_rendering();

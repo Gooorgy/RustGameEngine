@@ -10,11 +10,7 @@ use rendering_backend::descriptor::{
     DescriptorType, DescriptorValue, DescriptorWriteDesc, ShaderStage,
 };
 use rendering_backend::memory::MemoryHint;
-use rendering_backend::pipeline::{
-    BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode,
-    DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology,
-    RasterizationStateDesc, VertexInputDesc,
-};
+use rendering_backend::pipeline::{get_mesh_vertex_info, BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology, RasterizationStateDesc, VertexInputDesc};
 use common::Vertex;
 
 /// Axis-aligned bounding box passed to the debug renderer for wireframe drawing.
@@ -206,10 +202,7 @@ impl AabbDebugRenderer {
             }),
             layout: vec![layout],
             push_constant_ranges: vec![],
-            vertex_input: VertexInputDesc {
-                bindings: vec![],
-                attributes: vec![],
-            },
+            vertex_input: get_mesh_vertex_info(),
         };
 
         let pipeline = vulkan_backend.create_graphics_pipeline(pipeline_desc);

@@ -13,7 +13,8 @@ use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
 use std::path::PathBuf;
-
+use config::config::WindowResolution;
+use imgui::ImuiRenderer;
 pub use crate::passes::aabb_debug_renderer::DebugBox;
 
 pub struct RendererConfig {
@@ -28,6 +29,7 @@ pub struct Renderer {
     geometry_renderer: GeometryRenderer,
     lighting_renderer: LightingRenderer,
     aabb_debug_renderer: AabbDebugRenderer,
+    imgui_renderer: ImuiRenderer,
     shader_cache: ShaderCache,
 }
 
@@ -39,6 +41,7 @@ impl Renderer {
         let mut shader_cache = ShaderCache::new(config.asset_cache_dir);
         let lighting_renderer =
             LightingRenderer::new(vulkan_backend, &frame_data, &mut shader_cache);
+        let imgui_renderer = ImuiRenderer::new(vulkan_backend, frame_data.frame_images.draw_image, frame_data.basic_sampler);
         Self {
             frame_data,
             material_gpu_cache: MaterialGpuCache::new(),
@@ -46,6 +49,7 @@ impl Renderer {
             lighting_renderer,
             aabb_debug_renderer,
             shader_cache,
+            imgui_renderer,
         }
     }
 
@@ -65,6 +69,8 @@ impl Renderer {
         camera_render_data: Option<CameraRenderData>,
         directional_light: Option<DirectionalLightData>,
         aabbs: &[DebugBox],
+        delta_time: f32,
+        res: WindowResolution
     ) {
         let render_scene = self.create_render_scene(
             vulkan_backend,
@@ -92,6 +98,8 @@ impl Renderer {
             camera,
             &mut self.shader_cache,
         );
+
+            self.imgui_renderer.draw_frame(vulkan_backend, [res.width as f32, res.height as f32], delta_time, self.frame_data.frame_images.draw_image);
 
         vulkan_backend.end_frame(self.frame_data.frame_images.draw_image);
     }

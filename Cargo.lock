@@ -1078,7 +1078,9 @@ checksum = "e7c5cedc30da3a610cac6b4ba17597bdf7152cf974e8aab3afb3d54455e371c8"
 name = "imgui"
 version = "0.1.0"
 dependencies = [
+ "config",
  "imgui 0.12.0",
+ "rendering_backend",
 ]
 
 [[package]]
@@ -2283,6 +2285,7 @@ dependencies = [
  "config",
  "core",
  "ecs",
+ "imgui 0.1.0",
  "material",
  "nalgebra-glm",
  "rendering_backend",

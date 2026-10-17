@@ -313,6 +313,7 @@ fn map_texture_format(texture_format: TextureFormat) -> vk::Format {
         TextureFormat::R8g8b8a8Unorm => vk::Format::R8G8B8A8_UNORM,
         TextureFormat::D32Float => vk::Format::D32_SFLOAT,
         TextureFormat::R16g16b16a16Float => vk::Format::R16G16B16A16_SFLOAT,
+        TextureFormat::R32g32b32a32Float => vk::Format::R32G32B32A32_SFLOAT,
     }
 }
 

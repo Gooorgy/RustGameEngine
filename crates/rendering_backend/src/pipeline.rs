@@ -1,5 +1,7 @@
 use crate::descriptor::{DescriptorLayoutHandle, ShaderStage};
 use crate::image::GpuImageHandle;
+use common::Vertex;
+use std::mem::offset_of;
 
 #[derive(Copy, Clone, Debug)]
 pub struct PipelineHandle(pub usize);
@@ -70,6 +72,7 @@ pub enum VertexFormat {
     Uint32x2,
     Uint32x3,
     Uint32x4,
+    Unorm8x4
 }
 
 #[derive(Clone, Debug)]
@@ -174,4 +177,40 @@ pub enum CompareOp {
     NotEqual,
     GreaterOrEqual,
     Always,
+}
+
+pub fn get_mesh_vertex_info() -> VertexInputDesc {
+    VertexInputDesc {
+        bindings: vec![VertexBindingDesc {
+            binding: 0,
+            stride: size_of::<Vertex>() as u32,
+            input_rate: VertexInputRate::Vertex,
+        }],
+        attributes: vec![
+            VertexAttributeDesc {
+                location: 0,
+                binding: 0,
+                format: VertexFormat::Float32x3,
+                offset: offset_of!(Vertex, pos) as u32,
+            },
+            VertexAttributeDesc {
+                location: 1,
+                binding: 0,
+                format: VertexFormat::Float32x3,
+                offset: offset_of!(Vertex, color) as u32,
+            },
+            VertexAttributeDesc {
+                location: 2,
+                binding: 0,
+                format: VertexFormat::Float32x2,
+                offset: offset_of!(Vertex, tex_coord) as u32,
+            },
+            VertexAttributeDesc {
+                location: 3,
+                binding: 0,
+                format: VertexFormat::Float32x3,
+                offset: offset_of!(Vertex, normal) as u32,
+            },
+        ],
+    }
 }

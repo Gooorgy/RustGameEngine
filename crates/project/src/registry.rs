@@ -403,6 +403,7 @@ pub fn resolve_cooked_path(cache_dir: &Path, guid: &Guid, extension: &str) -> Pa
 
 #[cfg(test)]
 mod tests {
+    use crate::Project;
     use super::*;
 
     #[test]

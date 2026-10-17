@@ -20,6 +20,7 @@ pub enum TextureFormat {
     R8g8b8a8Unorm,
     R16g16b16a16Float,
     D32Float,
+    R32g32b32a32Float
     // add others as needed
 }
 

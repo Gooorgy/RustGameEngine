@@ -15,13 +15,15 @@ use crate::image::{GpuImageHandle, ImageDesc};
 use crate::backend_impl::pipeline_info::PipelineInfo;
 use crate::backend_impl::resource_registry::ResourceRegistry;
 use crate::memory::MemoryHint;
-use crate::pipeline::{PipelineDesc, PipelineHandle};
+use crate::pipeline::{PipelineDesc, PipelineHandle, VertexAttributeDesc, VertexBindingDesc};
 use crate::sampler::{SamplerDesc, SamplerHandle};
 use ash::vk::MemoryPropertyFlags;
 use ash::vk::{self};
 use ash::Instance;
 use std::{error::Error, ffi::CString, mem, ptr, slice};
+use std::mem::offset_of;
 use winit::{raw_window_handle::HasDisplayHandle, window::Window};
+use common::Vertex;
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
@@ -685,6 +687,18 @@ impl VulkanBackend {
         }
     }
 
+    pub fn bind_index_buffer_u16(&mut self, buffer: BufferHandle) {
+        let buf = self.resource_registry.buffers[buffer.0].buffer;
+        unsafe {
+            self.device_info.logical_device.cmd_bind_index_buffer(
+                self.command_buffer,
+                buf,
+                0,
+                vk::IndexType::UINT16,
+            );
+        }
+    }
+
     pub fn bind_pipeline(&mut self, pipeline: PipelineHandle) {
         let vk_pipeline = self.resource_registry.pipelines[pipeline.0].pipelines[0];
         unsafe {
@@ -715,14 +729,14 @@ impl VulkanBackend {
         }
     }
 
-    pub fn draw_indexed(&self, index_count: u32, first_index: u32) {
+    pub fn draw_indexed(&self, index_count: u32, first_index: u32, vertex_offset: i32) {
         unsafe {
             self.device_info.logical_device.cmd_draw_indexed(
                 self.command_buffer,
                 index_count,
                 1,
                 first_index,
-                0,
+                vertex_offset,
                 0,
             );
         }
