@@ -83,6 +83,8 @@ impl AabbDebugRenderer {
         camera: CameraMvpUbo,
         shader_cache: &mut ShaderCache,
     ) {
+        profiling::scope!("aabb_frame_frame");
+
         if !self.enabled || aabbs.is_empty() {
             return;
         }

@@ -6,6 +6,7 @@ edition = "2021"
 # crates/core/Cargo.toml
 [features]
 dev = ["dep:project", "dep:asset_pipeline"]
+profiling = ["profiling/profiling"]
 
 [dependencies]
 common = { path = "../common" }
@@ -18,3 +19,4 @@ input = { path = "../input" }
 spatial = { path = "../spatial" }
 project = { path = "../project", optional = true }
 asset_pipeline = { path = "../asset_pipeline", optional = true }
+profiling = {path = "../profiling"}

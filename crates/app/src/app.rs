@@ -11,6 +11,7 @@ use winit::event_loop::EventLoop;
 pub struct App {
     event_loop: EventLoop<()>,
     engine_context: EngineContext,
+    _profiler: profiling::ProfilerGuard,
 }
 
 impl Default for App {
@@ -28,6 +29,9 @@ impl App {
 
     /// Loads a project from an explicit `.eproj` path.
     pub fn with_project(path: impl AsRef<std::path::Path>) -> Self {
+        let profiler = profiling::start();
+        profiling::set_thread_name!("main");
+
         let path = path.as_ref();
         let project = Project::load(path)
             .unwrap_or_else(|e| panic!("failed to load '{}': {}", path.display(), e));
@@ -55,7 +59,7 @@ impl App {
         let engine_context = EngineContext::new(config, assets);
         let event_loop = EventLoop::new().expect("failed to create event loop");
 
-        Self { event_loop, engine_context }
+        Self { event_loop, engine_context, _profiler: profiler }
     }
 
     pub fn engine_context_mut(&mut self) -> &mut EngineContext {

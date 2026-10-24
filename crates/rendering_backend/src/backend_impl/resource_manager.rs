@@ -46,6 +46,8 @@ impl ResourceManager {
         handle: MeshHandle,
         mesh: &MeshData,
     ) -> GpuMeshData {
+        profiling::scope!("resource_manager::get_or_create_mesh");
+        
         let mesh_data = self.mesh_data.get_mut(&handle);
         if let Some(mesh_data) = mesh_data {
             return *mesh_data;
@@ -60,6 +62,8 @@ impl ResourceManager {
         mesh: &MeshData,
         handle: MeshHandle,
     ) -> GpuMeshData {
+        profiling::scope!("resource_manager::upload_mesh");
+        
         let vertices = mesh.vertices.as_slice();
         let indices = mesh.indices.as_slice();
 

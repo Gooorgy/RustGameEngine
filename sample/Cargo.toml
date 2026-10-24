@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["dev"]
+default = ["dev", "profiling"]
 dev = ["core/dev"]  # propagates down the chain
+profiling = ["core/profiling"]
 
 [dependencies]
 winit = "0.30.9"

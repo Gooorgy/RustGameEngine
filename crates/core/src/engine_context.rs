@@ -114,10 +114,12 @@ impl EngineContext {
     // ── Frame update ───────────────────────────────────────────────────────
 
     pub fn update(&mut self, delta_time: f32) {
+        profiling::scope!("update_engine_context");
         let systems = std::mem::take(&mut self.systems);
         let custom = HashMap::new();
 
         let queue = {
+            profiling::scope!("run_systems");
             let mut access = self.world.system_access();
             for system in &systems {
                 let mut ctx = Context {
@@ -132,10 +134,17 @@ impl EngineContext {
             access.into_queue()
         };
 
-        self.world.flush_queue(queue);
+        {
+            profiling::scope!("flush_queue");
+            self.world.flush_queue(queue);
+        }
 
         self.systems = systems;
-        self.sync_spatial();
+
+        {
+            profiling::scope!("sync_spatial");
+            self.sync_spatial();
+        }
     }
 
     pub fn register_system(&mut self, system: Box<dyn SystemFunction>) {

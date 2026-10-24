@@ -13,3 +13,4 @@ ecs = { path = "../ecs" }
 config = { path = "../config" }
 nalgebra-glm = { workspace = true }
 imgui = { path = "../imgui"}
+profiling = {path = "../profiling"}

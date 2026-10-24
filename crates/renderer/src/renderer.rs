@@ -72,6 +72,8 @@ impl Renderer {
         delta_time: f32,
         res: WindowResolution
     ) {
+        profiling::scope!("draw_frame");
+
         let render_scene = self.create_render_scene(
             vulkan_backend,
             mesh_requests,
@@ -99,7 +101,7 @@ impl Renderer {
             &mut self.shader_cache,
         );
 
-            self.imgui_renderer.draw_frame(vulkan_backend, [res.width as f32, res.height as f32], delta_time, self.frame_data.frame_images.draw_image);
+            //self.imgui_renderer.draw_frame(vulkan_backend, [res.width as f32, res.height as f32], delta_time, self.frame_data.frame_images.draw_image);
 
         vulkan_backend.end_frame(self.frame_data.frame_images.draw_image);
     }
@@ -116,12 +118,16 @@ impl Renderer {
         camera_render_data: Option<CameraRenderData>,
         directional_light: Option<DirectionalLightData>,
     ) -> RenderScene {
+        profiling::scope!("create_render_scene");
+        
         let mut meshes = vec![];
         let mut model_matrices = vec![];
 
         let basic_sampler = self.frame_data.basic_sampler;
 
         for request in mesh_requests {
+            profiling::scope!("handle_mesh_request");
+            
             let mesh_data = asset_store
                 .get::<MeshData>(request.mesh_handle)
                 .unwrap_or_else(|| {
@@ -129,7 +135,7 @@ impl Renderer {
                 });
 
             model_matrices.push(request.transform.get_model_matrix());
-
+            
             let gpu_mesh_data =
                 resource_manager.get_or_create_mesh(vulkan_backend, request.mesh_handle, mesh_data);
 

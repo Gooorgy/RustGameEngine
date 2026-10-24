@@ -9,3 +9,4 @@ assets = { path = "../assets" }
 nalgebra-glm = { workspace = true }
 bitflags = "2.10.0"
 serde = { version = "1.0.217", features = ["derive"] }
+profiling = {path = "../profiling"}

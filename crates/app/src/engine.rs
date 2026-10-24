@@ -70,6 +70,7 @@ impl Engine {
 
     /// Runs one full engine frame: input → ECS → render → present.
     pub fn tick(&mut self) {
+        profiling::scope!("tick");
         let delta_time = self.last_frame_time.elapsed().as_secs_f32();
         self.last_frame_time = Instant::now();
 
@@ -143,6 +144,7 @@ impl Engine {
         ));
 
         self.window.request_redraw();
+        profiling::frame_mark();
     }
 
     /// Forwards a winit device event to the input manager.

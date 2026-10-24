@@ -20,10 +20,10 @@ use crate::sampler::{SamplerDesc, SamplerHandle};
 use ash::vk::MemoryPropertyFlags;
 use ash::vk::{self};
 use ash::Instance;
-use std::{error::Error, ffi::CString, mem, ptr, slice};
-use std::mem::offset_of;
-use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 use common::Vertex;
+use std::mem::offset_of;
+use std::{error::Error, ffi::CString, mem, ptr, slice};
+use winit::{raw_window_handle::HasDisplayHandle, window::Window};
 
 pub struct VulkanBackend {
     _entry: ash::Entry,
@@ -239,6 +239,8 @@ impl VulkanBackend {
     }
 
     pub fn update_buffer<T>(&mut self, buffer_handle: BufferHandle, data: &[T]) {
+        profiling::scope!("update_buffer");
+        
         let buffer = &mut self.resource_registry.buffers[buffer_handle.0];
 
         buffer.update_buffer(data);
@@ -275,6 +277,8 @@ impl VulkanBackend {
     }
 
     pub fn begin_frame(&mut self) {
+        profiling::scope!("begin_frame");
+        
         let begin_info = vk::CommandBufferBeginInfo::default();
         unsafe {
             self.device_info
@@ -318,6 +322,8 @@ impl VulkanBackend {
     }
 
     pub fn end_frame(&mut self, final_image_handle: GpuImageHandle) {
+        profiling::scope!("end_frame");
+        
         let final_image = &self.resource_registry.images[final_image_handle.0];
         let swapchain_image =
             self.swapchain_info.swapchain_images[self.current_swapchain_image as usize];
@@ -371,6 +377,8 @@ impl VulkanBackend {
         );
 
         unsafe {
+            profiling::scope!("end_command_buffer");
+            
             self.device_info
                 .logical_device
                 .end_command_buffer(self.command_buffer)
@@ -400,6 +408,8 @@ impl VulkanBackend {
 
         //let t = Instant::now();
         unsafe {
+            profiling::scope!("queue_submit2");
+            
             self.device_info
                 .logical_device
                 .queue_submit2(
@@ -420,6 +430,8 @@ impl VulkanBackend {
             .image_indices(&image_indices);
 
         let present_result = unsafe {
+            profiling::scope!("queue_present");
+            
             self.swapchain_info
                 .swapchain_device
                 .queue_present(self.device_info.queue_info.present_queue, &present_info)

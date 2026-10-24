@@ -37,6 +37,8 @@ impl MaterialGpuCache {
         asset_store: &AssetStore,
         basic_sampler: SamplerHandle,
     ) -> (DescriptorSetHandle, DescriptorLayoutHandle) {
+        profiling::scope!("get_or_create");
+
         let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings, variant);
 
         // Return the cached set without any allocation if this material was seen before.

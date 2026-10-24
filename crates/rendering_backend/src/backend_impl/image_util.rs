@@ -159,6 +159,8 @@ pub fn copy_image_to_image(
     src_size: vk::Extent2D,
     dst_size: vk::Extent2D,
 ) {
+    profiling::scope!("copy_image_to_image");
+
     let mut blit_region = vk::ImageBlit2::default()
         .src_subresource(vk::ImageSubresourceLayers {
             aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -202,6 +204,8 @@ pub fn transition_image_layout(
     new_layout: vk::ImageLayout,
     depth: bool,
 ) {
+    profiling::scope!("transition_image_layout");
+
     let mut aspect_mask = vk::ImageAspectFlags::COLOR;
     if depth {
         aspect_mask = vk::ImageAspectFlags::DEPTH;

@@ -70,6 +70,8 @@ impl MaterialManager {
     }
 
     pub fn get_variant(&self, handle: MaterialHandle) -> &MaterialVariant {
+        profiling::scope!("get_variant");
+        
         let material = self
             .materials
             .get(&handle)

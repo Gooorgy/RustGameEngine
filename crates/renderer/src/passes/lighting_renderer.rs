@@ -276,6 +276,8 @@ impl LightingRenderer {
         render_scene: &RenderScene,
         frame_data: &FrameData,
     ) {
+        profiling::scope!("lighting_frame");
+        
         let light = match &render_scene.directional_light {
             Some(l) => l,
             None => return,
@@ -315,6 +317,8 @@ impl LightingRenderer {
 
         #[allow(clippy::needless_range_loop)]
         for cascade_idx in 0..CASCADE_COUNT {
+            profiling::scope!("cascade");
+            
             let shadow_image = &frame_data.frame_images.shadow_cascades[cascade_idx];
             let res = CASCADE_RESOLUTIONS[cascade_idx];
             vulkan_backend.begin_rendering_with_extent(&[], Some(shadow_image), res, res);
@@ -432,6 +436,8 @@ impl LightingRenderer {
     }
 
     fn compute_cascades(&self, camera: &CameraRenderData, light_dir: &Vec3) -> Vec<Cascade> {
+        profiling::scope!("compute_cascades");
+        
         let near = camera.near_clip;
         let far = camera.far_clip.min(SHADOW_DISTANCE);
         let lambda = 0.9f32;

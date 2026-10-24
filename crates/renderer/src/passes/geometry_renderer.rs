@@ -30,6 +30,8 @@ impl GeometryRenderer {
         frame_data: &FrameData,
         shader_cache: &mut ShaderCache,
     ) {
+        profiling::scope!("geometry_frame");
+        
         vulkan_backend.begin_rendering(
             &[frame_data.frame_images.gbuffer_albedo, frame_data.frame_images.gbuffer_normal],
             Some(&frame_data.frame_images.gbuffer_depth),

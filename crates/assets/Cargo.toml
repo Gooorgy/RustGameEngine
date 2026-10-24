@@ -7,4 +7,5 @@ edition = "2021"
 common = { path = "../common" }
 nalgebra = { workspace = true }
 nalgebra-glm = { workspace = true }
-image = { workspace = true }
+image = { workspace = true }#
+profiling = {path = "../profiling"}
