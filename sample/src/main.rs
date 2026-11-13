@@ -1,7 +1,7 @@
 use app::App;
 use core::components::{
     CameraComponent, CameraControllerComponent, DirectionalLightComponent, MaterialComponent,
-    MeshComponent, TransformComponent,
+    MeshComponent, TransformComponent, PointLightComponent
 };
 use core::system::{Context, System};
 use core::types::transform::Transform;
@@ -103,10 +103,19 @@ fn main() {
             },
         ));
 
+        setup.world.create_entity((
+            TransformComponent(Transform::default().with_location(vec3(-4.0, 4.0, -4.0))),
+            PointLightComponent {
+                radius: 100.0,
+                intensity: 1.0,
+                color: vec3(235.0, 107.0, 111.0),
+            }
+        ));
+
         let mut iteration = 0;
-        for x in 0..2i32 {
-            for y in 0..2i32 {
-                for z in 0..2i32 {
+        for x in 0..10i32 {
+            for y in 0..10i32 {
+                for z in 0..10i32 {
                     let selected = if iteration % 2 == 0 { mat } else { mat2 };
 
                     setup.world.create_entity((

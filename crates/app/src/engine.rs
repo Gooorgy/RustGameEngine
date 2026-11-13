@@ -118,6 +118,7 @@ impl Engine {
             camera_ubo,
             camera_render_data,
             directional_light,
+            render_data.point_lights,
             &debug_boxes,
             delta_time,
             WindowResolution {

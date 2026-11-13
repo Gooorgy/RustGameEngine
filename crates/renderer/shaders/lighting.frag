@@ -1,5 +1,12 @@
 #version 450
 
+struct PointLight {
+    vec3 position;
+    float radius;
+    vec3 color;
+    float intensity;
+};
+
 // G-buffer samplers
 layout(set = 0, binding = 1) uniform sampler2D albedoTexture;
 layout(set = 0, binding = 2) uniform sampler2D normalTexture;
@@ -11,6 +18,10 @@ layout(set = 0, binding = 4) uniform sampler2DShadow shadowMapCascade0;
 layout(set = 0, binding = 5) uniform sampler2DShadow shadowMapCascade1;
 layout(set = 0, binding = 6) uniform sampler2DShadow shadowMapCascade2;
 layout(set = 0, binding = 9) uniform sampler2DShadow shadowMapCascade3;
+layout(std430, set = 0, binding = 10) readonly buffer pointLights{
+    PointLight lights[];
+};
+
 
 // Directionallight cascade view projections
 layout(std140, set = 0, binding = 7) uniform Cascade {
@@ -29,6 +40,8 @@ layout(std140, set = 0, binding = 0) uniform Lighting {
     vec4 lightColor;
     vec4 ambiantLight;
     vec4 cascadeDepths;
+    // PointLight count
+    uint lightCount;
 } lighting;
 
 layout(location = 0) in vec2 fragTexCoord;
@@ -98,6 +111,14 @@ float calculateShadow(int cascadeIndex, vec3 worldPos, vec3 normal) {
     return mix(1.0, 1.0 - shadow, shadowFade);
 }
 
+// Smooth inverse-square falloff that reaches exactly 0 at the radius
+float attenuation(float dist, float radius) {
+    float d2 = dist * dist;
+    float r2 = radius * radius;
+    float window = clamp(1.0 - (d2 * d2) / (r2 * r2), 0.0, 1.0);
+    return (window * window) / max(d2, 0.0001);
+}
+
 void main() {
     vec3 albedo = texture(albedoTexture, fragTexCoord).rgb;
     vec3 normal = texture(normalTexture, fragTexCoord).rgb;
@@ -133,6 +154,20 @@ void main() {
     // apply shadow to diffuse
     float shadow = calculateShadow(cascadeIndex, worldPos, normal);
     diffuse = diffuse * (1.0 - shadow);
+
+    for (uint i = 0; i < lighting.lightCount; ++i) {
+        PointLight l = lights[i];
+
+        vec3 toLight = l.position - worldPos;
+        float dist = length(toLight);
+        if (dist >= l.radius) continue;
+
+        vec3 L = toLight / dist;
+        float NdotL = max(dot(normal, L), 0.0);
+
+        diffuse += NdotL * l.color * l.intensity * attenuation(dist, l.radius);
+    }
+
 
     // add ambient to diffuse
     vec3 ambient = lighting.ambiantLight.rgb * lighting.ambiantLight.w;

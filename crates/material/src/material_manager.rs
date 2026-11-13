@@ -2,29 +2,30 @@ use crate::{Material, MaterialParameterBinding, ShaderRef};
 use common::{Guid, Handle};
 use std::collections::HashMap;
 
-/// Marker type for material handles.
 pub struct MaterialData;
 pub type MaterialHandle = Handle<MaterialData>;
 
+pub struct MaterialVariantData;
+pub type MaterialVariantHandle = Handle<MaterialVariantData>;
+
 pub struct MaterialManager {
-    materials: HashMap<MaterialHandle, Material>,
-    shader_variants: HashMap<String, MaterialVariant>,
+    materials: Vec<MaterialRecord>,
+    variants: Vec<MaterialVariant>,
+    variant_index: HashMap<MaterialVariantKey, MaterialVariantHandle>,
     guid_index: HashMap<Guid, MaterialHandle>,
-    next_id: u64,
 }
 
 impl MaterialManager {
     pub fn new() -> Self {
         Self {
-            materials: HashMap::new(),
-            shader_variants: HashMap::new(),
+            materials: Vec::new(),
+            variants: Vec::new(),
+            variant_index: HashMap::new(),
             guid_index: HashMap::new(),
-            next_id: 0,
         }
     }
 
-    /// Returns the cached handle if this GUID was already loaded, otherwise
-    /// calls `f` to build the material, registers it, and caches the handle.
+    /// Returns the cached handle if this GUID was already loaded, otherwise builds and registers it.
     pub fn get_or_insert(&mut self, guid: Guid, f: impl FnOnce() -> Material) -> MaterialHandle {
         if let Some(&handle) = self.guid_index.get(&guid) {
             return handle;
@@ -35,73 +36,49 @@ impl MaterialManager {
     }
 
     fn insert(&mut self, material: Material) -> MaterialHandle {
-        let key = variant_key(
-            &material.vertex_shader,
-            &material.fragment_shader,
-            &material.active_defines,
-        );
-        let variant = Self::create_variant(&material);
-        self.shader_variants.entry(key).or_insert(variant);
-
-        let handle = Handle::new(self.next_id);
-        self.next_id += 1;
-        self.materials.insert(handle, material);
+        let variant_handle = self.ensure_variant(&material);
+        let handle = MaterialHandle::new(self.materials.len() as u64);
+        self.materials.push(MaterialRecord {
+            data: material,
+            variant_handle,
+        });
         handle
     }
 
-    pub fn get_variants(&self) -> Vec<&MaterialVariant> {
-        self.shader_variants.values().collect()
-    }
-
     pub fn get_bindings(&self, handle: MaterialHandle) -> &[MaterialParameterBinding] {
-        &self
-            .materials
-            .get(&handle)
-            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", handle))
-            .bindings
+        &self.material_record(handle).data.bindings
     }
 
     pub fn get_push_constants(&self, handle: MaterialHandle) -> &[u8] {
-        &self
-            .materials
-            .get(&handle)
+        &self.material_record(handle).data.push_constants
+    }
+
+    pub fn get_variant_handle(&self, handle: MaterialHandle) -> MaterialVariantHandle {
+        self.material_record(handle).variant_handle
+    }
+
+    pub fn get_variant(&self, handle: MaterialVariantHandle) -> &MaterialVariant {
+        self.variants
+            .get(handle.raw() as usize)
+            .unwrap_or_else(|| panic!("MaterialManager: invalid variant handle {:?}", handle))
+    }
+
+    fn material_record(&self, handle: MaterialHandle) -> &MaterialRecord {
+        self.materials
+            .get(handle.raw() as usize)
             .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", handle))
-            .push_constants
     }
 
-    pub fn get_variant(&self, handle: MaterialHandle) -> &MaterialVariant {
-        profiling::scope!("get_variant");
-        
-        let material = self
-            .materials
-            .get(&handle)
-            .unwrap_or_else(|| panic!("MaterialManager: invalid handle {:?}", handle));
-
-        let key = variant_key(
-            &material.vertex_shader,
-            &material.fragment_shader,
-            &material.active_defines,
-        );
-        self.shader_variants
-            .get(&key)
-            .expect("MaterialManager: shader variant not found")
-    }
-
-    fn create_variant(material: &Material) -> MaterialVariant {
-        MaterialVariant {
-            vertex_shader: material.vertex_shader.clone(),
-            fragment_shader: material.fragment_shader.clone(),
-            active_defines: material.active_defines.clone(),
-            push_constant_size: material.push_constants.len(),
-            binding_info: material
-                .bindings
-                .iter()
-                .map(|b| ShaderBindingInfo {
-                    index: b.index,
-                    binding_type: BindingType::ImageSampler,
-                })
-                .collect(),
+    fn ensure_variant(&mut self, material: &Material) -> MaterialVariantHandle {
+        let key = MaterialVariantKey::from_material(material);
+        if let Some(&handle) = self.variant_index.get(&key) {
+            return handle;
         }
+
+        let handle = MaterialVariantHandle::new(self.variants.len() as u64);
+        self.variants.push(key.to_variant());
+        self.variant_index.insert(key, handle);
+        handle
     }
 }
 
@@ -111,12 +88,32 @@ impl Default for MaterialManager {
     }
 }
 
-fn variant_key(v: &ShaderRef, f: &ShaderRef, defines: &[String]) -> String {
-    let s = |r: &ShaderRef| match r {
-        ShaderRef::BuiltIn(n) => format!("b:{}", n),
-        ShaderRef::Asset(g) => format!("a:{}", g),
-    };
-    format!("{}|{}|{}", s(v), s(f), defines.join(","))
+#[derive(Clone, Eq, PartialEq, Hash)]
+struct MaterialVariantKey {
+    vertex_shader: ShaderRef,
+    fragment_shader: ShaderRef,
+    active_defines: Vec<String>,
+    push_constant_size: usize,
+}
+
+impl MaterialVariantKey {
+    fn from_material(material: &Material) -> Self {
+        Self {
+            vertex_shader: material.vertex_shader.clone(),
+            fragment_shader: material.fragment_shader.clone(),
+            active_defines: material.active_defines.clone(),
+            push_constant_size: material.push_constants.len(),
+        }
+    }
+
+    fn to_variant(&self) -> MaterialVariant {
+        MaterialVariant {
+            vertex_shader: self.vertex_shader.clone(),
+            fragment_shader: self.fragment_shader.clone(),
+            active_defines: self.active_defines.clone(),
+            push_constant_size: self.push_constant_size,
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -125,16 +122,9 @@ pub struct MaterialVariant {
     pub fragment_shader: ShaderRef,
     pub active_defines: Vec<String>,
     pub push_constant_size: usize,
-    pub binding_info: Vec<ShaderBindingInfo>,
 }
 
-#[derive(Eq, PartialEq, Hash, Clone)]
-pub struct ShaderBindingInfo {
-    pub index: usize,
-    pub binding_type: BindingType,
-}
-
-#[derive(Eq, PartialEq, Hash, Clone)]
-pub enum BindingType {
-    ImageSampler,
+struct MaterialRecord {
+    data: Material,
+    variant_handle: MaterialVariantHandle,
 }

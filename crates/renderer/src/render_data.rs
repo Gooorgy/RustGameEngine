@@ -1,7 +1,7 @@
 use core::types::transform::Transform;
 use core::{
     CameraComponent, DirectionalLightComponent, MaterialComponent, MeshComponent,
-    TransformComponent,
+    TransformComponent, PointLightComponent
 };
 use ecs::world::World;
 use material::material_manager::MaterialHandle;
@@ -34,12 +34,20 @@ pub struct DirectionalLightData {
     pub ambient_intensity: f32,
 }
 
+pub struct PointLightData {
+    pub intensity: f32,
+    pub color: Vec3,
+    pub radius: f32,
+    pub location: Vec3,
+}
+
 /// Collects render data from the ECS World.
 /// Designed to be extensible for future render types (lights, particles, etc.)
 pub struct RenderDataCollector {
     pub mesh_requests: Vec<MeshRenderRequest>,
     pub camera: Option<CameraRenderData>,
     pub directional_light: Option<DirectionalLightData>,
+    pub point_lights: Vec<PointLightData>,
 }
 
 impl RenderDataCollector {
@@ -48,6 +56,7 @@ impl RenderDataCollector {
             mesh_requests: Vec::new(),
             camera: None,
             directional_light: None,
+            point_lights: Vec::new(),
         }
     }
 
@@ -59,6 +68,7 @@ impl RenderDataCollector {
         self.collect_meshes(world);
         self.collect_camera(world, aspect_ratio);
         self.collect_directional_light(world);
+        self.collect_point_lights(world);
     }
 
     fn collect_meshes(&mut self, world: &mut World) {
@@ -117,6 +127,20 @@ impl RenderDataCollector {
                 intensity: light.intensity,
                 ambient_color: light.ambient_color,
                 ambient_intensity: light.ambient_intensity,
+            });
+        }
+    }
+
+    fn collect_point_lights(&mut self, world: &mut World) {
+        let mut query =
+            world.query::<(&mut TransformComponent, &mut PointLightComponent)>();
+
+        if let Some((transform, light)) = query.iter().next() {
+            self.point_lights.push(PointLightData {
+                color: light.color,
+                radius: light.radius,
+                intensity: light.intensity,
+                location: transform.location,
             });
         }
     }

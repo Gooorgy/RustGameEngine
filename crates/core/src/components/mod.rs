@@ -75,3 +75,11 @@ pub struct DirectionalLightComponent {
     pub ambient_color: Vec3,
     pub ambient_intensity: f32,
 }
+
+#[derive(Clone, Debug, Component)]
+pub struct PointLightComponent {
+    pub color: Vec3,
+    pub intensity: f32,
+    pub radius: f32,
+}
+

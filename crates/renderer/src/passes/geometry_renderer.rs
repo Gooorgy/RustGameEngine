@@ -1,10 +1,14 @@
 use crate::frame_data::FrameData;
 use crate::render_scene::{MaterialData, RenderScene};
 use crate::shader_loader::ShaderCache;
-use material::material_manager::MaterialVariant;
+use material::material_manager::{MaterialManager, MaterialVariantHandle};
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::descriptor::ShaderStage;
-use rendering_backend::pipeline::{get_mesh_vertex_info, BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode, DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology, PushConstantDesc, RasterizationStateDesc, VertexInputDesc};
+use rendering_backend::pipeline::{
+    BlendAttachmentDesc, BlendFactor, BlendOp, BlendStateDesc, ColorWriteMask, CompareOp, CullMode,
+    DepthStencilDesc, FrontFace, PipelineDesc, PipelineHandle, PolygonMode, PrimitiveTopology,
+    PushConstantDesc, RasterizationStateDesc, VertexInputDesc, get_mesh_vertex_info,
+};
 use std::collections::HashMap;
 
 /// Byte offset of the fragment push constant block. The vertex block occupies
@@ -13,7 +17,13 @@ use std::collections::HashMap;
 const FRAGMENT_PUSH_CONSTANT_OFFSET: u32 = 16;
 
 pub struct GeometryRenderer {
-    pub pipeline_cache: HashMap<MaterialVariant, PipelineHandle>,
+    pub pipeline_cache: HashMap<
+        (
+            MaterialVariantHandle,
+            rendering_backend::descriptor::DescriptorLayoutHandle,
+        ),
+        PipelineHandle,
+    >,
 }
 
 impl GeometryRenderer {
@@ -29,11 +39,15 @@ impl GeometryRenderer {
         render_scene: &RenderScene,
         frame_data: &FrameData,
         shader_cache: &mut ShaderCache,
+        material_manager: &MaterialManager,
     ) {
         profiling::scope!("geometry_frame");
-        
+
         vulkan_backend.begin_rendering(
-            &[frame_data.frame_images.gbuffer_albedo, frame_data.frame_images.gbuffer_normal],
+            &[
+                frame_data.frame_images.gbuffer_albedo,
+                frame_data.frame_images.gbuffer_normal,
+            ],
             Some(&frame_data.frame_images.gbuffer_depth),
         );
 
@@ -43,6 +57,7 @@ impl GeometryRenderer {
                 frame_data,
                 &mesh_data.material_data,
                 shader_cache,
+                material_manager,
             );
 
             vulkan_backend.bind_pipeline(pipeline);
@@ -79,30 +94,33 @@ impl GeometryRenderer {
         frame_data: &FrameData,
         material_data: &MaterialData,
         shader_cache: &mut ShaderCache,
+        material_manager: &MaterialManager,
     ) -> PipelineHandle {
-        if let Some(&pipeline) = self.pipeline_cache.get(&material_data.shader_variant) {
+        let cache_key = (
+            material_data.variant_handle,
+            material_data.descriptor_layout_handle,
+        );
+        if let Some(&pipeline) = self.pipeline_cache.get(&cache_key) {
             return pipeline;
         }
 
+        let variant = material_manager.get_variant(material_data.variant_handle);
         let vert_bytes = shader_cache.load(
-            &material_data.shader_variant.vertex_shader,
+            &variant.vertex_shader,
             &[], // vertex shader permutations are encoded in the name for built-ins
         );
-        let frag_bytes = shader_cache.load(
-            &material_data.shader_variant.fragment_shader,
-            &material_data.shader_variant.active_defines,
-        );
+        let frag_bytes = shader_cache.load(&variant.fragment_shader, &variant.active_defines);
 
         let mut push_constant_ranges = vec![PushConstantDesc {
             offset: 0,
             stages: ShaderStage::VERTEX,
             size: size_of::<u64>(),
         }];
-        if material_data.shader_variant.push_constant_size > 0 {
+        if variant.push_constant_size > 0 {
             push_constant_ranges.push(PushConstantDesc {
                 offset: FRAGMENT_PUSH_CONSTANT_OFFSET,
                 stages: ShaderStage::FRAGMENT,
-                size: material_data.shader_variant.push_constant_size,
+                size: variant.push_constant_size,
             });
         }
 
@@ -164,8 +182,7 @@ impl GeometryRenderer {
         };
 
         let pipeline_handle = vulkan_backend.create_graphics_pipeline(pipeline_desc);
-        self.pipeline_cache
-            .insert(material_data.shader_variant.clone(), pipeline_handle);
+        self.pipeline_cache.insert(cache_key, pipeline_handle);
 
         pipeline_handle
     }

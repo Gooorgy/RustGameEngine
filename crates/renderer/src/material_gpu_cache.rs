@@ -1,5 +1,5 @@
 use assets::AssetStore;
-use material::material_manager::{MaterialHandle, MaterialVariant};
+use material::material_manager::MaterialHandle;
 use material::{MaterialParameterBinding, MaterialParameterBindingData};
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 /// Maps material handles to their GPU descriptor sets and layouts.
 /// Allocates GPU resources exactly once per material and caches them for subsequent frames.
 pub struct MaterialGpuCache {
-    layout_cache: HashMap<MaterialVariant, DescriptorLayoutHandle>,
+    layout_cache: HashMap<DescriptorLayoutKey, DescriptorLayoutHandle>,
     descriptor_cache: HashMap<MaterialHandle, DescriptorSetHandle>,
 }
 
@@ -32,14 +32,13 @@ impl MaterialGpuCache {
         vulkan_backend: &mut VulkanBackend,
         material_handle: MaterialHandle,
         bindings: Vec<MaterialParameterBinding>,
-        variant: &MaterialVariant,
         resource_manager: &mut ResourceManager,
         asset_store: &AssetStore,
         basic_sampler: SamplerHandle,
     ) -> (DescriptorSetHandle, DescriptorLayoutHandle) {
         profiling::scope!("get_or_create");
 
-        let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings, variant);
+        let layout_handle = self.get_or_create_layout(vulkan_backend, &bindings);
 
         // Return the cached set without any allocation if this material was seen before.
         if let Some(&set_handle) = self.descriptor_cache.get(&material_handle) {
@@ -87,19 +86,24 @@ impl MaterialGpuCache {
         &mut self,
         vulkan_backend: &mut VulkanBackend,
         bindings: &[MaterialParameterBinding],
-        variant: &MaterialVariant,
     ) -> DescriptorLayoutHandle {
-        if let Some(&handle) = self.layout_cache.get(variant) {
+        let mut key = bindings
+            .iter()
+            .map(|binding| binding.index as u32)
+            .collect::<Vec<_>>();
+        key.sort_unstable();
+        let key = DescriptorLayoutKey(key);
+        if let Some(&handle) = self.layout_cache.get(&key) {
             return handle;
         }
 
         let descriptor_bindings = bindings
             .iter()
-            .map(|b| DescriptorBinding {
+            .map(|binding| DescriptorBinding {
                 stages: ShaderStage::FRAGMENT,
                 descriptor_type: DescriptorType::CombinedImageSampler,
                 count: 1,
-                binding: b.index as u32,
+                binding: binding.index as u32,
             })
             .collect::<Vec<_>>();
 
@@ -107,7 +111,10 @@ impl MaterialGpuCache {
             bindings: descriptor_bindings,
         });
 
-        self.layout_cache.insert(variant.clone(), handle);
+        self.layout_cache.insert(key, handle);
         handle
     }
 }
+
+#[derive(Eq, PartialEq, Hash)]
+struct DescriptorLayoutKey(Vec<u32>);

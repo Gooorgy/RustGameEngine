@@ -1,21 +1,21 @@
 use crate::frame_data::{FrameData, ResolutionSettings};
 use crate::material_gpu_cache::MaterialGpuCache;
 use crate::passes::aabb_debug_renderer::AabbDebugRenderer;
+pub use crate::passes::aabb_debug_renderer::DebugBox;
 use crate::passes::geometry_renderer::GeometryRenderer;
 use crate::passes::lighting_renderer::LightingRenderer;
-use crate::render_data::{CameraRenderData, DirectionalLightData, MeshRenderRequest};
+use crate::render_data::{CameraRenderData, DirectionalLightData, MeshRenderRequest, PointLightData};
 use crate::render_scene::{MaterialData, MeshRenderData, RenderScene};
 use crate::shader_loader::ShaderCache;
 use assets::AssetStore;
 use common::MeshData;
+use config::config::WindowResolution;
+use imgui::ImuiRenderer;
 use material::material_manager::MaterialManager;
 use rendering_backend::backend_impl::resource_manager::ResourceManager;
 use rendering_backend::backend_impl::vulkan_backend::VulkanBackend;
 use rendering_backend::camera::CameraMvpUbo;
 use std::path::PathBuf;
-use config::config::WindowResolution;
-use imgui::ImuiRenderer;
-pub use crate::passes::aabb_debug_renderer::DebugBox;
 
 pub struct RendererConfig {
     pub resolution_settings: ResolutionSettings,
@@ -41,7 +41,11 @@ impl Renderer {
         let mut shader_cache = ShaderCache::new(config.asset_cache_dir);
         let lighting_renderer =
             LightingRenderer::new(vulkan_backend, &frame_data, &mut shader_cache);
-        let imgui_renderer = ImuiRenderer::new(vulkan_backend, frame_data.frame_images.draw_image, frame_data.basic_sampler);
+        let imgui_renderer = ImuiRenderer::new(
+            vulkan_backend,
+            frame_data.frame_images.draw_image,
+            frame_data.basic_sampler,
+        );
         Self {
             frame_data,
             material_gpu_cache: MaterialGpuCache::new(),
@@ -68,9 +72,10 @@ impl Renderer {
         camera: CameraMvpUbo,
         camera_render_data: Option<CameraRenderData>,
         directional_light: Option<DirectionalLightData>,
+        point_lights: Vec<PointLightData>,
         aabbs: &[DebugBox],
         delta_time: f32,
-        res: WindowResolution
+        res: WindowResolution,
     ) {
         profiling::scope!("draw_frame");
 
@@ -83,6 +88,7 @@ impl Renderer {
             camera,
             camera_render_data,
             directional_light,
+            point_lights,
         );
         vulkan_backend.begin_frame();
 
@@ -91,8 +97,10 @@ impl Renderer {
             &render_scene,
             &self.frame_data,
             &mut self.shader_cache,
+            material_manager,
         );
-        self.lighting_renderer.draw_frame(vulkan_backend, &render_scene, &self.frame_data);
+        self.lighting_renderer
+            .draw_frame(vulkan_backend, &render_scene, &self.frame_data);
         self.aabb_debug_renderer.draw_frame(
             vulkan_backend,
             aabbs,
@@ -101,7 +109,7 @@ impl Renderer {
             &mut self.shader_cache,
         );
 
-            //self.imgui_renderer.draw_frame(vulkan_backend, [res.width as f32, res.height as f32], delta_time, self.frame_data.frame_images.draw_image);
+        //self.imgui_renderer.draw_frame(vulkan_backend, [res.width as f32, res.height as f32], delta_time, self.frame_data.frame_images.draw_image);
 
         vulkan_backend.end_frame(self.frame_data.frame_images.draw_image);
     }
@@ -117,9 +125,10 @@ impl Renderer {
         camera: CameraMvpUbo,
         camera_render_data: Option<CameraRenderData>,
         directional_light: Option<DirectionalLightData>,
+        point_lights: Vec<PointLightData>,
     ) -> RenderScene {
         profiling::scope!("create_render_scene");
-        
+
         let mut meshes = vec![];
         let mut model_matrices = vec![];
 
@@ -127,7 +136,7 @@ impl Renderer {
 
         for request in mesh_requests {
             profiling::scope!("handle_mesh_request");
-            
+
             let mesh_data = asset_store
                 .get::<MeshData>(request.mesh_handle)
                 .unwrap_or_else(|| {
@@ -135,21 +144,22 @@ impl Renderer {
                 });
 
             model_matrices.push(request.transform.get_model_matrix());
-            
+
             let gpu_mesh_data =
                 resource_manager.get_or_create_mesh(vulkan_backend, request.mesh_handle, mesh_data);
 
-            let material_bindings =
-                material_manager.get_bindings(request.material_handle).to_vec();
-            let shader_variant = material_manager.get_variant(request.material_handle).clone();
-            let push_constant_data =
-                material_manager.get_push_constants(request.material_handle).to_vec();
+            let material_bindings = material_manager
+                .get_bindings(request.material_handle)
+                .to_vec();
+            let variant_handle = material_manager.get_variant_handle(request.material_handle);
+            let push_constant_data = material_manager
+                .get_push_constants(request.material_handle)
+                .to_vec();
 
             let (set_handle, layout_handle) = self.material_gpu_cache.get_or_create(
                 vulkan_backend,
                 request.material_handle,
                 material_bindings,
-                &shader_variant,
                 resource_manager,
                 asset_store,
                 basic_sampler,
@@ -158,7 +168,7 @@ impl Renderer {
             meshes.push(MeshRenderData {
                 mesh_data: gpu_mesh_data,
                 material_data: MaterialData {
-                    shader_variant,
+                    variant_handle,
                     descriptor_set_handle: set_handle,
                     descriptor_layout_handle: layout_handle,
                     push_constant_data,
@@ -176,6 +186,7 @@ impl Renderer {
             meshes,
             camera_data: camera_render_data,
             directional_light,
+            point_lights
         }
     }
 }

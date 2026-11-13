@@ -25,6 +25,16 @@ pub struct LightingUbo {
     pub light_color: Vec4,
     pub ambient_light: Vec4,
     pub cascade_depths: Vec4,
+    pub light_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PointLight {
+    pub position: Vec3,
+    pub radius: f32,
+    pub color: Vec3,
+    pub intensity: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -45,6 +55,7 @@ pub struct LightingRenderer {
     lighting_pipeline: PipelineHandle,
     cascade_buffer: BufferHandle,
     lighting_buffer: BufferHandle,
+    point_lights_buffer: BufferHandle,
     shadow_sampler: SamplerHandle,
     shadow_descriptor_set: DescriptorSetHandle,
     lighting_descriptor_set: DescriptorSetHandle,
@@ -73,6 +84,17 @@ impl LightingRenderer {
             },
             None,
         );
+
+        let point_lights_buffer = vulkan_backend.create_buffer::<PointLight>(
+            BufferDesc {
+                // TODO: Set light budget in constant
+                size: size_of::<PointLight>() * 100,
+                usage: BufferUsageFlags::STORAGE,
+                memory_hint: MemoryHint::CPUWritable,
+            },
+            None,
+        );
+
 
         let shadow_sampler = vulkan_backend.create_sampler(SamplerDesc {
             mag_filter: Filter::Linear,
@@ -182,6 +204,12 @@ impl LightingRenderer {
                         count: 1,
                         stages: ShaderStage::FRAGMENT,
                     },
+                    DescriptorBinding {
+                        binding: 10,
+                        descriptor_type: DescriptorType::StorageBuffer,
+                        count: 1,
+                        stages: ShaderStage::FRAGMENT,
+                    },
                 ],
             });
 
@@ -261,6 +289,7 @@ impl LightingRenderer {
             lighting_pipeline,
             cascade_buffer,
             lighting_buffer,
+            point_lights_buffer,
             shadow_sampler,
             shadow_descriptor_set,
             lighting_descriptor_set,
@@ -312,9 +341,20 @@ impl LightingRenderer {
                 cascades.get(2).map_or(0.0, |c| c.depth),
                 cascades.get(3).map_or(0.0, |c| c.depth),
             ),
+            light_count: render_scene.point_lights.len() as u32,
         };
         vulkan_backend.update_buffer(self.lighting_buffer, &[lighting_ubo]);
-
+        
+        let point_lights: Vec<_> = render_scene.point_lights.iter().map(|light| PointLight {
+            intensity: light.intensity,
+            radius: light.radius,
+            color: light.color,
+            position: light.location
+        }).collect();
+        
+    vulkan_backend.update_buffer(self.point_lights_buffer, point_lights.as_slice());
+        
+        
         #[allow(clippy::needless_range_loop)]
         for cascade_idx in 0..CASCADE_COUNT {
             profiling::scope!("cascade");
@@ -429,6 +469,10 @@ impl LightingRenderer {
                     image: frame_data.frame_images.shadow_cascades[3],
                     sampler: self.shadow_sampler,
                 }),
+            },
+            DescriptorWriteDesc {
+                binding: 10,
+                value: DescriptorValue::StorageBuffer(self.point_lights_buffer),
             },
         ];
 
